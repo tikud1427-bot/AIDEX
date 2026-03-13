@@ -113,18 +113,31 @@ href="/tools/category/<%= encodeURIComponent(category) %>">
 
 <% tools.forEach(function(tool){ %>
 
-<div class="tool-card">
+  <div class="tool-card">
 
-<h3><%= tool.name %></h3>
+  <div class="logo-box">
+  <img src="<%= tool.logo %>" alt="<%= tool.name %>">
+  </div>
 
-<p><%= tool.description %></p>
+  <a href="/tool/<%= tool.id %>" class="tool-link">
+  <h3><%= tool.name %></h3>
+  </a>
 
-<a href="<%= tool.url %>" target="_blank">
-Visit Tool
-</a>
+  <p><%= tool.description %></p>
 
-</div>
+  <div class="tool-actions">
 
+  <a href="/tool/<%= tool.id %>" class="details-btn">
+  View Details
+  </a>
+
+  <a href="<%= tool.url %>" target="_blank" class="visit-btn">
+  Visit Tool
+  </a>
+
+  </div>
+
+  </div>
 <% }) %>
 
 <% } else { %>
