@@ -1,4 +1,9 @@
 const express = require("express");
+const mongoose = require("mongoose");
+
+mongoose.connect(process.env.MONGO_URI)
+.then(()=>console.log("MongoDB connected"))
+.catch(err=>console.log(err));
 const bodyParser = require("body-parser");
 const fs = require("fs");
 const path = require("path");
