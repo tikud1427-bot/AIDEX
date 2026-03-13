@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title><%= tool.name %> | AIDEX</title>
+
+<link rel="stylesheet" href="/css/styles.css">
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+</head>
+
+<body>
+
+<div class="tool-container">
+
+<div class="tool-card">
+
+<h1 class="tool-title">
+<%= tool.name %>
+</h1>
+
+<% if(tool.trending){ %>
+<span class="trending-badge">🔥 Trending Tool</span>
+<% } %>
+
+<p class="tool-category">
+Category: <strong><%= tool.category %></strong>
+</p>
+
+<p class="tool-description">
+<%= tool.description %>
+</p>
+
+<div class="tool-buttons">
+
+<a href="<%= tool.url %>" target="_blank" class="visit-btn">
+Visit Official Website
+</a>
+
+<a href="/tools" class="back-btn">
+← Back to Tools
+</a>
+
+</div>
+
+</div>
+
+</div>
+
+</body>
+</html>
