@@ -1,53 +1,47 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title><%= tool.name %> | AIDEX</title>
+<title>All AI Tools | AIDEX</title>
 
 <link rel="stylesheet" href="/css/styles.css">
-
-<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
 </head>
 
 <body>
 
-<div class="tool-container">
+<h1>All AI Tools</h1>
 
-<div class="tool-card">
+<div class="tools-grid">
 
-<h1 class="tool-title">
-<%= tool.name %>
-</h1>
+<% if (tools && tools.length > 0) { %>
 
-<% if(tool.trending){ %>
-<span class="trending-badge">🔥 Trending Tool</span>
+  <% tools.forEach(function(tool){ %>
+
+    <div class="tool-card">
+      <img src="<%= tool.logo %>" class="tool-logo">
+      <h3>
+        <a href="/tool/<%= tool.id %>">
+          <%= tool.name %>
+        </a>
+      </h3>
+
+      <p><%= tool.description %></p>
+
+      <a href="<%= tool.url %>" target="_blank">
+        Visit Tool
+      </a>
+
+    </div>
+
+  <% }) %>
+
+<% } else { %>
+
+<p>No tools available.</p>
+
 <% } %>
-
-<p class="tool-category">
-Category: <strong><%= tool.category %></strong>
-</p>
-
-<p class="tool-description">
-<%= tool.description %>
-</p>
-
-<div class="tool-buttons">
-
-<a href="<%= tool.url %>" target="_blank" class="visit-btn">
-Visit Official Website
-</a>
-
-<a href="/tools" class="back-btn">
-← Back to Tools
-</a>
-
-</div>
-
-</div>
 
 </div>
 
