@@ -48,29 +48,6 @@
 
 <%- include('partials/footer') %>
 
-<script>
-
-document.querySelectorAll(".star").forEach((star,index)=>{
-
-star.addEventListener("click",function(){
-
-const rating=index+1;
-
-const id=this.parentElement.dataset.id;
-
-fetch("/rate/"+id,{
-method:"POST",
-headers:{
-"Content-Type":"application/json"
-},
-body:JSON.stringify({rating})
-});
-
-});
-
-});
-
-</script>
 
 </body>
 </html>
