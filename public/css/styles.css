@@ -654,4 +654,391 @@ color:white;
 cursor:pointer;
 font-weight:500;
 }
+.tool-page{
+max-width:800px;
+margin:auto;
+padding:40px;
+text-align:center;
+}
 
+.tool-description{
+margin-top:20px;
+font-size:18px;
+}
+
+.tool-buttons{
+margin-top:30px;
+display:flex;
+gap:20px;
+justify-content:center;
+}
+
+.visit-btn{
+background:#4CAF50;
+color:white;
+padding:10px 20px;
+border-radius:6px;
+text-decoration:none;
+}
+
+.back-btn{
+background:#333;
+color:white;
+padding:10px 20px;
+border-radius:6px;
+text-decoration:none;
+}
+
+.trending-badge{
+background:red;
+color:white;
+padding:4px 10px;
+border-radius:5px;
+margin-left:10px;
+}
+/* TOOL CARD ANIMATION */
+
+.tool-card {
+background: white;
+border-radius: 12px;
+padding: 20px;
+box-shadow: 0 5px 20px rgba(0,0,0,0.08);
+transition: all 0.35s ease;
+position: relative;
+overflow: hidden;
+}
+
+/* Hover Lift Effect */
+
+.tool-card:hover {
+transform: translateY(-8px);
+box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+}
+
+/* Smooth Fade In */
+
+.tool-card {
+animation: fadeInUp 0.6s ease forwards;
+}
+
+/* Keyframes */
+
+@keyframes fadeInUp {
+0%{
+opacity:0;
+transform: translateY(20px);
+}
+
+100%{
+opacity:1;
+transform: translateY(0);
+}
+}
+
+/* Button Animation */
+
+.tool-card a {
+display:inline-block;
+margin-top:10px;
+padding:8px 16px;
+background:#0077ff;
+color:white;
+border-radius:6px;
+text-decoration:none;
+transition: all 0.3s ease;
+}
+
+.tool-card a:hover {
+background:#005fd1;
+transform: scale(1.05);
+}
+/* ===============================
+GLOBAL SMOOTH PAGE FADE
+================================ */
+
+body{
+animation: fadePage 0.8s ease-in;
+}
+
+@keyframes fadePage{
+0%{
+opacity:0;
+transform:translateY(15px);
+}
+
+100%{
+opacity:1;
+transform:translateY(0);
+}
+}
+
+
+/* ===============================
+TOOL PAGE STYLE
+================================ */
+
+.tool-page{
+max-width:800px;
+margin:auto;
+padding:50px 20px;
+animation: slideUp 0.7s ease;
+}
+
+@keyframes slideUp{
+0%{
+opacity:0;
+transform:translateY(40px);
+}
+
+100%{
+opacity:1;
+transform:translateY(0);
+}
+}
+
+
+/* ===============================
+TITLE STYLE
+================================ */
+
+.tool-page h1{
+font-size:40px;
+margin-bottom:10px;
+transition:all 0.3s ease;
+}
+
+.tool-page h1:hover{
+color:#0077ff;
+}
+
+
+/* ===============================
+TRENDING BADGE
+================================ */
+
+.trending-badge{
+background:#ff4d4d;
+color:white;
+padding:6px 12px;
+border-radius:6px;
+font-size:14px;
+margin-left:10px;
+animation:pulse 2s infinite;
+}
+
+@keyframes pulse{
+0%{transform:scale(1);}
+50%{transform:scale(1.08);}
+100%{transform:scale(1);}
+}
+
+
+/* ===============================
+BUTTON STYLE
+================================ */
+
+.tool-page a{
+display:inline-block;
+margin-top:15px;
+padding:10px 18px;
+background:#0077ff;
+color:white;
+border-radius:6px;
+text-decoration:none;
+transition:all 0.3s ease;
+}
+
+.tool-page a:hover{
+background:#005fd1;
+transform:translateY(-3px) scale(1.05);
+box-shadow:0 10px 25px rgba(0,0,0,0.15);
+}
+
+
+/* ===============================
+BACK LINK
+================================ */
+
+.tool-page a:last-child{
+background:#333;
+}
+
+.tool-page a:last-child:hover{
+background:#000;
+}
+
+
+/* ===============================
+TEXT STYLE
+================================ */
+
+.tool-page p{
+font-size:18px;
+line-height:1.6;
+margin-top:10px;
+animation:fadeText 1s ease;
+}
+
+@keyframes fadeText{
+0%{
+opacity:0;
+}
+
+100%{
+opacity:1;
+}
+}
+/* TOOL PAGE */
+
+body{
+font-family:'Poppins',sans-serif;
+background:#f4f6fb;
+margin:0;
+padding:0;
+}
+
+/* container */
+
+.tool-container{
+display:flex;
+justify-content:center;
+align-items:center;
+min-height:100vh;
+padding:40px;
+}
+
+/* card */
+
+.tool-card{
+background:white;
+padding:40px;
+border-radius:14px;
+box-shadow:0 20px 40px rgba(0,0,0,0.1);
+max-width:650px;
+width:100%;
+text-align:center;
+
+animation:fadeUp 0.8s ease;
+}
+
+/* animation */
+
+@keyframes fadeUp{
+0%{
+opacity:0;
+transform:translateY(30px);
+}
+
+100%{
+opacity:1;
+transform:translateY(0);
+}
+}
+
+/* title */
+
+.tool-title{
+font-size:36px;
+margin-bottom:10px;
+}
+
+/* badge */
+
+.trending-badge{
+background:#ff4d4d;
+color:white;
+padding:6px 14px;
+border-radius:20px;
+font-size:14px;
+display:inline-block;
+margin-bottom:15px;
+}
+
+/* description */
+
+.tool-description{
+margin-top:10px;
+font-size:18px;
+line-height:1.6;
+color:#444;
+}
+
+/* buttons */
+
+.tool-buttons{
+margin-top:25px;
+display:flex;
+gap:15px;
+justify-content:center;
+flex-wrap:wrap;
+}
+
+.visit-btn{
+background:#0077ff;
+color:white;
+padding:12px 22px;
+border-radius:8px;
+text-decoration:none;
+transition:0.3s;
+}
+
+.visit-btn:hover{
+background:#005fd1;
+transform:translateY(-3px);
+}
+
+.back-btn{
+background:#333;
+color:white;
+padding:12px 22px;
+border-radius:8px;
+text-decoration:none;
+}
+
+.back-btn:hover{
+background:black;
+}
+.tool-logo{
+width:50px;
+height:50px;
+object-fit:contain;
+margin-bottom:10px;
+}
+
+/* LOGO BOX */
+
+.logo-box{
+width:70px;
+height:70px;
+margin:0 auto 15px;
+background:#f4f6f8;
+border-radius:16px;
+display:flex;
+align-items:center;
+justify-content:center;
+padding:10px;
+}
+
+.logo-box img{
+width:100%;
+height:100%;
+object-fit:contain;
+}
+
+.logo-box{
+width:70px;
+height:70px;
+margin:0 auto 15px;
+background:#f4f6f8;
+border-radius:16px;
+display:flex;
+align-items:center;
+justify-content:center;
+padding:10px;
+}
+
+.logo-box img{
+width:100%;
+height:100%;
+object-fit:contain;
+}
