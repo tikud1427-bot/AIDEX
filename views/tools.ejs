@@ -14,22 +14,6 @@
 
 </head>
 
-  <script>
-  const menuBtn = document.querySelector(".menu-toggle");
-  const mobileMenu = document.querySelector(".mobile-menu");
-  const overlay = document.querySelector(".menu-overlay");
-
-  menuBtn.addEventListener("click", () => {
-    mobileMenu.classList.toggle("active");
-    overlay.classList.toggle("active");
-  });
-
-  overlay.addEventListener("click", () => {
-    mobileMenu.classList.remove("active");
-    overlay.classList.remove("active");
-  });
-  </script>
-
 <body>
 
 <%- include('partials/header') %>
@@ -52,16 +36,18 @@
 
 <a href="<%= tool.url %>" target="_blank">Visit Tool</a>
 
-</div>
 <div class="rating">
 ⭐ <%= tool.rating || 0 %> / 5
 </div>
-<div class="stars" data-id="<%= tool._id %>">
+
+<div class="stars" data-id="<%= tool.id %>">
 <span class="star">⭐</span>
 <span class="star">⭐</span>
 <span class="star">⭐</span>
 <span class="star">⭐</span>
 <span class="star">⭐</span>
+</div>
+
 </div>
 
 <% }) %>
@@ -71,6 +57,30 @@
 </main>
 
 <%- include('partials/footer') %>
+
+<script>
+
+document.querySelectorAll(".star").forEach((star,index)=>{
+
+star.addEventListener("click",function(){
+
+const rating=index+1;
+
+const id=this.parentElement.dataset.id;
+
+fetch("/rate/"+id,{
+method:"POST",
+headers:{
+"Content-Type":"application/json"
+},
+body:JSON.stringify({rating})
+});
+
+});
+
+});
+
+</script>
 
 </body>
 </html>
