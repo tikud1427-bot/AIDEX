@@ -1,140 +1,140 @@
-const express = require("express");
+const mongoose = require("mongoose");
 const fs = require("fs");
+
+mongoose.connect(process.env.MONGO_URI);
+
+mongoose.connection.once("open", () => {
+  console.log("MongoDB connected");
+});
+
+const toolSchema = new mongoose.Schema({
+  id: String,
+  name: String,
+  category: String,
+  url: String,
+  description: String,
+  trending: Boolean,
+  clicks: Number,
+  logo: String
+});
+
+const Tool = mongoose.model("Tool", toolSchema);
+
+// -------- IMPORT OLD JSON TOOLS --------
+let jsonTools = [];
+
+try {
+  jsonTools = JSON.parse(fs.readFileSync("./data/tools.json","utf8"));
+} catch {
+  console.log("No tools.json found, skipping import");
+}
+
+async function importTools() {
+  const count = await Tool.countDocuments();
+
+  if (count === 0 && jsonTools.length > 0) {
+    await Tool.insertMany(jsonTools);
+    console.log("Default tools imported to MongoDB");
+  }
+}
+
+importTools();
+// --------------------------------------------------
+
+const express = require("express");
 const path = require("path");
 const bodyParser = require("body-parser");
-
+const multer = require("multer");
 const app = express();
 
-const tools = JSON.parse(fs.readFileSync("./data/tools.json"));
+// ---------- UPLOAD DIRECTORY ----------
+const uploadDir = path.join(__dirname, "public/uploads");
+
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir, { recursive: true });
+}
 
 // ---------- MIDDLEWARE ----------
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 app.set("view engine", "ejs");
 
-// ---------- DATABASE PATH ----------
-const dataDir = path.join(__dirname, "data");
-const dataPath = path.join(dataDir, "tools.json");
+// ---------- FILE UPLOAD SETUP ----------
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "./public/uploads");
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + "-" + file.originalname);
+  }
+});
 
-// ---------- DEFAULT TOOLS ----------
-const defaultTools = [
-{
-id:"chatgpt",
-name:"ChatGPT",
-category:"Writing AI",
-url:"https://chat.openai.com",
-description:"AI chatbot for writing, coding and research.",
-trending:true
-},
-{
-id:"claude",
-name:"Claude",
-category:"Writing AI",
-url:"https://claude.ai",
-description:"Advanced AI assistant.",
-trending:true
-},
-{
-id:"grammarly",
-name:"Grammarly",
-category:"Writing AI",
-url:"https://grammarly.com",
-description:"AI grammar assistant.",
-trending:false
-},
-{
-id:"midjourney",
-name:"Midjourney",
-category:"Image AI",
-url:"https://midjourney.com",
-description:"AI art generator.",
-trending:true
-},
-{
-id:"dalle",
-name:"DALL-E",
-category:"Image AI",
-url:"https://openai.com/dall-e",
-description:"AI image generator.",
-trending:true
-}
-];
-
-let aiTools = [];
-
-// ---------- LOAD DATABASE ----------
-function loadTools(){
-
-if(!fs.existsSync(dataDir)){
-fs.mkdirSync(dataDir);
-}
-
-if(!fs.existsSync(dataPath)){
-fs.writeFileSync(dataPath,JSON.stringify(defaultTools,null,2));
-aiTools = defaultTools;
-return;
-}
-
-try{
-const data = fs.readFileSync(dataPath,"utf8");
-aiTools = JSON.parse(data);
-}
-catch(err){
-console.log("Error loading tools.json, resetting.");
-aiTools = defaultTools;
-saveTools();
-}
-
-}
-
-// ---------- SAVE DATABASE ----------
-function saveTools(){
-fs.writeFileSync(dataPath,JSON.stringify(aiTools,null,2));
-console.log("Tools saved");
-}
-
-// Load tools on start
-loadTools();
+const upload = multer({ storage: storage });
 
 // ---------- ROUTES ----------
 
 // Test route
 app.get("/test", (req,res)=>{
-  res.send("Server working");
+res.send("Server working");
 });
 
 // Home
-app.get("/", (req, res) => {
+app.get("/", async (req, res) => {
 
-const categories = {};
-const featuredTools = [];
+const tools = await Tool.find().limit(20);
 
-aiTools.forEach(tool => {
-
-if(!categories[tool.category]){
-categories[tool.category] = 0;
-}
-
-if(categories[tool.category] < 5){
-featuredTools.push(tool);
-categories[tool.category]++;
-}
+res.render("home", { tools });
 
 });
 
-res.render("home", { tools: featuredTools });
+// CLICK TRACKING ROUTE
+app.get("/visit/:id", async (req, res) => {
+
+const tool = await Tool.findOne({ id: req.params.id });
+
+if(!tool){
+return res.redirect("/tools");
+}
+
+tool.clicks = (tool.clicks || 0) + 1;
+
+await tool.save();
+
+let redirectUrl = tool.url;
+
+if(!redirectUrl.startsWith("http")){
+redirectUrl = "https://" + redirectUrl;
+}
+
+return res.redirect(redirectUrl);
+
+});
+
+// 🔥 TRENDING PAGE
+app.get("/trending", async (req, res) => {
+
+const trendingTools = await Tool.find({})
+.sort({ clicks: -1 })
+.limit(10);
+
+res.render("trending", { tools: trendingTools });
 
 });
 
 // Individual Tool Page
-app.get("/tool/:id",(req,res)=>{
+app.get("/tool/:id", async (req,res)=>{
 
 const toolId = req.params.id;
 
-const tool = aiTools.find(t => t.id === toolId);
+const tool = await Tool.findOne({
+$or: [
+{ id: toolId },
+{ name: new RegExp("^" + toolId + "$", "i") }
+]
+});
 
 if(!tool){
-return res.send("Tool not found");
+return res.redirect("/tools");
 }
 
 res.render("tool",{tool});
@@ -142,31 +142,31 @@ res.render("tool",{tool});
 });
 
 // All tools
-app.get("/tools",function(req,res){
-res.render("tools",{tools:aiTools});
+app.get("/tools", async (req,res)=>{
+
+const tools = await Tool.find({});
+
+// extract categories automatically
+const categories = [...new Set(tools.map(t => t.category))];
+
+res.render("tools",{tools, categories});
+
 });
 
 // Search
-app.get("/search",(req,res)=>{
+app.get("/search", async (req,res)=>{
 
-const query = req.query.q.toLowerCase();
+const query = req.query.q || "";
 
-const results = aiTools.filter(tool =>
-tool.name.toLowerCase().includes(query) ||
-tool.category.toLowerCase().includes(query) ||
-tool.description.toLowerCase().includes(query)
-);
-
-res.render("tools",{tools:results});
-
+const results = await Tool.find({
+$or: [
+{ name: { $regex: query, $options: "i" } },
+{ category: { $regex: query, $options: "i" } },
+{ description: { $regex: query, $options: "i" } }
+]
 });
 
-// Trending
-app.get("/trending",function(req,res){
-
-const trendingTools = aiTools.filter(tool => tool.trending === true);
-
-res.render("trending",{tools:trendingTools});
+res.render("tools",{tools:results});
 
 });
 
@@ -176,40 +176,27 @@ res.render("submit");
 });
 
 // Submit tool
-app.post("/submit",function(req,res){
+app.post("/submit", upload.single("logo"), async (req, res) => {
 
-const name = req.body.name;
-const category = req.body.category;
-const url = req.body.url;
-const description = req.body.description;
+const newTool = new Tool({
+  id: req.body.name.toLowerCase().replace(/\s+/g, "-"),
+  name: req.body.name,
+  category: req.body.category,
+  url: req.body.url,
+  description: req.body.description,
+  trending: false,
+  clicks: 0,
+  logo: req.file ? "/uploads/" + req.file.filename : ""
+});
 
-if(!name || !category || !url || !description){
-return res.send("All fields are required.");
+try {
+  await newTool.save();
+  console.log("Tool saved to MongoDB");
+  res.redirect("/tools");
+} catch(err) {
+  console.log("Database error:", err);
+  res.send("Error saving tool");
 }
-
-let formattedUrl = url;
-
-if(!url.startsWith("http")){
-formattedUrl = "https://" + url;
-}
-
-// create id from name
-const id = name.toLowerCase().replace(/\s+/g,"");
-
-const newTool = {
-id:id,
-name:name,
-category:category,
-url:formattedUrl,
-description:description,
-trending:false
-};
-
-aiTools.push(newTool);
-
-saveTools();
-
-res.redirect("/tools");
 
 });
 
@@ -219,15 +206,15 @@ res.render("about");
 });
 
 // Category filter
-app.get("/tools/category/:name",function(req,res){
+app.get("/tools/category/:name", async (req,res)=>{
 
-const category = req.params.name.toLowerCase();
+const category = req.params.name;
 
-const filtered = aiTools.filter(tool =>
-tool.category.toLowerCase() === category
-);
+const tools = await Tool.find({
+category: { $regex: "^" + category + "$", $options: "i" }
+});
 
-res.render("tools",{tools:filtered});
+res.render("tools",{tools});
 
 });
 
