@@ -1042,3 +1042,666 @@ width:100%;
 height:100%;
 object-fit:contain;
 }
+/* ===============================
+AIDEX UI UPGRADE ANIMATIONS
+Paste at bottom of styles.css
+================================*/
+
+/* Smooth page load */
+body{
+animation:fadeInPage 0.6s ease;
+}
+
+@keyframes fadeInPage{
+from{
+opacity:0;
+transform:translateY(12px);
+}
+to{
+opacity:1;
+transform:translateY(0);
+}
+}
+
+/* Tools grid layout */
+.tools-grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+gap:25px;
+padding:30px;
+}
+
+/* Tool cards */
+.tool-card{
+background:#ffffff;
+border-radius:14px;
+padding:22px;
+box-shadow:0 6px 25px rgba(0,0,0,0.08);
+transition:all 0.3s ease;
+position:relative;
+overflow:hidden;
+}
+
+/* Card hover animation */
+.tool-card:hover{
+transform:translateY(-8px) scale(1.02);
+box-shadow:0 18px 45px rgba(0,0,0,0.15);
+}
+
+/* Logo styling */
+.tool-logo{
+width:50px;
+height:50px;
+margin-bottom:12px;
+transition:transform 0.3s ease;
+}
+
+/* Logo animation on hover */
+.tool-card:hover .tool-logo{
+transform:rotate(6deg) scale(1.1);
+}
+
+/* Tool title */
+.tool-card h3{
+font-size:18px;
+margin-bottom:6px;
+}
+
+/* Tool description */
+.tool-card p{
+font-size:14px;
+color:#555;
+line-height:1.5;
+margin-bottom:12px;
+}
+
+/* Visit tool button */
+.tool-card a{
+display:inline-block;
+background:#6c63ff;
+color:white;
+padding:8px 14px;
+border-radius:8px;
+text-decoration:none;
+font-size:14px;
+transition:all 0.25s ease;
+}
+
+/* Button hover */
+.tool-card a:hover{
+background:#5147ff;
+transform:scale(1.05);
+}
+
+/* Trending badge */
+.trending-badge{
+background:linear-gradient(45deg,#ff6a00,#ff0000);
+color:white;
+font-size:12px;
+padding:4px 10px;
+border-radius:20px;
+display:inline-block;
+margin-bottom:8px;
+}
+
+/* Card shine animation */
+.tool-card::before{
+content:"";
+position:absolute;
+top:0;
+left:-100%;
+width:100%;
+height:100%;
+background:linear-gradient(
+120deg,
+transparent,
+rgba(255,255,255,0.35),
+transparent
+);
+transition:all 0.6s;
+}
+
+.tool-card:hover::before{
+left:100%;
+}
+
+/* Heading styling */
+h1{
+font-size:34px;
+text-align:center;
+margin-top:40px;
+margin-bottom:10px;
+font-weight:700;
+}
+
+/* Responsive improvements */
+@media (max-width:768px){
+
+.tools-grid{
+grid-template-columns:1fr;
+padding:20px;
+}
+
+h1{
+font-size:26px;
+}
+
+}
+
+/* TRENDING PAGE IMPROVEMENTS */
+
+.page-container{
+max-width:1200px;
+margin:auto;
+padding:40px 20px;
+}
+
+.tools-grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+gap:30px;
+margin-top:40px;
+}
+
+.tool-card{
+background:white;
+border-radius:16px;
+padding:25px;
+text-align:center;
+box-shadow:0 10px 30px rgba(0,0,0,0.08);
+transition:all 0.3s ease;
+}
+
+.tool-card:hover{
+transform:translateY(-8px);
+box-shadow:0 18px 45px rgba(0,0,0,0.15);
+}
+
+.tool-logo{
+width:55px;
+height:55px;
+object-fit:contain;
+margin-bottom:15px;
+}
+
+.tool-card h3{
+font-size:18px;
+margin-bottom:6px;
+}
+
+.tool-category{
+font-size:14px;
+color:#777;
+margin-bottom:6px;
+}
+
+.tool-description{
+font-size:14px;
+color:#444;
+margin-bottom:15px;
+line-height:1.5;
+}
+
+.visit-btn{
+display:inline-block;
+padding:8px 16px;
+background:#6c63ff;
+color:white;
+border-radius:8px;
+text-decoration:none;
+font-size:14px;
+transition:0.2s;
+}
+
+.visit-btn:hover{
+background:#554ee0;
+}
+.tools-container{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+gap:30px;
+padding:40px;
+}
+
+.tool-card{
+background:white;
+border-radius:16px;
+padding:25px;
+text-align:center;
+box-shadow:0 10px 25px rgba(0,0,0,0.08);
+transition:0.3s;
+}
+
+.tool-card:hover{
+transform:translateY(-8px);
+box-shadow:0 20px 40px rgba(0,0,0,0.15);
+}
+
+.tool-logo{
+width:60px;
+height:60px;
+margin-bottom:15px;
+}
+
+.category{
+color:#666;
+font-size:14px;
+margin-bottom:8px;
+}
+
+.description{
+font-size:14px;
+color:#444;
+margin-bottom:15px;
+}
+
+.trending-badge{
+display:inline-block;
+background:#ff6b6b;
+color:white;
+padding:5px 10px;
+border-radius:8px;
+font-size:12px;
+margin-bottom:12px;
+}
+
+.tool-buttons{
+display:flex;
+justify-content:center;
+gap:10px;
+margin-top:10px;
+}
+
+.visit-btn{
+background:linear-gradient(135deg,#6a5cff,#7c4dff);
+color:white;
+padding:10px 18px;
+border-radius:8px;
+text-decoration:none;
+}
+
+.details-btn{
+background:#eee;
+padding:10px 18px;
+border-radius:8px;
+text-decoration:none;
+color:#333;
+}
+
+/* ================================================= */
+/* AIDEX ADVANCED SUBMIT PAGE UI */
+/* ================================================= */
+
+/* Page Layout */
+
+.page-container {
+max-width: 850px;
+margin: 70px auto;
+padding: 20px;
+text-align: center;
+}
+
+.page-container h1 {
+font-size: 38px;
+font-weight: 600;
+margin-bottom: 10px;
+color: #111;
+letter-spacing: -0.5px;
+}
+
+.page-subtitle {
+color: #666;
+margin-bottom: 45px;
+font-size: 16px;
+}
+
+
+/* Submit Form Card */
+
+.submit-form {
+
+background: #ffffff;
+
+padding: 45px;
+
+border-radius: 16px;
+
+box-shadow:
+0 10px 30px rgba(0,0,0,0.08),
+0 1px 2px rgba(0,0,0,0.04);
+
+display: flex;
+flex-direction: column;
+gap: 18px;
+
+transition: all 0.3s ease;
+}
+
+.submit-form:hover {
+
+transform: translateY(-4px);
+
+box-shadow:
+0 18px 45px rgba(0,0,0,0.12),
+0 4px 10px rgba(0,0,0,0.06);
+}
+
+
+/* Inputs */
+
+.submit-form input,
+.submit-form textarea {
+
+width: 100%;
+
+padding: 14px 16px;
+
+border-radius: 10px;
+
+border: 1px solid #e4e4e4;
+
+font-size: 15px;
+
+font-family: "Poppins", sans-serif;
+
+background: #fafafa;
+
+transition: all 0.25s ease;
+}
+
+
+/* Input Hover */
+
+.submit-form input:hover,
+.submit-form textarea:hover {
+
+border-color: #cfcfcf;
+
+background: #ffffff;
+}
+
+
+/* Input Focus */
+
+.submit-form input:focus,
+.submit-form textarea:focus {
+
+outline: none;
+
+border-color: #6c63ff;
+
+background: #ffffff;
+
+box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+}
+
+
+/* Upload Label */
+
+.upload-label {
+
+font-weight: 500;
+
+font-size: 14px;
+
+text-align: left;
+
+color: #444;
+}
+
+
+/* File Upload */
+
+.submit-form input[type="file"] {
+
+padding: 14px;
+
+border: 2px dashed #d8d8d8;
+
+background: #f8f9ff;
+
+cursor: pointer;
+
+border-radius: 10px;
+
+transition: all 0.25s ease;
+}
+
+
+/* Upload Hover */
+
+.submit-form input[type="file"]:hover {
+
+border-color: #6c63ff;
+
+background: #f2f3ff;
+}
+
+
+/* Submit Button */
+
+.submit-form button {
+
+margin-top: 8px;
+
+padding: 15px;
+
+border: none;
+
+border-radius: 10px;
+
+font-size: 16px;
+
+font-weight: 500;
+
+cursor: pointer;
+
+color: white;
+
+background: linear-gradient(
+135deg,
+#6c63ff,
+#4f46e5
+);
+
+transition: all 0.25s ease;
+
+box-shadow: 0 8px 18px rgba(79,70,229,0.25);
+}
+
+
+/* Button Hover */
+
+.submit-form button:hover {
+
+transform: translateY(-2px);
+
+box-shadow: 0 12px 25px rgba(79,70,229,0.35);
+}
+
+
+/* Button Click */
+
+.submit-form button:active {
+
+transform: translateY(0);
+}
+
+
+/* Mobile */
+
+@media (max-width: 700px){
+
+.page-container {
+padding: 15px;
+}
+
+.page-container h1 {
+font-size: 30px;
+}
+
+.submit-form {
+padding: 30px;
+}
+
+}
+
+/* FIX TOOL CARD LOGO */
+.tool-card img{
+width:80px;
+height:80px;
+object-fit:contain;
+margin:0 auto 10px;
+display:block;
+}
+
+/* TOOL CARD LAYOUT */
+.tool-card{
+background:#fff;
+border-radius:12px;
+padding:20px;
+text-align:center;
+box-shadow:0 4px 15px rgba(0,0,0,0.08);
+overflow:hidden;
+}
+
+/* GRID FIX */
+.tools-grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(250px,1fr));
+gap:25px;
+}
+
+/* PAGE LAYOUT */
+
+.tools-page-container{
+max-width:1200px;
+margin:auto;
+padding:40px 20px;
+}
+
+.page-title{
+text-align:center;
+font-size:36px;
+margin-bottom:10px;
+}
+
+.page-subtitle{
+text-align:center;
+color:#666;
+margin-bottom:40px;
+}
+
+/* GRID */
+
+.tools-grid{
+display:grid;
+grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+gap:30px;
+}
+
+/* CARD */
+
+.tool-card{
+background:white;
+border-radius:14px;
+padding:20px;
+box-shadow:0 6px 20px rgba(0,0,0,0.08);
+transition:0.3s;
+display:flex;
+flex-direction:column;
+align-items:center;
+text-align:center;
+}
+
+.tool-card:hover{
+transform:translateY(-6px);
+box-shadow:0 15px 35px rgba(0,0,0,0.12);
+}
+
+/* LOGO */
+
+.tool-logo-container{
+width:90px;
+height:90px;
+display:flex;
+align-items:center;
+justify-content:center;
+margin-bottom:15px;
+}
+
+.tool-logo-container img{
+max-width:100%;
+max-height:100%;
+object-fit:contain;
+}
+
+/* TEXT */
+
+.tool-name{
+font-size:20px;
+margin-bottom:5px;
+}
+
+.tool-category{
+color:#6c63ff;
+font-weight:600;
+margin-bottom:10px;
+}
+
+.tool-description{
+color:#555;
+font-size:14px;
+margin-bottom:15px;
+}
+
+/* BUTTONS */
+
+.tool-buttons{
+display:flex;
+gap:10px;
+}
+
+.details-btn{
+background:#eee;
+padding:8px 14px;
+border-radius:8px;
+text-decoration:none;
+color:#333;
+font-size:14px;
+}
+
+.visit-btn{
+background:#6c63ff;
+color:white;
+padding:8px 14px;
+border-radius:8px;
+text-decoration:none;
+font-size:14px;
+}
+
+.visit-btn:hover{
+background:#574fd6;
+}
+
+.category-filter{
+display:flex;
+flex-wrap:wrap;
+gap:10px;
+justify-content:center;
+margin-bottom:30px;
+}
+
+.category-btn{
+padding:8px 16px;
+background:#f0f0f0;
+border-radius:20px;
+text-decoration:none;
+color:#333;
+font-size:14px;
+}
+
+.category-btn:hover{
+background:#6c63ff;
+color:white;
+}
