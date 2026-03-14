@@ -13,21 +13,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
 </head>
-  <script>
-  const menuBtn = document.querySelector(".menu-toggle");
-  const mobileMenu = document.querySelector(".mobile-menu");
-  const overlay = document.querySelector(".menu-overlay");
-
-  menuBtn.addEventListener("click", () => {
-    mobileMenu.classList.toggle("active");
-    overlay.classList.toggle("active");
-  });
-
-  overlay.addEventListener("click", () => {
-    mobileMenu.classList.remove("active");
-    overlay.classList.remove("active");
-  });
-  </script>
+ 
 <body>
 
 <%- include("partials/header") %>
@@ -40,17 +26,23 @@
 
 <% tools.forEach(tool => { %>
 
-<div class="tool-card">
+  <div class="tool-card">
 
-<h3><%= tool.name %></h3>
+  <h3><%= tool.name %></h3>
 
-<p class="tool-category"><%= tool.category %></p>
+  <p class="tool-category"><%= tool.category %></p>
 
-<p><%= tool.description %></p>
+  <p><%= tool.description %></p>
 
-<a href="<%= tool.url %>" target="_blank">Visit Tool</a>
+  <div class="tool-buttons">
 
-</div>
+  <a href="/tool/<%= tool.id %>" class="details-btn">View Details</a>
+
+  <a href="/visit/<%= tool.id %>" class="visit-btn">Visit</a>
+
+  </div>
+
+  </div>
 
 <% }) %>
 
@@ -59,6 +51,20 @@
 </main>
 
 <%- include("partials/footer") %>
+   <script>
+    const menuBtn = document.querySelector(".menu-toggle");
+    const mobileMenu = document.querySelector(".mobile-menu");
+    const overlay = document.querySelector(".menu-overlay");
 
+    menuBtn.addEventListener("click", () => {
+      mobileMenu.classList.toggle("active");
+      overlay.classList.toggle("active");
+    });
+
+    overlay.addEventListener("click", () => {
+      mobileMenu.classList.remove("active");
+      overlay.classList.remove("active");
+    });
+    </script>
 </body>
 </html>
