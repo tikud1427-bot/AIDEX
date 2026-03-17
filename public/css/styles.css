@@ -751,4 +751,641 @@ max-width:100%;
   background:rgba(255,255,255,0.08);
   color:white;
   text-decoration:none;
-}
+
+  /* ===============================
+  ⚡ AIDEX PERFORMANCE MODE CSS
+  Fix lag + smooth UI
+  =============================== */
+
+  /* RESET */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  /* BODY */
+  body {
+    font-family: 'Poppins', sans-serif;
+    background: #0f172a;
+    color: #fff;
+    overflow-x: hidden;
+  }
+
+  /* CONTAINER */
+  .page-container {
+    max-width: 1200px;
+    margin: auto;
+    padding: 20px;
+  }
+
+  /* NAVBAR */
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #0f172a;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  /* GRID */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  /* CARD (OPTIMIZED) */
+  .tool-card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 18px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    /* LIGHT shadow only */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  }
+
+  /* HOVER (light, not heavy) */
+  .tool-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+  }
+
+  /* BUTTON */
+  button {
+    background: #3b82f6;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  button:hover {
+    background: #2563eb;
+  }
+
+  /* IMAGES */
+  img {
+    max-width: 100%;
+    display: block;
+    border-radius: 10px;
+  }
+
+  /* REMOVE HEAVY EFFECTS */
+  .glass,
+  .card-glass,
+  .blur-bg {
+    backdrop-filter: none !important;
+    background: #1e293b !important;
+  }
+
+  /* DISABLE HEAVY ANIMATIONS */
+  * {
+    animation: none !important;
+  }
+
+  /* MOBILE OPTIMIZATION */
+  @media (max-width: 768px) {
+    .tools-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .navbar {
+      flex-direction: column;
+      gap: 10px;
+    }
+  }/* ===============================
+  ⚡ AIDEX PERFORMANCE MODE CSS
+  Fix lag + smooth UI
+  =============================== */
+
+  /* RESET */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  /* BODY */
+  body {
+    font-family: 'Poppins', sans-serif;
+    background: #0f172a;
+    color: #fff;
+    overflow-x: hidden;
+  }
+
+  /* CONTAINER */
+  .page-container {
+    max-width: 1200px;
+    margin: auto;
+    padding: 20px;
+  }
+
+  /* NAVBAR */
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #0f172a;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  /* GRID */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  /* CARD (OPTIMIZED) */
+  .tool-card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 18px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    /* LIGHT shadow only */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  }
+
+  /* HOVER (light, not heavy) */
+  .tool-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+  }
+
+  /* BUTTON */
+  button {
+    background: #3b82f6;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  button:hover {
+    background: #2563eb;
+  }
+
+  /* IMAGES */
+  img {
+    max-width: 100%;
+    display: block;
+    border-radius: 10px;
+  }
+
+  /* REMOVE HEAVY EFFECTS */
+  .glass,
+  .card-glass,
+  .blur-bg {
+    backdrop-filter: none !important;
+    background: #1e293b !important;
+  }
+
+  /* DISABLE HEAVY ANIMATIONS */
+  * {
+    animation: none !important;
+  }
+
+  /* MOBILE OPTIMIZATION */
+  @media (max-width: 768px) {
+    .tools-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .navbar {
+      flex-direction: column;
+      gap: 10px;
+    }
+  }/* ===============================
+  ⚡ AIDEX PERFORMANCE MODE CSS
+  Fix lag + smooth UI
+  =============================== */
+
+  /* RESET */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  /* BODY */
+  body {
+    font-family: 'Poppins', sans-serif;
+    background: #0f172a;
+    color: #fff;
+    overflow-x: hidden;
+  }
+
+  /* CONTAINER */
+  .page-container {
+    max-width: 1200px;
+    margin: auto;
+    padding: 20px;
+  }
+
+  /* NAVBAR */
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #0f172a;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  /* GRID */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  /* CARD (OPTIMIZED) */
+  .tool-card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 18px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    /* LIGHT shadow only */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  }
+
+  /* HOVER (light, not heavy) */
+  .tool-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+  }
+
+  /* BUTTON */
+  button {
+    background: #3b82f6;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  button:hover {
+    background: #2563eb;
+  }
+
+  /* IMAGES */
+  img {
+    max-width: 100%;
+    display: block;
+    border-radius: 10px;
+  }
+
+  /* REMOVE HEAVY EFFECTS */
+  .glass,
+  .card-glass,
+  .blur-bg {
+    backdrop-filter: none !important;
+    background: #1e293b !important;
+  }
+
+  /* DISABLE HEAVY ANIMATIONS */
+  * {
+    animation: none !important;
+  }
+
+  /* MOBILE OPTIMIZATION */
+  @media (max-width: 768px) {
+    .tools-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .navbar {
+      flex-direction: column;
+      gap: 10px;
+    }
+  }/* ===============================
+  ⚡ AIDEX PERFORMANCE MODE CSS
+  Fix lag + smooth UI
+  =============================== */
+
+  /* RESET */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  /* BODY */
+  body {
+    font-family: 'Poppins', sans-serif;
+    background: #0f172a;
+    color: #fff;
+    overflow-x: hidden;
+  }
+
+  /* CONTAINER */
+  .page-container {
+    max-width: 1200px;
+    margin: auto;
+    padding: 20px;
+  }
+
+  /* NAVBAR */
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #0f172a;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  /* GRID */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  /* CARD (OPTIMIZED) */
+  .tool-card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 18px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    /* LIGHT shadow only */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  }
+
+  /* HOVER (light, not heavy) */
+  .tool-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+  }
+
+  /* BUTTON */
+  button {
+    background: #3b82f6;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  button:hover {
+    background: #2563eb;
+  }
+
+  /* IMAGES */
+  img {
+    max-width: 100%;
+    display: block;
+    border-radius: 10px;
+  }
+
+  /* REMOVE HEAVY EFFECTS */
+  .glass,
+  .card-glass,
+  .blur-bg {
+    backdrop-filter: none !important;
+    background: #1e293b !important;
+  }
+
+  /* DISABLE HEAVY ANIMATIONS */
+  * {
+    animation: none !important;
+  }
+
+  /* MOBILE OPTIMIZATION */
+  @media (max-width: 768px) {
+    .tools-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .navbar {
+      flex-direction: column;
+      gap: 10px;
+    }
+  }/* ===============================
+  ⚡ AIDEX PERFORMANCE MODE CSS
+  Fix lag + smooth UI
+  =============================== */
+
+  /* RESET */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  /* BODY */
+  body {
+    font-family: 'Poppins', sans-serif;
+    background: #0f172a;
+    color: #fff;
+    overflow-x: hidden;
+  }
+
+  /* CONTAINER */
+  .page-container {
+    max-width: 1200px;
+    margin: auto;
+    padding: 20px;
+  }
+
+  /* NAVBAR */
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #0f172a;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  /* GRID */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  /* CARD (OPTIMIZED) */
+  .tool-card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 18px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    /* LIGHT shadow only */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  }
+
+  /* HOVER (light, not heavy) */
+  .tool-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+  }
+
+  /* BUTTON */
+  button {
+    background: #3b82f6;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  button:hover {
+    background: #2563eb;
+  }
+
+  /* IMAGES */
+  img {
+    max-width: 100%;
+    display: block;
+    border-radius: 10px;
+  }
+
+  /* REMOVE HEAVY EFFECTS */
+  .glass,
+  .card-glass,
+  .blur-bg {
+    backdrop-filter: none !important;
+    background: #1e293b !important;
+  }
+
+  /* DISABLE HEAVY ANIMATIONS */
+  * {
+    animation: none !important;
+  }
+
+  /* MOBILE OPTIMIZATION */
+  @media (max-width: 768px) {
+    .tools-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .navbar {
+      flex-direction: column;
+      gap: 10px;
+    }
+  }/* ===============================
+  ⚡ AIDEX PERFORMANCE MODE CSS
+  Fix lag + smooth UI
+  =============================== */
+
+  /* RESET */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  /* BODY */
+  body {
+    font-family: 'Poppins', sans-serif;
+    background: #0f172a;
+    color: #fff;
+    overflow-x: hidden;
+  }
+
+  /* CONTAINER */
+  .page-container {
+    max-width: 1200px;
+    margin: auto;
+    padding: 20px;
+  }
+
+  /* NAVBAR */
+  .navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 20px;
+    background: #0f172a;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+
+  /* GRID */
+  .tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+  }
+
+  /* CARD (OPTIMIZED) */
+  .tool-card {
+    background: #1e293b;
+    border-radius: 12px;
+    padding: 18px;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+    /* LIGHT shadow only */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+  }
+
+  /* HOVER (light, not heavy) */
+  .tool-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+  }
+
+  /* BUTTON */
+  button {
+    background: #3b82f6;
+    border: none;
+    padding: 10px 16px;
+    border-radius: 8px;
+    color: white;
+    cursor: pointer;
+    transition: background 0.2s ease;
+  }
+
+  button:hover {
+    background: #2563eb;
+  }
+
+  /* IMAGES */
+  img {
+    max-width: 100%;
+    display: block;
+    border-radius: 10px;
+  }
+
+  /* REMOVE HEAVY EFFECTS */
+  .glass,
+  .card-glass,
+  .blur-bg {
+    backdrop-filter: none !important;
+    background: #1e293b !important;
+  }
+
+  /* DISABLE HEAVY ANIMATIONS */
+  * {
+    animation: none !important;
+  }
+
+  /* MOBILE OPTIMIZATION */
+  @media (max-width: 768px) {
+    .tools-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .navbar {
+      flex-direction: column;
+      gap: 10px;
+    }
+  }
