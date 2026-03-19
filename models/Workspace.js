@@ -1,13 +1,16 @@
 const mongoose = require("mongoose");
 
 const workspaceSchema = new mongoose.Schema({
-  userId: String,
+  userId: { 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: "User", 
+    required: true 
+  },
+
   tools: [
-    {
-      toolId: String,
-      name: String,
-      url: String,
-      logo: String
+    { 
+      type: mongoose.Schema.Types.ObjectId, 
+      ref: "Tool" 
     }
   ]
 });

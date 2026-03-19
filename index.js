@@ -65,15 +65,26 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 app.set("view engine", "ejs");
 
-app.use(session({
-  secret: process.env.SESSION_SECRET || "aidex-secret",
-  resave: false,
-  saveUninitialized: false,
-  cookie: { 
-    maxAge: 1000 * 60 * 60 * 24,
-    secure: false   // ✅ important for Replit / localhost
-  }
-}));
+// ✅ SESSION (IMPROVED)
+app.use(
+  session({
+    name: "aidex_session",
+    secret: process.env.SESSION_SECRET || "super-secret-key",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      maxAge: 1000 * 60 * 60 * 24, // 1 day
+      httpOnly: true,
+      secure: false,
+    },
+  })
+);
+
+// ✅ GLOBAL USER (IMPORTANT)
+app.use((req, res, next) => {
+  res.locals.user = req.session.user || null;
+  next();
+});
 
 // ================= UPLOAD =================
 const uploadDir = path.join(__dirname, "public/uploads");
@@ -82,8 +93,9 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
   filename: (req, file, cb) =>
-    cb(null, Date.now() + "-" + file.originalname)
+    cb(null, Date.now() + "-" + file.originalname),
 });
+
 const upload = multer({ storage });
 
 // ================= AUTH MIDDLEWARE =================
@@ -91,11 +103,7 @@ function requireLogin(req, res, next) {
   if (!req.session.userId) return res.redirect("/login");
   next();
 }
-// 🔥 GLOBAL USER
-app.use((req, res, next) => {
-  res.locals.user = req.session.user || null;
-  next();
-});
+
 // ================= ROUTES =================
 
 // HOME
@@ -121,8 +129,8 @@ app.get("/tools", async (req, res) => {
     tools = await Tool.find({
       $or: [
         { name: { $regex: query, $options: "i" } },
-        { description: { $regex: query, $options: "i" } }
-      ]
+        { description: { $regex: query, $options: "i" } },
+      ],
     }).lean();
   } else {
     tools = await Tool.find().lean();
@@ -136,6 +144,7 @@ app.get("/tools", async (req, res) => {
 
   res.render("tools", { tools, categories, trendingIds });
 });
+
 // TOOL DETAILS
 app.get("/tool/:id", async (req, res) => {
   try {
@@ -169,126 +178,124 @@ app.get("/visit/:id", async (req, res) => {
   }
 });
 
-// TRENDING
-app.get("/trending", async (req, res) => {
-  try {
-    const tools = await getTrendingTools(20);
-
-    const allTools = await Tool.find().lean();
-    const categories = [...new Set(allTools.map(t => t.category))];
-
-    const trendingIds = tools.map(t => t._id.toString());
-
-    res.render("trending", { tools, categories, trendingIds });
-  } catch {
-    res.send("Error loading trending");
-  }
-});
-
-// SEARCH
-app.get("/search", async (req, res) => {
-  const q = req.query.q || "";
-
-  const tools = await Tool.find({
-    $or: [
-      { name: { $regex: q, $options: "i" } },
-      { category: { $regex: q, $options: "i" } },
-      { description: { $regex: q, $options: "i" } }
-    ]
-  }).lean();
-
-  const categories = [...new Set(tools.map(t => t.category))];
-
-  const trendingTools = await getTrendingTools(10);
-  const trendingIds = trendingTools.map(t => t._id.toString());
-
-  res.render("tools", { tools, categories, trendingIds });
-});
-
-// CATEGORY
-app.get("/tools/category/:name", async (req, res) => {
-  const category = decodeURIComponent(req.params.name);
-
-  const tools = await Tool.find({
-    category: { $regex: "^" + category + "$", $options: "i" }
-  }).lean();
-
-  const allTools = await Tool.find().lean();
-  const categories = [...new Set(allTools.map(t => t.category))];
-
-  const trendingTools = await getTrendingTools(10);
-  const trendingIds = trendingTools.map(t => t._id.toString());
-
-  res.render("tools", { tools, categories, trendingIds });
-});
-
 // ================= AUTH =================
 
 // LOGIN PAGE
-app.get("/login", (req, res) => res.render("login"));
+app.get("/login", (req, res) => {
+  if (req.session.userId) return res.redirect("/workspace");
+  res.render("login");
+});
 
 // SIGNUP PAGE
-app.get("/signup", (req, res) => res.render("signup"));
+app.get("/signup", (req, res) => {
+  if (req.session.userId) return res.redirect("/workspace");
+  res.render("signup");
+});
 
 // LOGIN
 app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  const user = await User.findOne({ email });
-  if (!user) return res.send("User not found");
+    if (!email || !password)
+      return res.send("All fields are required");
 
-  const match = await bcrypt.compare(password, user.password);
-  if (!match) return res.send("Wrong password");
+    const user = await User.findOne({ email });
+    if (!user) return res.send("User not found");
 
-  req.session.userId = user._id;
-  req.session.user = {
-    _id: user._id,
-    email: user.email
-  };
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.send("Invalid credentials");
 
-  // 🔥 CRITICAL FIX
-  req.session.save(() => {
-    res.redirect("/workspace");
-  });
+    req.session.user = {
+      _id: user._id,
+      email: user.email,
+      username: user.email.split("@")[0]
+    };
+
+    req.session.userId = user._id; // 🔥 ADD THIS
+    req.session.save(() => {
+      res.redirect("/workspace");
+    });
+  } catch (err) {
+    console.error(err);
+    res.send("Login error");
+  }
 });
 
 // SIGNUP
 app.post("/signup", async (req, res) => {
-  const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-  const exists = await User.findOne({ email });
-  if (exists) return res.send("User exists");
+    if (!email || !password)
+      return res.send("All fields are required");
 
-  const hash = await bcrypt.hash(password, 10);
-  await new User({ email, password: hash }).save();
+    const exists = await User.findOne({ email });
+    if (exists) return res.send("User already exists");
 
-  res.redirect("/login");
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const newUser = await new User({
+      email,
+      password: hashedPassword,
+    }).save();
+
+    // 🔥 AUTO LOGIN AFTER SIGNUP
+    req.session.user = {
+      _id: newUser._id,
+      email: newUser.email,
+      username: newUser.email.split("@")[0]
+    };
+
+    req.session.userId = newUser._id; // 🔥 ADD THIS
+    req.session.save(() => {
+      res.redirect("/workspace");
+    });
+  } catch (err) {
+    console.error(err);
+    res.send("Signup error");
+  }
 });
 
 // LOGOUT
 app.get("/logout", (req, res) => {
-  req.session.destroy(() => res.redirect("/"));
+  req.session.destroy(() => {
+    res.clearCookie("aidex_session");
+    res.redirect("/");
+  });
 });
 
 // ================= WORKSPACE =================
+
+// VIEW
 app.get("/workspace", requireLogin, async (req, res) => {
-  let workspace = await Workspace.findOne({ userId: req.session.userId }).populate("tools");
+  let workspace = await Workspace.findOne({
+    userId: req.session.userId,
+  })
+    .populate("tools")
+    .lean();
 
   if (!workspace) {
     workspace = await new Workspace({
       userId: req.session.userId,
-      tools: []
+      tools: [],
     }).save();
   }
 
   res.render("workspace", { workspace });
 });
 
+// ADD
 app.post("/workspace/add/:toolId", requireLogin, async (req, res) => {
-  let workspace = await Workspace.findOne({ userId: req.session.userId });
+  let workspace = await Workspace.findOne({
+    userId: req.session.userId,
+  });
 
   if (!workspace) {
-    workspace = new Workspace({ userId: req.session.userId, tools: [] });
+    workspace = new Workspace({
+      userId: req.session.userId,
+      tools: [],
+    });
   }
 
   if (!workspace.tools.includes(req.params.toolId)) {
@@ -299,13 +306,21 @@ app.post("/workspace/add/:toolId", requireLogin, async (req, res) => {
   res.sendStatus(200);
 });
 
+// REMOVE
 app.post("/workspace/remove/:toolId", requireLogin, async (req, res) => {
-  await Workspace.updateOne(
-    { userId: req.session.userId },
-    { $pull: { tools: req.params.toolId } }
-  );
+  try {
+    const toolId = new mongoose.Types.ObjectId(req.params.toolId);
 
-  res.sendStatus(200);
+    await Workspace.updateOne(
+      { userId: req.session.userId },
+      { $pull: { tools: toolId } }
+    );
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error removing tool");
+  }
 });
 
 // ================= START =================

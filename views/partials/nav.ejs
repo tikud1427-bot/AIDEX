@@ -6,6 +6,7 @@
 
     <!-- NAV LINKS -->
     <nav class="nav-links">
+
       <a href="/">Home</a>
       <a href="/tools">Tools</a>
       <a href="/trending" class="highlight">🔥 Trending</a>
@@ -16,17 +17,27 @@
 
       <a href="/submit">Submit</a>
       <a href="/about">About</a>
+
     </nav>
 
     <!-- ACTION BUTTONS -->
     <div class="header-actions">
+
       <% if (typeof user !== "undefined" && user) { %>
+
+        <!-- Optional: Show username -->
+        <span class="user-greet">Hi, <%= user.username || "User" %></span>
+
         <a href="/workspace" class="btn ghost">⚡ Workspace</a>
         <a href="/logout" class="btn primary">Logout</a>
+
       <% } else { %>
+
         <a href="/login" class="btn ghost">Login</a>
         <a href="/signup" class="btn primary">Sign Up</a>
+
       <% } %>
+
     </div>
 
     <!-- MOBILE MENU BUTTON -->
@@ -36,20 +47,26 @@
 
   <!-- MOBILE MENU -->
   <div class="mobile-menu" id="mobileMenu">
+
     <a href="/">Home</a>
     <a href="/tools">Tools</a>
     <a href="/trending">🔥 Trending</a>
 
     <% if (typeof user !== "undefined" && user) { %>
+
       <a href="/workspace">Workspace</a>
       <a href="/logout">Logout</a>
+
     <% } else { %>
+
       <a href="/login">Login</a>
       <a href="/signup">Sign Up</a>
+
     <% } %>
 
     <a href="/submit">Submit</a>
     <a href="/about">About</a>
+
   </div>
 </header>
 
