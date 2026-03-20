@@ -85,8 +85,7 @@
 
   {"id":"quillbot","name":"Quillbot","category":"Writing AI","url":"https://quillbot.com","description":"Paraphrasing and rewriting AI tool","logo":"https://w7.pngwing.com/pngs/885/865/png-transparent-quillbot-round-logo-tech-companies-thumbnail.png","clicks":0},
 
-  {"id":"deeplwrite",
-"name":"DeepL Write","category":"Writing AI","url":"https://deepl.com/write","description":"AI writing and translation assistant","logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSIaYNJCs3K8_Ma_DRryIwRMkL4g-YapNEiIQ&s","clicks":0},
+  {"id":"deeplwrite","name":"DeepL Write","category":"Writing AI","url":"https://deepl.com/write","description":"AI writing and translation assistant","logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSIaYNJCs3K8_Ma_DRryIwRMkL4g-YapNEiIQ&s","clicks":0},
 
   {"id":"komoai","name":"Komo AI","category":"Research AI","url":"https://komo.ai","description":"AI-powered search engine","logo":"https://komo.ai/icon.svg","clicks":0},
 
@@ -128,11 +127,11 @@
 
   {"id":"hostingerai","name":"Hostinger AI","category":"Website AI","url":"https://hostinger.com","description":"AI website builder","logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRKIivHIZm03BCjoHvRL33qCoexOKV4QRHMRg&s","clicks":0},
 
-  {"id:"cursor","name":"Cursor","category":"Coding AI","url":"https://cursor.sh","description":"AI code editor","logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTNk_Td9U-X3rbCCmwt4joXhsj7bBwpi3-U3w&s","clicks":0},
+  {"id":"cursor","name":"Cursor","category":"Coding AI","url":"https://cursor.sh","description":"AI code editor","logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTNk_Td9U-X3rbCCmwt4joXhsj7bBwpi3-U3w&s","clicks":0},
 
   {"id":"boltai","name":"Bolt AI","category":"Coding AI","url":"https://bolt.new","description":"AI full stack app builder","logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQBLl2L3jcRSXHzFSwobG4LHr6jrW1hMmthEA&s","clicks":0},
 
-  {"id":v"name":"Lovable","category":"Coding AI","url":"https://lovable.dev","description":"AI app builder","logo":"https://lovable.dev/img/logo/lovable-icon-bg-light.png","clicks":0},
+  {"id":"lovable","name":"Lovable","category":"Coding AI","url":"https://lovable.dev","description":"AI app builder","logo":"https://lovable.dev/img/logo/lovable-icon-bg-light.png","clicks":0},
 
   {"id":"blackboxai","name":"Blackbox AI","category":"Coding AI","url":"https://blackbox.ai","description":"AI coding assistant","logo":"https://media.licdn.com/dms/image/v2/D4E0BAQEsZKwTqXCf5Q/company-logo_200_200/B4EZlNb39IHIBs-/0/1757940777149/blackboxtech_logo?e=2147483647&v=beta&t=pdiPsSbF7U_2sLN63HVwfIGHkC-iV85J3LKjVnjP4Fc","clicks":0},
 
@@ -140,7 +139,7 @@
 
   {"id":"reclaimai","name":"Reclaim AI","category":"Productivity AI","url":"https://reclaim.ai","description":"AI scheduling assistant","logo":"https://files.raycast.com/sxrai2h4l4rrfou5ykibqbdn46ll","clicks":0},
 
-  {"id":"clockwise","name":"Clockwise","category":"Productivity AI","url":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRqQNdr9C43SB-TXwyCyR2leFTW-rV55uHrmA&s","clicks":0},
+  {"id":"clockwise","name":"Clockwise","category":"Productivity AI","url":"https://clockwise.com","description":"AI calendar optimization tool","logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRqQNdr9C43SB-TXwyCyR2leFTW-rV55uHrmA&s","clicks":0},
 
   {"id":"skedpal","name":"SkedPal","category":"Productivity AI","url":"https://skedpal.com","description":"Smart scheduling AI","logo":"https://www.skedpal.com/skedpal-logo.svg","clicks":0},
 
@@ -158,7 +157,7 @@
 
   {"id":"sanebox","name":"SaneBox","category":"Email AI","url":"https://sanebox.com","description":"AI inbox organizer","logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSBHTsXAHdMKtoh_9KbL8QhHeatm8o6gNwwrQ&s","clicks":0},
 
-  {"id":"botpress",","name":"Botpress","category":"Automation AI","url":"https://botpress.com","description":"AI chatbot builder","logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTQ4242hmSoIuvpzO6FJxMXFc-omp_G_Y--4g&s","clicks":0},
+  {"id":"botpress","name":"Botpress","category":"Automation AI","url":"https://botpress.com","description":"AI chatbot builder","logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTQ4242hmSoIuvpzO6FJxMXFc-omp_G_Y--4g&s","clicks":0},
   
 
   {"id":"resembleai","name":"Resemble AI","category":"Voice AI","url":"https://resemble.ai","description":"AI voice cloning","logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTEVGWjbDeMRW6Y6g7g_nWi4kFtF7DQ4SWYsQ&s","clicks":0},
