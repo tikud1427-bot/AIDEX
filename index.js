@@ -231,6 +231,28 @@ app.get("/about", (req, res) => {
   res.render("about");
 });
 
+// CATEGORY FILTER
+app.get("/tools/category/:category", async (req, res) => {
+  try {
+    const category = decodeURIComponent(req.params.category);
+
+  const tools = await Tool.find({
+      category: { $regex: new RegExp("^" + category + "$", "i") }
+    }).lean();
+    const allTools = await Tool.find().lean();
+    const categories = [...new Set(allTools.map(t => t.category))];
+
+    const trendingTools = await getTrendingTools(10);
+    const trendingIds = trendingTools.map(t => t._id.toString());
+
+    res.render("tools", { tools, categories, trendingIds });
+
+  } catch (err) {
+    console.error(err);
+    res.redirect("/tools");
+  }
+});
+
 // ================= AUTH =================
 
 // LOGIN PAGE
