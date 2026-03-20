@@ -933,3 +933,65 @@ h2{
   background: #020617;
   color: white;
 }
+
+/* SECTION TITLE */
+.section-title {
+  font-size: 28px;
+  margin-bottom: 25px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+/* CATEGORY GRID */
+.categories {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 20px;
+}
+
+/* CATEGORY CARD */
+.category-card {
+  background: linear-gradient(145deg, #0f172a, #1e293b);
+  border: 1px solid rgba(255,255,255,0.05);
+  padding: 25px;
+  border-radius: 16px;
+  text-align: center;
+  text-decoration: none;
+  color: white;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* HOVER EFFECT */
+.category-card:hover {
+  transform: translateY(-6px) scale(1.02);
+  border-color: #38bdf8;
+  box-shadow: 0 10px 30px rgba(56, 189, 248, 0.2);
+}
+
+/* ICON */
+.category-icon {
+  font-size: 32px;
+  margin-bottom: 12px;
+}
+
+/* NAME */
+.category-name {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* OPTIONAL GLOW EFFECT */
+.category-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(56,189,248,0.15), transparent);
+  opacity: 0;
+  transition: 0.3s;
+}
+
+.category-card:hover::before {
+  opacity: 1;
+}
