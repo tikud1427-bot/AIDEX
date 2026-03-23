@@ -258,6 +258,39 @@ app.get("/tools/category/:category", async (req, res) => {
     res.redirect("/tools");
   }
 });
+app.get("/lab", (req, res) => {
+  res.render("lab");
+});
+app.post("/generate", async (req, res) => {
+  const { prompt } = req.body;
+
+  try {
+    const OpenAI = require("openai");
+    const client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+
+    const baseResponse = await client.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    const answer = baseResponse.choices[0].message.content;
+
+    // Create variations
+    const responses = {
+      smart: answer,
+      creative: "Make it more creative:\n\n" + answer,
+      fast: answer.substring(0, 150) + "...",
+      detailed: answer + "\n\n(Expanded explanation added.)",
+    };
+
+    res.json(responses);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error generating response");
+  }
+});
 
 // ================= AUTH =================
 

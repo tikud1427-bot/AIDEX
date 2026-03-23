@@ -995,3 +995,40 @@ h2{
 .category-card:hover::before {
   opacity: 1;
 }
+
+.prompt-box {
+  display: flex;
+  gap: 10px;
+  margin: 20px;
+}
+
+.prompt-box input {
+  flex: 1;
+  padding: 12px;
+  font-size: 16px;
+}
+
+.prompt-box button {
+  padding: 12px 20px;
+  background: black;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+
+.results {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+  padding: 20px;
+}
+
+.card {
+  padding: 20px;
+  background: #f5f5f5;
+  border-radius: 10px;
+}
+
+.recommended {
+  border: 2px solid gold;
+}
