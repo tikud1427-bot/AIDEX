@@ -269,10 +269,7 @@ res.render("lab");
 
 const axios = require("axios");
 
-
-
-//MULTI AI GENERATION
-
+// MULTI AI GENERATION
 const models = [
   {
     name: "🧠 Smart AI",
@@ -300,7 +297,9 @@ app.post("/multi-generate", async (req, res) => {
           const result = await axios.post(
             "https://openrouter.ai/api/v1/chat/completions",
             {
-              model: "meta-llama/llama-3-8b-instruct",
+              // ✅ FIXED MODEL (stable)
+              model: "openai/gpt-3.5-turbo",
+
               messages: [
                 { role: "system", content: ai.system },
                 { role: "user", content: prompt }
@@ -309,7 +308,11 @@ app.post("/multi-generate", async (req, res) => {
             {
               headers: {
                 Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
+
+                // ✅ IMPORTANT HEADERS
+                "HTTP-Referer": "https://ai-directory--tikud1427.replit.app/",
+                "X-Title": "AQUIPLEX"
               }
             }
           );
@@ -323,7 +326,8 @@ app.post("/multi-generate", async (req, res) => {
 
         } catch (err) {
           console.error("❌ ERROR:", ai.name);
-          console.error(err.response?.data || err.message);
+          console.error("STATUS:", err.response?.status);
+          console.error("DATA:", err.response?.data || err.message);
 
           return {
             model: ai.name,
@@ -333,7 +337,7 @@ app.post("/multi-generate", async (req, res) => {
       })
     );
 
-    // ✅ Smart recommendation (first successful)
+    // ✅ Smart recommendation
     const best =
       responses.find(r => !r.output.includes("⚠️")) || responses[0];
 
