@@ -2,18 +2,15 @@
 <html>
 <head>
   <title>Aquiplex Prompt Lab</title>
-  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
 
 <h1>🧠 Aquiplex Prompt Lab</h1>
 
-<div class="prompt-box">
-  <input type="text" id="prompt" placeholder="Ask anything...">
-  <button onclick="generate()">Generate</button>
-</div>
+<input type="text" id="prompt" placeholder="Ask anything...">
+<button onclick="generate()">Generate</button>
 
-<div id="results" class="results"></div>
+<div id="results"></div>
 
 <script>
 async function generate() {
@@ -30,25 +27,10 @@ async function generate() {
   const data = await res.json();
 
   document.getElementById("results").innerHTML = `
-    <div class="card recommended">
-      <h3>⭐ Smart AI (Recommended)</h3>
-      <p>${data.smart}</p>
-    </div>
-
-    <div class="card">
-      <h3>🎨 Creative AI</h3>
-      <p>${data.creative}</p>
-    </div>
-
-    <div class="card">
-      <h3>⚡ Fast AI</h3>
-      <p>${data.fast}</p>
-    </div>
-
-    <div class="card">
-      <h3>📚 Detailed AI</h3>
-      <p>${data.detailed}</p>
-    </div>
+    <h3>⭐ Smart AI</h3><p>${data.smart}</p>
+    <h3>🎨 Creative AI</h3><p>${data.creative}</p>
+    <h3>⚡ Fast AI</h3><p>${data.fast}</p>
+    <h3>📚 Detailed AI</h3><p>${data.detailed}</p>
   `;
 }
 </script>

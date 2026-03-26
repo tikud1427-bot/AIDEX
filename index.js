@@ -265,33 +265,27 @@ app.get("/lab", (req, res) => {
 app.post("/generate", async (req, res) => {
   const { prompt } = req.body;
 
-  try {
-    const OpenAI = require("openai");
-    const client = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+  console.log("PROMPT:", prompt);
 
-    const baseResponse = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [{ role: "user", content: prompt }],
-    });
+  // ⏳ Simulate AI thinking delay
+  await new Promise(resolve => setTimeout(resolve, 800));
 
-    const answer = baseResponse.choices[0].message.content;
+  // 🧠 Better fake AI logic
+  const responses = {
+    smart: `🧠 Smart Answer:\n\n"${prompt}" can be approached strategically. Start by understanding the core concept, break it into smaller steps, and execute with clarity and consistency.`,
 
-    // Create variations
-    const responses = {
-      smart: answer,
-      creative: "Make it more creative:\n\n" + answer,
-      fast: answer.substring(0, 150) + "...",
-      detailed: answer + "\n\n(Expanded explanation added.)",
-    };
+    creative: `🎨 Creative Take:\n\nImagine "${prompt}" as something completely new — combine ideas, experiment freely, and don’t be afraid to break traditional patterns.`,
 
-    res.json(responses);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Error generating response");
-  }
+    fast: `⚡ Quick Answer:\n\n${prompt}? → Start simple, take action, improve as you go.`,
+
+    detailed: `📚 Detailed Explanation:\n\nTo fully understand "${prompt}", you need a structured approach:\n\n1. Understand the basics\n2. Break into steps\n3. Apply practically\n4. Iterate and improve\n\nThis method ensures long-term success.`,
+  };
+
+  res.json(responses);
 });
+    
+
+  
 
 // ================= AUTH =================
 
