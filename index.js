@@ -283,9 +283,9 @@ app.post("/multi-generate", async (req, res) => {
   if (!prompt) return res.status(400).send("Prompt required");
 
   const models = [
-    "mistralai/mistral-7b-instruct",
     "meta-llama/llama-3-8b-instruct",
-    "openchat/openchat-7b"
+    "mistralai/mistral-7b-instruct:free",
+    "google/gemma-7b-it:free"
   ];
 
   try {
