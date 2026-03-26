@@ -1531,3 +1531,149 @@ DO NOT REMOVE
   }
 
 }
+
+/* =========================
+🔥 DESKTOP OPTIMIZATION PATCH
+SAFE – NO BREAKING
+========================= */
+
+/* CENTER EVERYTHING */
+.main-container {
+  max-width: 1200px;
+  margin: auto;
+  align-items: center;
+}
+
+/* HERO + AI SIDE BALANCE */
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 60px;
+}
+
+/* LEFT SIDE (TEXT) */
+.hero-box {
+  flex: 1;
+  max-width: 550px;
+}
+
+/* RIGHT SIDE (AI) */
+.ai-box {
+  flex: 1;
+  max-width: 500px;
+}
+
+/* BETTER TEXT SCALING */
+.hero h1 {
+  font-size: 44px;
+  line-height: 1.2;
+}
+
+.hero p {
+  font-size: 16px;
+  max-width: 500px;
+}
+
+/* AI RESULTS SCROLL AREA */
+.ai-results {
+  max-height: 420px;
+  overflow-y: auto;
+  padding-right: 5px;
+}
+
+/* SCROLLBAR (OPTIONAL PREMIUM LOOK) */
+.ai-results::-webkit-scrollbar {
+  width: 6px;
+}
+.ai-results::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 10px;
+}
+
+/* CARD SPACING IMPROVEMENT */
+.ai-card {
+  margin-bottom: 10px;
+}
+
+/* GRID IMPROVEMENT */
+.grid {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+/* CATEGORY SECTION ALIGNMENT */
+.categories {
+  max-width: 900px;
+  margin: auto;
+}
+
+/* PREVENT TOO MUCH STRETCH ON ULTRA-WIDE */
+@media (min-width: 1400px) {
+  .main-container {
+    max-width: 1300px;
+  }
+}
+
+/* =========================
+🔥 HERO LAYOUT FIX (DESKTOP + MOBILE SAFE)
+========================= */
+
+/* STACK HERO CONTENT */
+.hero {
+  flex-direction: column !important;
+  align-items: center;
+  text-align: center;
+}
+
+/* REMOVE SIDE WIDTH LIMIT */
+.hero-box {
+  max-width: 700px;
+  width: 100%;
+}
+
+/* AI BOX BELOW */
+.ai-box {
+  max-width: 600px;
+  width: 100%;
+  margin-top: 20px;
+}
+
+/* SEARCH BAR CENTER */
+.search-bar {
+  justify-content: center;
+}
+
+/* AI FORM FULL WIDTH */
+#aiForm {
+  width: 100%;
+  justify-content: center;
+}
+
+/* INPUT + BUTTON BALANCE */
+#aiForm input {
+  flex: 1;
+}
+
+#aiForm button {
+  min-width: 120px;
+}
+
+/* BETTER SPACING */
+.hero h1 {
+  margin-bottom: 15px;
+}
+
+.hero p {
+  margin-bottom: 25px;
+}
+
+/* OPTIONAL: LIMIT WIDTH FOR CLEAN LOOK */
+.hero {
+  max-width: 900px;
+  margin: auto;
+}
+
+.search-bar input {
+  width: 400px;
+  max-width: 100%;
+}
