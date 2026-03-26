@@ -149,6 +149,7 @@
 
 </footer>
 
+
             <script>
             document.getElementById("aiForm").addEventListener("submit", async (e) => {
               e.preventDefault();
@@ -156,40 +157,38 @@
               const prompt = document.getElementById("aiPrompt").value;
               const resultsDiv = document.getElementById("aiResults");
 
-              resultsDiv.innerHTML = "⏳ Generating responses from multiple AIs...";
+              resultsDiv.innerHTML = "⏳ Loading...";
 
               try {
                 const res = await fetch("/multi-generate", {
                   method: "POST",
-                  headers: { "Content-Type": "application/json" },
+                  headers: {
+                    "Content-Type": "application/json"
+                  },
                   body: JSON.stringify({ prompt })
                 });
 
-                const data = await res.json();
+                console.log("STATUS:", res.status);
 
-                resultsDiv.innerHTML = "";
+                let data;
 
-                // ❌ Safety check
-                if (!data.responses) {
-                  resultsDiv.innerHTML = "❌ Failed to get AI responses";
+                try {
+                  data = await res.json();
+                } catch (e) {
+                  const text = await res.text();
+                  console.error("RAW RESPONSE:", text);
+                  resultsDiv.innerHTML = "❌ Server returned invalid response";
                   return;
                 }
+
+                resultsDiv.innerHTML = "";
 
                 data.responses.forEach(r => {
                   const div = document.createElement("div");
                   div.classList.add("ai-card");
 
-                  // 🧠 Clean names instead of ugly model names
-                  let modelName = "🤖 AI";
-                  if (r.model.includes("llama")) modelName = "🧠 Smart AI";
-                  else if (r.model.includes("mistral")) modelName = "🎨 Creative AI";
-                  else if (r.model.includes("openchat")) modelName = "📚 Detailed AI";
-
                   div.innerHTML = `
-                    <h3>
-                      ${modelName}
-                      ${r.model === data.recommended ? "🔥 AQUIPLEX Recommended" : ""}
-                    </h3>
+                    <h3>${r.model}</h3>
                     <p>${r.output}</p>
                   `;
 
@@ -197,8 +196,8 @@
                 });
 
               } catch (err) {
-                console.error(err);
-                resultsDiv.innerHTML = "❌ Something went wrong";
+                console.error("FRONTEND ERROR:", err);
+                resultsDiv.innerHTML = "❌ Frontend error";
               }
             });
             </script>

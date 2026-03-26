@@ -272,11 +272,13 @@ const axios = require("axios");
 
 
 //MULTI AI GENERATION
-console.log("🔥 ROUTE HIT");
-console.log("PROMPT:", prompt);
 
 app.post("/multi-generate", async (req, res) => {
+  console.log("🔥 ROUTE HIT");
+
   const { prompt } = req.body;
+
+  console.log("PROMPT:", prompt); // ✅ NOW SAFE
 
   if (!prompt) return res.status(400).send("Prompt required");
 
@@ -299,9 +301,7 @@ app.post("/multi-generate", async (req, res) => {
             {
               headers: {
                 Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://replit.com",
-                "X-Title": "Aquiplex"
+                "Content-Type": "application/json"
               }
             }
           );
@@ -333,7 +333,7 @@ app.post("/multi-generate", async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("❌ GLOBAL ERROR:", err);
     res.status(500).send("AI generation failed");
   }
 });
@@ -490,7 +490,7 @@ async function startServer() {
 await connectDB();
 await importTools();
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, "0.0.0.0", () => {
 console.log("🚀 Server running on port " + PORT);
