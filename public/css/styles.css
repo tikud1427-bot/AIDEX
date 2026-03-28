@@ -1882,3 +1882,7 @@ SAFE – NO BREAKING
   background: #1f2937;
   color: #9ca3af;
 }
+
+.browser.hidden {
+  display: none !important;
+}

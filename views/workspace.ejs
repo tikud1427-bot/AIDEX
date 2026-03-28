@@ -119,37 +119,35 @@
       };
 
     // 🚀 Launch Tool
-    function launchTool(name, url){
-      if(!url){
-        alert("No URL found for this tool");
-        return;
-      }
+      function launchTool(name, url){
+        if(!url){
+          alert("No URL found for this tool");
+          return;
+        }
 
-      if(!url.startsWith("http")){
-        url = "https://" + url;
-      }
+        if(!url.startsWith("http")){
+          url = "https://" + url;
+        }
 
-      const browser = document.getElementById("workspace-browser");
-      const urlBar = document.getElementById("browser-url");
+        const browser = document.getElementById("workspace-browser");
+        const urlBar = document.getElementById("browser-url");
 
-      // Show fake browser
-      browser.classList.remove("hidden");
-      urlBar.innerText = url;
+        // Show fake browser
+        browser.classList.remove("hidden");
+        urlBar.innerText = url;
 
-      // Save active tool
-      activeTools[name] = {
-        url,
-        openedAt: new Date()
-      };
+        // Save tool
+        activeTools[name] = { url };
 
-      // Open real tool
-      setTimeout(() => {
+        // OPEN TOOL
         window.open(url, "_blank");
-        browser.classList.add("hidden");
-        updateWorkspaceUI();
-      }, 800);
-    }
 
+        // 🔥 FORCE HIDE AFTER 1s (IMPORTANT)
+        setTimeout(() => {
+          browser.classList.add("hidden");
+          updateWorkspaceUI();
+        }, 1000);
+      }
     // 🔥 Render active tools
     function updateWorkspaceUI(){
       const container = document.getElementById("active-tools");
