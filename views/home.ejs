@@ -79,7 +79,13 @@
 
           </div>
         </div>
-        <div id="history-container">
+        <!-- Toggle Button -->
+        <button class="history-toggle" onclick="toggleHistory()">
+          🕘 Show Recent Prompts
+        </button>
+
+        <!-- Hidden History -->
+        <div id="history-container" class="history-hidden">
           <h3>🕘 Recent Prompts</h3>
           <div id="history"></div>
         </div>
@@ -241,10 +247,9 @@
                     return;
                   }
 
-                  container.innerHTML = data.map(item => `
+                  container.innerHTML = data.slice(0, 5).map(item => `
                     <div class="history-item">
                       <p class="prompt">${item.prompt}</p>
-                      <p class="response">${item.response}</p>
                       <button onclick="reusePrompt('${item.prompt.replace(/'/g, "\\'")}')">
                         Reuse
                       </button>
@@ -275,6 +280,18 @@
                     }, 2000);
                   });
                 }
+              function toggleHistory() {
+                const section = document.getElementById("history-container");
+                const button = document.querySelector(".history-toggle");
+
+                section.classList.toggle("history-show");
+
+                if (section.classList.contains("history-show")) {
+                  button.innerText = "❌ Hide Recent Prompts";
+                } else {
+                  button.innerText = "🕘 Show Recent Prompts";
+                }
+              }
               </script>
 
             <script>
