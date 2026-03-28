@@ -1819,3 +1819,26 @@ SAFE – NO BREAKING
       display: none;
     }
   }
+
+  /* =========================
+  🔥 AI GRID FINAL FIX (FORCE OVERRIDE)
+  ========================= */
+
+  #aiResults {
+    display: flex !important;
+    overflow-x: auto;
+    gap: 12px;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 10px;
+  }
+
+  #aiResults .ai-card {
+    min-width: 85% !important;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+
+  /* Hide scrollbar */
+  #aiResults::-webkit-scrollbar {
+    display: none;
+  }
