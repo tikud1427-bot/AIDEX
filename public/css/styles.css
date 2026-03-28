@@ -1762,375 +1762,123 @@ SAFE – NO BREAKING
   }
 }
 
+/* =========================
+🔥 AI GRID (CLEAN FIX)
+========================= */
+
+/* DESKTOP */
 .ai-grid {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 10px;
-  scroll-snap-type: x mandatory;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
 }
 
-.ai-card {
-  min-width: 85%;   /* important */
-  flex-shrink: 0;
-  scroll-snap-align: start;
-
-  background: #0f172a;
-  padding: 15px;
-  border-radius: 12px;
-}
-
-.ai-card:hover {
-  transform: translateY(-5px);
-}
-
-.smart { border-top: 3px solid #22c55e; }
-.creative { border-top: 3px solid #f59e0b; }
-.fast { border-top: 3px solid #3b82f6; }
-
+/* MOBILE */
 @media (max-width: 768px) {
-
-
-
-
-  /* DESKTOP: 3 columns */
   .ai-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 15px;
-  }
-
-  /* MOBILE: horizontal scroll */
-  @media (max-width: 768px) {
-    .ai-grid {
-      display: flex;
-      overflow-x: auto;
-      gap: 12px;
-      scroll-snap-type: x mandatory;
-    }
-
-    .ai-card {
-      min-width: 80%;
-      flex-shrink: 0;
-      scroll-snap-align: start;
-    }
-
-    .ai-grid::-webkit-scrollbar {
-      display: none;
-    }
-  }
-
-  /* =========================
-  🔥 AI GRID FINAL FIX (FORCE OVERRIDE)
-  ========================= */
-
-  #aiResults {
-    display: flex !important;
+    display: flex;
     overflow-x: auto;
     gap: 12px;
     scroll-snap-type: x mandatory;
-    padding-bottom: 10px;
   }
 
-  #aiResults .ai-card {
-    min-width: 85% !important;
+  .ai-card {
+    min-width: 80%;
     flex-shrink: 0;
     scroll-snap-align: start;
   }
 
-  /* Hide scrollbar */
-  #aiResults::-webkit-scrollbar {
+  .ai-grid::-webkit-scrollbar {
     display: none;
   }
+}
 
-  .ai-card {
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    height: 100%;
-  }
+/* AI CARD (single clean version) */
+.ai-card {
+  background: #0f172a;
+  padding: 18px;
+  border-radius: 16px;
+  min-height: 250px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  transition: 0.3s;
+}
 
-  .ai-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 20px;
-    align-items: stretch; /* IMPORTANT */
-  }
+.ai-card:hover {
+  transform: translateY(-4px);
+}
 
-  .ai-box {
-    max-width: 1200px;
-    margin: auto;
-  }
+/* =========================
+🔥 WORKSPACE FINAL FIX
+========================= */
 
-  .ai-card {
-    background: #0f172a;
-    padding: 18px;
-    border-radius: 16px;
-    min-height: 250px;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-  }
+.active-tools-panel {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 20px 0 30px;
+}
 
-  .ai-card p {
-    overflow-y: auto;
-    max-height: 300px;
-  }
+.active-tool {
+  background: linear-gradient(135deg, #0f172a, #111827);
+  border: 1px solid rgba(255,255,255,0.08);
+  padding: 12px 16px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #e5e7eb;
+  min-width: 200px;
+}
 
-  .ai-card.best {
-    border: 2px solid #22c55e;
-    transform: scale(1.02);
-  }
+.active-tool button {
+  margin-left: auto;
+  background: #2563eb;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+}
 
-  .ai-card h3 {
-    position: sticky;
-    top: 0;
-    background: #0f172a;
-  }
+/* =========================
+🔥 FAKE BROWSER FIX
+========================= */
 
-  /* Target your existing buttons inside AI cards */
-  .ai-card button {
-    margin-top: 15px;
-    width: 100%;
-    padding: 10px;
+.browser {
+  position: fixed;
+  inset: 0;
+  background: #0b0f1a;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  backdrop-filter: blur(10px);
+}
 
-    border: none;
-    border-radius: 10px;
+/* =========================
+🔥 WORKSPACE CARD UPGRADE
+========================= */
 
-    font-size: 14px;
-    font-weight: 500;
+.workspace-card {
+  background: linear-gradient(145deg, #0b1220, #0f172a);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,0.05);
+  transition: 0.25s;
+}
 
-    color: white;
-    background: linear-gradient(135deg, #4f46e5, #06b6d4);
+.workspace-card:hover {
+  transform: translateY(-6px);
+  border-color: #3b82f6;
+}
 
-    cursor: pointer;
-    transition: all 0.3s ease;
+.launch-btn {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+}
 
-    position: relative;
-    overflow: hidden;
-  }
-
-  /* Hover effect */
-  .ai-card button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(6, 182, 212, 0.3);
-  }
-
-  /* Click press */
-  .ai-card button:active {
-    transform: scale(0.95);
-  }
-
-  /* ✨ Shine animation */
-  .ai-card button::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      120deg,
-      transparent,
-      rgba(255, 255, 255, 0.4),
-      transparent
-    );
-    transition: all 0.5s;
-  }
-
-  .ai-card button:hover::before {
-    left: 100%;
-  }
-
-  /* Optional subtle glow */
-  .ai-card button {
-    box-shadow: 0 0 0 rgba(0,0,0,0);
-  }
-
-  .ai-card button:hover {
-    box-shadow: 0 0 15px rgba(79, 70, 229, 0.4);
-  }
-
-  .ai-card button {
-    backdrop-filter: blur(6px);
-  }
-
-  /* 🔥 FAKE BROWSER */
-  .browser {
-    position: fixed;
-    inset: 0;
-    background: #0b0f1a;
-    z-index: 9999;
-    display: flex;
-    flex-direction: column;
-  }
-
-  .browser-top {
-    display: flex;
-    align-items: center;
-    padding: 10px;
-    background: #111827;
-    gap: 8px;
-  }
-
-  .dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-  }
-
-  .red { background: #ff5f56; }
-  .yellow { background: #ffbd2e; }
-  .green { background: #27c93f; }
-
-  .address-bar {
-    margin-left: 10px;
-    background: #1f2937;
-    padding: 6px 12px;
-    border-radius: 6px;
-    font-size: 13px;
-    color: #9ca3af;
-    flex: 1;
-  }
-
-  .browser-body {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #9ca3af;
-  }
-
-  .loader {
-    animation: pulse 1s infinite;
-  }
-
-  @keyframes pulse {
-    0% { opacity: 0.4; }
-    50% { opacity: 1; }
-    100% { opacity: 0.4; }
-  }
-
-  .hidden {
-    display: none;
-  }
-
-
-  /* 🔥 ACTIVE TOOLS PANEL */
-  .active-tools-panel {
-    display: flex;
-    gap: 12px;
-    flex-wrap: wrap;
-    margin: 20px 0 30px;
-  }
-
-  .active-tool {
-    background: linear-gradient(135deg, #0f172a, #111827);
-    border: 1px solid rgba(255,255,255,0.08);
-    padding: 12px 16px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: #e5e7eb;
-    min-width: 200px;
-    transition: 0.2s ease;
-  }
-
-  .active-tool:hover {
-    transform: translateY(-2px);
-    border-color: rgba(59,130,246,0.4);
-  }
-
-  .active-tool span {
-    font-weight: 500;
-  }
-
-  .active-tool button {
-    margin-left: auto;
-    background: #2563eb;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 6px;
-    color: white;
-    cursor: pointer;
-    font-size: 12px;
-    transition: 0.2s;
-  }
-
-  .active-tool button:hover {
-    background: #1d4ed8;
-  }
-
-  .workspace-card {
-    background: linear-gradient(145deg, #0b1220, #0f172a);
-    border-radius: 16px;
-    padding: 20px;
-    border: 1px solid rgba(255,255,255,0.05);
-    transition: all 0.25s ease;
-    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
-  }
-
-  .workspace-card:hover {
-    transform: translateY(-6px);
-    border-color: rgba(59,130,246,0.4);
-    box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-  }
-
-  .launch-btn {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    border: none;
-    padding: 10px;
-    border-radius: 10px;
-    color: white;
-    font-weight: 500;
-    cursor: pointer;
-    transition: 0.2s;
-  }
-
-  .launch-btn:hover {
-    transform: scale(1.03);
-    box-shadow: 0 6px 20px rgba(59,130,246,0.4);
-  }
-
-  .remove-btn {
-    background: #1f2937;
-    border: none;
-    padding: 10px;
-    border-radius: 10px;
-    color: #9ca3af;
-    cursor: pointer;
-    transition: 0.2s;
-  }
-
-  .remove-btn:hover {
-    background: #ef4444;
-    color: white;
-  }
-
-  .workspace-header h1 {
-    font-size: 32px;
-    font-weight: 600;
-    margin-bottom: 6px;
-  }
-
-  .workspace-header p {
-    color: #9ca3af;
-    font-size: 14px;
-  }
-
-  .container {
-    max-width: 1100px;
-    margin: auto;
-    padding: 30px 20px;
-  }
-
-  .browser {
-    backdrop-filter: blur(10px);
-    animation: fadeIn 0.25s ease;
-  }
-
-  .browser-body {
-    font-size: 14px;
-    opacity: 0.8;
-  }
-
-  
+.remove-btn {
+  background: #1f2937;
+  color: #9ca3af;
+}
