@@ -114,6 +114,9 @@
     <script>
 
     const activeTools = {};
+      window.onload = () => {
+        updateWorkspaceUI();
+      };
 
     // 🚀 Launch Tool
     function launchTool(name, url){
@@ -159,7 +162,7 @@
         div.className = "active-tool";
 
         div.innerHTML = `
-          <span>${name}</span>
+          <span>🧠 ${name}</span>
           <button onclick="resumeTool('${tool.url}')">Resume</button>
         `;
 

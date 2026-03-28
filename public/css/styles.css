@@ -2013,17 +2013,124 @@ SAFE – NO BREAKING
     display: none;
   }
 
+
   /* 🔥 ACTIVE TOOLS PANEL */
   .active-tools-panel {
-    margin-top: 20px;
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin: 20px 0 30px;
   }
 
   .active-tool {
+    background: linear-gradient(135deg, #0f172a, #111827);
+    border: 1px solid rgba(255,255,255,0.08);
+    padding: 12px 16px;
+    border-radius: 12px;
     display: flex;
-    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    color: #e5e7eb;
+    min-width: 200px;
+    transition: 0.2s ease;
+  }
+
+  .active-tool:hover {
+    transform: translateY(-2px);
+    border-color: rgba(59,130,246,0.4);
+  }
+
+  .active-tool span {
+    font-weight: 500;
+  }
+
+  .active-tool button {
+    margin-left: auto;
+    background: #2563eb;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    font-size: 12px;
+    transition: 0.2s;
+  }
+
+  .active-tool button:hover {
+    background: #1d4ed8;
+  }
+
+  .workspace-card {
+    background: linear-gradient(145deg, #0b1220, #0f172a);
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid rgba(255,255,255,0.05);
+    transition: all 0.25s ease;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+  }
+
+  .workspace-card:hover {
+    transform: translateY(-6px);
+    border-color: rgba(59,130,246,0.4);
+    box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+  }
+
+  .launch-btn {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    border: none;
     padding: 10px;
-    background: #111827;
-    margin-bottom: 8px;
-    border-radius: 8px;
+    border-radius: 10px;
+    color: white;
+    font-weight: 500;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+
+  .launch-btn:hover {
+    transform: scale(1.03);
+    box-shadow: 0 6px 20px rgba(59,130,246,0.4);
+  }
+
+  .remove-btn {
+    background: #1f2937;
+    border: none;
+    padding: 10px;
+    border-radius: 10px;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: 0.2s;
+  }
+
+  .remove-btn:hover {
+    background: #ef4444;
     color: white;
   }
+
+  .workspace-header h1 {
+    font-size: 32px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+
+  .workspace-header p {
+    color: #9ca3af;
+    font-size: 14px;
+  }
+
+  .container {
+    max-width: 1100px;
+    margin: auto;
+    padding: 30px 20px;
+  }
+
+  .browser {
+    backdrop-filter: blur(10px);
+    animation: fadeIn 0.25s ease;
+  }
+
+  .browser-body {
+    font-size: 14px;
+    opacity: 0.8;
+  }
+
+  
