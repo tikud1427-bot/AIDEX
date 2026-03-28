@@ -2016,3 +2016,78 @@ SAFE – NO BREAKING
   color: white;
   cursor: pointer;
 }
+
+/* =========================
+🔥 AI RESPONSE LAYOUT FIX (FINAL SAFE OVERRIDE)
+========================= */
+
+/* Force horizontal layout on desktop */
+.ai-results,
+#aiResults,
+.ai-grid {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 20px !important;
+  align-items: stretch;
+}
+
+/* Make all cards equal height */
+.ai-card {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+/* Remove width restrictions that break grid */
+.ai-card {
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+
+/* 🔥 MOBILE KEEP CLEAN STACK */
+@media (max-width: 768px) {
+  .ai-results,
+  #aiResults,
+  .ai-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* =========================
+🔥 AI MOBILE HORIZONTAL SCROLL (FINAL)
+========================= */
+
+/* MOBILE: horizontal scroll instead of vertical */
+@media (max-width: 768px) {
+
+  .ai-results,
+  #aiResults,
+  .ai-grid {
+    display: flex !important;
+    overflow-x: auto;
+    gap: 15px;
+    padding-bottom: 10px;
+    scroll-snap-type: x mandatory;
+  }
+
+  /* Each card behaves like slide */
+  .ai-card {
+    min-width: 85% !important;
+    flex-shrink: 0;
+    scroll-snap-align: start;
+  }
+
+  /* Hide scrollbar for clean UI */
+  .ai-results::-webkit-scrollbar,
+  #aiResults::-webkit-scrollbar,
+  .ai-grid::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.ai-results,
+#aiResults,
+.ai-grid {
+  scroll-behavior: smooth;
+}
