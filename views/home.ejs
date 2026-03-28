@@ -4,7 +4,7 @@
   <head>
 
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=meta, initial-scale=1.0">
 
   <title>AQUIPLEX | Discover the Best AI Tools</title>
 
@@ -60,7 +60,22 @@
           <button type="submit">Generate</button>
         </form>
 
-        <div id="aiResults"></div>
+        <div id="aiResults" class="ai-grid">
+          <div class="ai-card smart">
+            <h3>🧠 Smart</h3>
+            <p id="smartText">Waiting...</p>
+          </div>
+
+          <div class="ai-card creative">
+            <h3>🎨 Creative</h3>
+            <p id="creativeText">Waiting...</p>
+          </div>
+
+          <div class="ai-card fast">
+            <h3>⚡ Fast</h3>
+            <p id="fastText">Waiting...</p>
+          </div>
+        </div>
         <div id="history-container">
           <h3>🕘 Recent Prompts</h3>
           <div id="history"></div>
@@ -169,55 +184,27 @@
               const prompt = document.getElementById("aiPrompt").value;
               const resultsDiv = document.getElementById("aiResults");
 
-              resultsDiv.innerHTML = "⏳ Loading...";
+              // Set loading states
+              document.getElementById("smartText").innerText = "🧠 Thinking...";
+              document.getElementById("creativeText").innerText = "🎨 Creating...";
+              document.getElementById("fastText").innerText = "⚡ Answering...";
 
-              try {
-                const res = await fetch("/multi-generate", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json"
-                  },
-                  body: JSON.stringify({ prompt })
-                });
+              loadHistory();
 
-                console.log("STATUS:", res.status);
-
-                let data;
-
-                try {
-                  data = await res.json();
-                } catch (e) {
-                  const text = await res.text();
-                  console.error("RAW RESPONSE:", text);
-                  resultsDiv.innerHTML = "❌ Server returned invalid response";
-                  return;
+              // Fill fixed UI cards
+              data.responses.forEach(r => {
+                if (r.model.includes("Smart")) {
+                  document.getElementById("smartText").innerText = r.output;
                 }
 
-                resultsDiv.innerHTML = "";
-                loadHistory();
+                if (r.model.includes("Creative")) {
+                  document.getElementById("creativeText").innerText = r.output;
+                }
 
-                data.responses
-                .filter(r => !r.output.includes("⚠️"))
-                .forEach(r => {
-                  const div = document.createElement("div");
-                  div.classList.add("ai-card");
-
-                  // ✅ ADD HERE
-                  if (r.model === data.recommended) {
-                    div.classList.add("recommended");
-                  }
-
-                  div.innerHTML = `
-                    <h3>
-                      ${r.model}
-                      ${r.model === data.recommended ? "🔥 Recommended" : ""}
-                    </h3>
-                    <p>${r.output}</p>
-                  `;
-
-                  resultsDiv.appendChild(div);
-                });
-
+                if (r.model.includes("Fast")) {
+                  document.getElementById("fastText").innerText = r.output;
+                }
+              });
               } catch (err) {
                 console.error("FRONTEND ERROR:", err);
                 resultsDiv.innerHTML = "❌ Frontend error";

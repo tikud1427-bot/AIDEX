@@ -1761,3 +1761,26 @@ SAFE – NO BREAKING
     font-size: 16px;
   }
 }
+
+.ai-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.ai-card {
+  background: #0f172a;
+  padding: 15px;
+  border-radius: 12px;
+  min-height: 150px;
+  transition: 0.3s;
+}
+
+.ai-card:hover {
+  transform: translateY(-5px);
+}
+
+.smart { border-top: 3px solid #22c55e; }
+.creative { border-top: 3px solid #f59e0b; }
+.fast { border-top: 3px solid #3b82f6; }
