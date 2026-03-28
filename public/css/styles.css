@@ -1886,3 +1886,7 @@ SAFE – NO BREAKING
 .browser.hidden {
   display: none !important;
 }
+
+.workspace-card {
+  transition: all 0.3s ease;
+}

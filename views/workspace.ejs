@@ -148,6 +148,53 @@
           updateWorkspaceUI();
         }, 1000);
       }
+
+      // 🗑️ Remove Tool
+      async function removeTool(toolId){
+        try {
+          const res = await fetch("/workspace/remove/" + toolId, {
+            method: "POST"
+          });
+
+          if(res.ok){
+
+            const card = document.getElementById("tool-" + toolId);
+
+            if(card){
+              // animation
+              card.style.transition = "all 0.3s ease";
+              card.style.opacity = "0";
+              card.style.transform = "scale(0.8)";
+
+              setTimeout(() => {
+                card.remove();
+
+                // check empty state
+                const grid = document.getElementById("workspaceGrid");
+                const remaining = grid.querySelectorAll(".workspace-card");
+
+                if(remaining.length === 0){
+                  grid.innerHTML = `
+                    <div class="empty-workspace">
+                      <h2>No tools saved</h2>
+                      <p>Add tools from the tools page</p>
+                      <a href="/tools" class="browse-tools-btn">Browse Tools</a>
+                    </div>
+                  `;
+                }
+
+              }, 300);
+            }
+
+          } else {
+            alert("Failed to remove tool");
+          }
+
+        } catch (err){
+          console.error(err);
+          alert("Error removing tool");
+        }
+      }
     // 🔥 Render active tools
     function updateWorkspaceUI(){
       const container = document.getElementById("active-tools");
