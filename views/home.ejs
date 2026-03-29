@@ -55,6 +55,20 @@
 
         </div>
 
+    
+        <section class="section" id="history-container">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <h2 class="section-title">🕘 Recent Prompts</h2>
+            <button class="history-toggle" onclick="toggleHistory()">
+              Show Recent Prompts
+            </button>
+          </div>
+
+          <div id="history" class="history-list">
+            <p>Loading...</p>
+          </div>
+        </section>
+
         <!-- 🔥 CTA -->
         <div class="hero-cta">
           <a href="/tools" class="btn primary">Explore Tools</a>
@@ -72,21 +86,36 @@
         <div class="ai-card smart">
           <h3>🧠 Smart</h3>
           <p id="smartText">Waiting...</p>
-          <button onclick="copyText('smartText', this)">Copy</button>
+
+          <div class="ai-actions">
+            <button onclick="copyText('smartText', this)">Copy</button>
+            <button onclick="shareText('smartText')">Share</button>
+          </div>
         </div>
 
-        <div class="ai-card creative">
-          <h3>🎨 Creative</h3>
-          <p id="creativeText">Waiting...</p>
-          <button onclick="copyText('creativeText', this)">Copy</button>
-        </div>
+        <div id="aiResults" class="ai-grid">
+          <div class="ai-card smart">
+            <h3>🎨 Creative</h3>
+            <p id="smartText">Waiting...</p>
 
-        <div class="ai-card fast">
-          <h3>⚡ Fast</h3>
-          <p id="fastText">Waiting...</p>
-          <button onclick="copyText('fastText', this)">Copy</button>
-        </div>
-      </div>
+            <div class="ai-actions">
+              <button onclick="copyText('smartText', this)">Copy</button>
+              <button onclick="shareText('smartText')">Share</button>
+            </div>
+          </div>
+        
+        
+
+          <div id="aiResults" class="ai-grid">
+            <div class="ai-card smart">
+              <h3>"⚡Fast</h3>
+              <p id="smartText">Waiting...</p>
+
+              <div class="ai-actions">
+                <button onclick="copyText('smartText', this)">Copy</button>
+                <button onclick="shareText('smartText')">Share</button>
+              </div>
+            </div>
     </section>
 
     <section class="section">
@@ -301,28 +330,20 @@
               }    
 
 
-                function copyText(id, btn) {    
-                  const text = document.getElementById(id).innerText;    
-
-                  navigator.clipboard.writeText(text).then(() => {    
-                    btn.innerText = "Copied!";    
-                    setTimeout(() => {    
-                      btn.innerText = "Copy";    
-                    }, 2000);    
-                  });    
+                  
                 }    
-              function toggleHistory() {    
-                const section = document.getElementById("history-container");    
-                const button = document.querySelector(".history-toggle");    
+              function toggleHistory() {
+                const section = document.getElementById("history-container");
+                const button = document.querySelector(".history-toggle");
 
-                section.classList.toggle("history-show");    
+                section.classList.toggle("history-show");
 
-                if (section.classList.contains("history-show")) {    
-                  button.innerText = "❌ Hide Recent Prompts";    
-                } else {    
-                  button.innerText = "🕘 Show Recent Prompts";    
-                }    
-              }    
+                if (section.classList.contains("history-show")) {
+                  button.innerText = "❌ Hide Recent Prompts";
+                } else {
+                  button.innerText = "🕘 Show Recent Prompts";
+                }
+              }
               </script>    
 
             <script>    
@@ -335,13 +356,55 @@
             </script>    
 
             <script>    
-              if (!/Android/i.test(navigator.userAgent)) {    
-                    const apk = document.querySelector(".apk-section");
-                    if (apk && !/Android/i.test(navigator.userAgent)) {
-                      apk.style.display = "none";
-                    }
-              }    
+              const apk = document.querySelector(".apk-section");
+              if (apk && !/Android/i.test(navigator.userAgent)) {
+                apk.style.display = "none";
+              }
             </script>    
+
+            <script>
+            async function copyText(id, btn) {
+              const text = document.getElementById(id).innerText;
+
+              try {
+                await navigator.clipboard.writeText(text);
+              } catch {
+                // fallback (important)
+                const textarea = document.createElement("textarea");
+                textarea.value = text;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textarea);
+              }
+
+              btn.innerText = "Copied!";
+              setTimeout(() => {
+                btn.innerText = "Copy";
+              }, 2000);
+            }
+            </script>
+
+            <script>
+            async function shareText(id) {
+              const text = document.getElementById(id).innerText;
+
+              if (navigator.share) {
+                try {
+                  await navigator.share({
+                    title: "Aquiplex AI Result",
+                    text: text
+                  });
+                } catch (err) {
+                  console.log("Share cancelled");
+                }
+              } else {
+                // fallback → copy instead
+                await navigator.clipboard.writeText(text);
+                alert("Copied! Share it anywhere 🚀");
+              }
+            }
+            </script>
 
   </body>    
 </html>

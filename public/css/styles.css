@@ -2868,3 +2868,28 @@ HOOKED HERO (NEXT LEVEL UI)
     border: none;
   }
 }
+
+/* HISTORY */
+.history-list {
+  margin-top: 15px;
+  display: none;
+}
+
+.history-show .history-list {
+  display: block;
+}
+
+.history-item {
+  background: #0f172a;
+  padding: 10px;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-item .prompt {
+  font-size: 14px;
+  opacity: 0.8;
+}
