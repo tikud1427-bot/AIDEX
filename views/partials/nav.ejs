@@ -1,16 +1,6 @@
 <header class="main-header">
   <div class="header-container">
 
-    <!-- 🔍 GLOBAL SEARCH -->
-    <form action="/tools" method="GET" class="nav-search">
-      <input 
-        type="text" 
-        name="q" 
-        placeholder="Search AI tools..." 
-        required
-      >
-    </form>
-
     <!-- LOGO -->
     <a href="/" class="logo">
       <img src="/logo/logo.png" alt="AQUIPLEX" class="logo-img">
@@ -19,7 +9,6 @@
 
     <!-- NAV LINKS -->
     <nav class="nav-links">
-
       <a href="/">Home</a>
       <a href="/tools">Tools</a>
       <a href="/trending" class="highlight">🔥 Trending</a>
@@ -30,27 +19,28 @@
 
       <a href="/submit">Submit</a>
       <a href="/about">About</a>
-
     </nav>
+
+    <!-- 🔍 DESKTOP SEARCH -->
+    <form action="/tools" method="GET" class="nav-search">
+      <input 
+        type="text" 
+        name="q" 
+        placeholder="Search AI tools..." 
+        required
+      >
+    </form>
 
     <!-- ACTION BUTTONS -->
     <div class="header-actions">
-
       <% if (typeof user !== "undefined" && user) { %>
-
-        <!-- Optional: Show username -->
         <span class="user-greet">Hi, <%= user.username || "User" %></span>
-
         <a href="/workspace" class="btn ghost">⚡ Workspace</a>
         <a href="/logout" class="btn primary">Logout</a>
-
       <% } else { %>
-
         <a href="/login" class="btn ghost">Login</a>
         <a href="/signup" class="btn primary">Sign Up</a>
-
       <% } %>
-
     </div>
 
     <!-- MOBILE MENU BUTTON -->
@@ -58,23 +48,29 @@
 
   </div>
 
-  <!-- MOBILE MENU -->
+  <!-- ✅ MOBILE MENU (PUT SEARCH HERE, NOT ABOVE) -->
   <div class="mobile-menu" id="mobileMenu">
+
+    <!-- 🔍 MOBILE SEARCH -->
+    <form action="/tools" method="GET" class="mobile-search">
+      <input 
+        type="text" 
+        name="q" 
+        placeholder="Search AI tools..."
+        required
+      >
+    </form>
 
     <a href="/">Home</a>
     <a href="/tools">Tools</a>
     <a href="/trending">🔥 Trending</a>
 
     <% if (typeof user !== "undefined" && user) { %>
-
       <a href="/workspace">Workspace</a>
       <a href="/logout">Logout</a>
-
     <% } else { %>
-
       <a href="/login">Login</a>
       <a href="/signup">Sign Up</a>
-
     <% } %>
 
     <a href="/submit">Submit</a>
@@ -82,12 +78,3 @@
 
   </div>
 </header>
-
-<script>
-function toggleMenu(){
-  const menu = document.getElementById("mobileMenu");
-  if(menu){
-    menu.classList.toggle("active");
-  }
-}
-</script>
