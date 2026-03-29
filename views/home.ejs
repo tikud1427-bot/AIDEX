@@ -28,6 +28,7 @@
 
 <!-- HERO -->
 
+    <!-- HERO -->
     <section class="hero">
 
       <div class="hero-box">
@@ -39,6 +40,20 @@
         <p>
           Explore the best AI tools for productivity, creativity, and development — all in one place.
         </p>
+
+        <!-- DOWNLOAD BUTTON -->
+        <div class="apk-section">
+          <a href="/downloads/aquiplex.apk" class="apk-btn">
+            📲 Download Aquiplex App
+          </a>
+
+          <p class="apk-info">
+            🚀 Early Access • Android APK • Safe Install
+          </p>
+
+          <p class="apk-info">Version 1.0 • 12MB</p>
+          <p style="opacity:0.6;">Coming soon to Play Store</p>
+        </div>
 
         <!-- SEARCH -->
         <form action="/tools" method="GET" class="search-bar">
@@ -53,6 +68,7 @@
 
       </div>
 
+      <!-- AI BOX (YOUR ORIGINAL FULL CODE) -->
       <div class="ai-box">
         <form id="aiForm">
           <input type="text" id="aiPrompt" placeholder="Ask multiple AIs at once..." required>
@@ -76,24 +92,36 @@
             <h3>⚡ Fast</h3>
             <p id="fastText">Waiting...</p>
             <button onclick="copyText('fastText', this)">Copy</button>
-
           </div>
         </div>
-        <!-- Toggle Button -->
+
         <button class="history-toggle" onclick="toggleHistory()">
           🕘 Show Recent Prompts
         </button>
 
-        <!-- Hidden History -->
         <div id="history-container" class="history-hidden">
           <h3>🕘 Recent Prompts</h3>
           <div id="history"></div>
         </div>
       </div>
+
+    </section>
+
+
+    <!-- INSTALL SECTION -->
+    <section class="section">
+      <h2 class="section-title">📲 How to Install</h2>
+
+      <div style="max-width:600px; margin:auto; text-align:center; opacity:0.9;">
+        <p>1. Download the APK</p>
+        <p>2. Open the file</p>
+        <p>3. Allow "Install from unknown sources"</p>
+        <p>4. Install & enjoy 🚀</p>
+      </div>
     </section>
 
     <div class="container">
-
+      
       <!-- CATEGORY SECTION -->
       <section class="section">
         <h2 class="section-title">Explore by Category</h2>
@@ -301,6 +329,12 @@
                 .catch(err => console.log("SW failed", err));
             }
           
+            </script>
+
+            <script>
+              if (!/Android/i.test(navigator.userAgent)) {
+                document.querySelector(".apk-section").style.display = "none";
+              }
             </script>
           
   </body>
