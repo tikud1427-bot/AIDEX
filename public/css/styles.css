@@ -2572,3 +2572,138 @@ AQUIPLEX ABOUT PAGE PREMIUM OVERRIDE
   font-size: 0.9rem;
   opacity: 0.6;
 }
+
+/* =========================
+HOOKED HERO (NEXT LEVEL UI)
+========================= */
+
+.hooked-hero {
+  text-align: center;
+  padding: 100px 20px 60px;
+}
+
+.hero-main {
+  max-width: 800px;
+  margin: auto;
+}
+
+.hero-main h1 {
+  font-size: clamp(2rem, 5vw, 3.2rem);
+  font-weight: 600;
+}
+
+.hero-main span {
+  color: #3b82f6;
+}
+
+.hero-sub {
+  margin-top: 10px;
+  opacity: 0.8;
+}
+
+/* AI BOX CENTER */
+.hero-ai {
+  margin-top: 30px;
+}
+
+/* INPUT */
+#aiForm {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+#aiForm input {
+  flex: 1;
+  padding: 12px;
+  border-radius: 10px;
+  border: none;
+  background: rgba(255,255,255,0.05);
+  color: white;
+}
+
+#aiForm button {
+  padding: 12px 18px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  border: none;
+  color: white;
+  cursor: pointer;
+}
+
+/* TRUST LINE */
+.trust-line {
+  margin-top: 20px;
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+/* CTA */
+.hero-cta {
+  margin-top: 20px;
+}
+
+.hero-cta .btn {
+  padding: 12px 24px;
+}
+
+.hero-main {
+  animation: fadeUp 0.8s ease;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(25px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.ai-card {
+  background: rgba(255,255,255,0.03);
+  border-radius: 14px;
+  padding: 15px;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.ai-card:hover {
+  transform: translateY(-6px) scale(1.02);
+  background: rgba(255,255,255,0.06);
+  box-shadow: 0 15px 40px rgba(59,130,246,0.2);
+}
+
+#aiForm input:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.5);
+}
+
+#aiForm button {
+  transition: 0.25s;
+}
+
+#aiForm button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 25px rgba(99,102,241,0.5);
+}
+
+.trust-line {
+  color: #c7d2fe;
+  letter-spacing: 0.3px;
+}
+
+.hooked-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 20%, rgba(59,130,246,0.25), transparent 70%);
+  z-index: 0;
+}
+
+.hooked-hero {
+  position: relative;
+  overflow: hidden;
+}

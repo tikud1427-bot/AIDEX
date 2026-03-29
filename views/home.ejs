@@ -28,98 +28,69 @@
 
 <!-- HERO -->    
 
-    <!-- HERO -->    
-    <section class="hero">    
+    <section class="hero hooked-hero">
 
-      <div class="hero-box">    
+      <div class="hero-main">
 
-        <h1>    
-          Discover the Future of <span>AI Tools</span>    
-        </h1>    
+        <!-- 🔥 HOOK -->
+        <h1>
+          Stop Searching. <span>Start Using AI.</span>
+        </h1>
 
-        <p>    
-          Explore the best AI tools for productivity, creativity, and development — all in one place.    
-        </p>    
+        <p class="hero-sub">
+          Ask once → Get answers from multiple AIs instantly.
+        </p>
 
-        <!-- DOWNLOAD BUTTON -->    
-        <div class="apk-section">    
-          <a href="/uploads/Aquiplex.apk" class="apk-btn" download>    
-            📲 Download Aquiplex App    
-          </a>    
+        <!-- 🧠 MAIN FEATURE (CENTER FOCUS) -->
+        <div class="ai-box hero-ai">
 
-          <p class="apk-info">    
-            🚀 Early Access • Android APK • Safe Install    
-          </p>    
+          <form id="aiForm">
+            <input type="text" id="aiPrompt" placeholder="Ask anything... (e.g. Build a startup idea)" required>
+            <button type="submit">⚡ Generate</button>
+          </form>
 
-          <p class="apk-info">Version 1.0 • 12MB</p>    
-          <p style="opacity:0.6;">Coming soon to Play Store</p>    
-        </div>    
+          <div id="aiResults" class="ai-grid">
+            <div class="ai-card smart">
+              <h3>🧠 Smart</h3>
+              <p id="smartText">Waiting...</p>
+              <button onclick="copyText('smartText', this)">Copy</button>
+            </div>
 
-        <!-- SEARCH -->    
-        <form action="/tools" method="GET" class="search-bar">    
-          <input     
-            type="text"     
-            name="q"     
-            placeholder="Search AI tools like ChatGPT, Midjourney..."     
-            required    
-          >    
-          <button type="submit">Search</button>    
-        </form>    
+            <div class="ai-card creative">
+              <h3>🎨 Creative</h3>
+              <p id="creativeText">Waiting...</p>
+              <button onclick="copyText('creativeText', this)">Copy</button>
+            </div>
 
-      </div>    
+            <div class="ai-card fast">
+              <h3>⚡ Fast</h3>
+              <p id="fastText">Waiting...</p>
+              <button onclick="copyText('fastText', this)">Copy</button>
+            </div>
+          </div>
 
-      <!-- AI BOX (YOUR ORIGINAL FULL CODE) -->    
-      <div class="ai-box">    
-        <form id="aiForm">    
-          <input type="text" id="aiPrompt" placeholder="Ask multiple AIs at once..." required>    
-          <button type="submit">Generate</button>    
-        </form>    
+        </div>
 
-        <div id="aiResults" class="ai-grid">    
-          <div class="ai-card smart">    
-            <h3>🧠 Smart</h3>    
-            <p id="smartText">Waiting...</p>    
-            <button onclick="copyText('smartText', this)">Copy</button>    
-          </div>    
+        <!-- 🎯 TRUST + CTA -->
+        <p class="trust-line">🔥 Used by 10,000+ AI explorers</p>
 
-          <div class="ai-card creative">    
-            <h3>🎨 Creative</h3>    
-            <p id="creativeText">Waiting...</p>    
-            <button onclick="copyText('creativeText', this)">Copy</button>    
-          </div>    
+        <div class="hero-cta">
+          <a href="/tools" class="btn primary">Explore 100+ Tools</a>
+        </div>
 
-          <div class="ai-card fast">    
-            <h3>⚡ Fast</h3>    
-            <p id="fastText">Waiting...</p>    
-            <button onclick="copyText('fastText', this)">Copy</button>    
-          </div>    
-        </div>    
+      </div>
 
-        <button class="history-toggle" onclick="toggleHistory()">    
-          🕘 Show Recent Prompts    
-        </button>    
-
-        <div id="history-container" class="history-hidden">    
-          <h3>🕘 Recent Prompts</h3>    
-          <div id="history"></div>    
-        </div>    
-      </div>    
-
-    </section>    
+    </section>
 
 
-    <!-- INSTALL SECTION -->    
-    <section class="section">    
-      <h2 class="section-title">📲 How to Install</h2>    
+    <section class="section">
+      <h2 class="section-title">🔥 Trending AI Tools</h2>
+      <p style="text-align:center; opacity:0.7;">
+        Discover what everyone is using right now
+      </p>
+    </section>
 
-      <div style="max-width:600px; margin:auto; text-align:center; opacity:0.9;">    
-        <p>1. Download the APK</p>    
-        <p>2. Open the file</p>    
-        <p>3. Allow "Install from unknown sources"</p>    
-        <p>4. Install & enjoy 🚀</p>    
-      </div>    
-    </section>    
-
+    
     <div class="container">    
 
       <!-- CATEGORY SECTION -->    
@@ -204,6 +175,19 @@
       </section>    
 
     </div>    
+
+            <!-- INSTALL SECTION -->    
+            <section class="section">    
+              <h2 class="section-title">📲 How to Install</h2>    
+
+              <div style="max-width:600px; margin:auto; text-align:center; opacity:0.9;">    
+                <p>1. Download the APK</p>    
+                <p>2. Open the file</p>    
+                <p>3. Allow "Install from unknown sources"</p>    
+                <p>4. Install & enjoy 🚀</p>    
+              </div>    
+            </section>    
+
 
 
 <!-- FOOTER -->    
