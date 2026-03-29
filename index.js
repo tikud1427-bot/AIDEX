@@ -146,6 +146,14 @@ res.send("Error loading home");
 }
 });
 
+// Download APK
+app.get("/download", (req, res) => {
+  console.log("APK downloaded");
+
+  const filePath = path.join(__dirname, "public/uploads/Aquiplex.apk");
+  res.download(filePath);
+});
+
 // TOOLS
 app.get("/tools", async (req, res) => {
 const query = req.query.q;
