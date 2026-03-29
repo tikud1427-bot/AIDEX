@@ -283,6 +283,8 @@
                         document.getElementById("fastText").innerText = r.output;
                       }
                     });
+                    document.getElementById("aiPrompt").value = "";
+
 
                     loadHistory();
 
@@ -301,12 +303,15 @@
 
                   if (!container) return;
 
-                  if (!res.ok) {
+                  const text = await res.text();
+
+                  // detect HTML (login page)
+                  if (text.startsWith("<!DOCTYPE")) {
                     container.innerHTML = "<p>Login to see history</p>";
                     return;
                   }
 
-                  const data = await res.json();
+                  const data = JSON.parse(text);
 
                   if (!data.length) {
                     container.innerHTML = "<p>No history yet</p>";
@@ -326,7 +331,6 @@
                   console.log(err);
                 }
               }
-
               loadHistory();
 
             });

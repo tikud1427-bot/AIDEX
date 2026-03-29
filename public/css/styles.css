@@ -2609,3 +2609,39 @@ PASTE AT VERY BOTTOM ONLY
     display: none;
   }
 }
+
+/* FIX CLICK BLOCKING */
+.hero::before {
+  pointer-events: none;
+}
+
+.hero,
+.hero * {
+  position: relative;
+  z-index: 1;
+}
+
+/* CENTER EVERYTHING PROPERLY */
+.hero-main {
+  max-width: 700px;
+  margin: auto;
+}
+
+/* FIX HISTORY HEADER */
+#history-container > div {
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* FIX BUTTON SIZE */
+.history-toggle {
+  padding: 10px 18px;
+  width: auto;
+  border-radius: 10px;
+}
+
+/* ALIGN AI SECTION */
+.section {
+  max-width: 1000px;
+  margin: auto;
+}
