@@ -2893,3 +2893,38 @@ HOOKED HERO (NEXT LEVEL UI)
   font-size: 14px;
   opacity: 0.8;
 }
+
+/* 🔥 MOBILE MENU FIX FINAL */
+.mobile-menu {
+  display: none;
+  flex-direction: column;
+  background: #020617;
+  padding: 15px;
+  position: absolute;
+  top: 70px;
+  left: 0;
+  width: 100%;
+  z-index: 999;
+}
+
+.mobile-menu.active {
+  display: flex;
+}
+
+.mobile-menu a {
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.mobile-search {
+  margin-bottom: 10px;
+}
+
+.mobile-search input {
+  width: 100%;
+  padding: 10px;
+  border-radius: 8px;
+  background: #0f172a;
+  color: white;
+  border: none;
+}

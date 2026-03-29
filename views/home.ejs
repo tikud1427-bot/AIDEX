@@ -90,7 +90,7 @@
           <p id="smartText">Waiting...</p>
 
           <div class="ai-actions">
-            <button onclick="copyText('smartText', this)">Copy</button>
+            <button type="button" onclick="copyText('smartText', this)">Copy</button>
             <button onclick="shareText('smartText')">Share</button>
           </div>
         </div>
@@ -101,7 +101,7 @@
           <p id="creativeText">Waiting...</p>
 
           <div class="ai-actions">
-            <button onclick="copyText('creativeText', this)">Copy</button>
+            <button type="button" onclick="copyText('creativeText', this)">Copy</button>
             <button onclick="shareText('creativeText')">Share</button>
           </div>
         </div>
@@ -112,7 +112,7 @@
           <p id="fastText">Waiting...</p>
 
           <div class="ai-actions">
-            <button onclick="copyText('fastText', this)">Copy</button>
+            <button type="button" onclick="copyText('fastText', this)">Copy</button>
             <button onclick="shareText('fastText')">Share</button>
           </div>
         </div>
@@ -368,6 +368,16 @@
                 await navigator.clipboard.writeText(text);
                 alert("Copied! Share it 🚀");
               }
+            }
+            </script>
+
+            <script>
+            function toggleMenu() {
+              const menu = document.getElementById("mobileMenu");
+
+              if (!menu) return;
+
+              menu.classList.toggle("active");
             }
             </script>
   </body>    
