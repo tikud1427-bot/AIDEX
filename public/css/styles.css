@@ -3086,3 +3086,87 @@ ADD AT VERY BOTTOM
     display: block;
   }
 }
+
+
+/* =========================
+   FINAL NAVBAR FIX (REAL)
+========================= */
+
+/* Force header to behave properly */
+.main-header {
+  width: 100%;
+  position: relative;
+  z-index: 1000;
+}
+
+/* FIX OVERFLOW ISSUE */
+.header-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+
+/* Prevent items from pushing out */
+.logo {
+  flex-shrink: 0;
+}
+
+.nav-links {
+  display: flex;
+  gap: 14px;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/* 🔥 IMPORTANT: STOP BREAKING */
+.nav-links a {
+  white-space: nowrap;
+}
+
+/* SEARCH FIX */
+.nav-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.nav-search input {
+  width: 100%;
+}
+
+/* ACTION BUTTONS FIX */
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* 🔥 KEY FIX: USER TEXT */
+.user-greet {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* MOBILE FIX */
+@media (max-width: 768px) {
+
+  .nav-links {
+    display: none !important;
+  }
+
+  .nav-search {
+    display: none !important;
+  }
+
+  .user-greet {
+    display: none !important;
+  }
+
+  .menu-toggle {
+    display: block;
+  }
+}
