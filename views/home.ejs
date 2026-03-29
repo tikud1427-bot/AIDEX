@@ -32,56 +32,62 @@
 
       <div class="hero-main">
 
-        <!-- 🔥 HOOK -->
         <h1>
           Stop Searching. <span>Start Using AI.</span>
         </h1>
 
         <p class="hero-sub">
-          Ask once → Get answers from multiple AIs instantly.
+          One prompt → Multiple AI answers instantly ⚡
         </p>
 
-        <!-- 🧠 MAIN FEATURE (CENTER FOCUS) -->
+        <!-- 🔥 MAIN AI BOX -->
         <div class="ai-box hero-ai">
 
           <form id="aiForm">
-            <input type="text" id="aiPrompt" placeholder="Ask anything... (e.g. Build a startup idea)" required>
-            <button type="submit">⚡ Generate</button>
+            <input 
+              type="text" 
+              id="aiPrompt" 
+              placeholder="Ask anything... (e.g. startup idea)" 
+              required
+            >
+            <button type="submit">Generate</button>
           </form>
-
-          <div id="aiResults" class="ai-grid">
-            <div class="ai-card smart">
-              <h3>🧠 Smart</h3>
-              <p id="smartText">Waiting...</p>
-              <button onclick="copyText('smartText', this)">Copy</button>
-            </div>
-
-            <div class="ai-card creative">
-              <h3>🎨 Creative</h3>
-              <p id="creativeText">Waiting...</p>
-              <button onclick="copyText('creativeText', this)">Copy</button>
-            </div>
-
-            <div class="ai-card fast">
-              <h3>⚡ Fast</h3>
-              <p id="fastText">Waiting...</p>
-              <button onclick="copyText('fastText', this)">Copy</button>
-            </div>
-          </div>
 
         </div>
 
-        <!-- 🎯 TRUST + CTA -->
-        <p class="trust-line">🔥 Used by 10,000+ AI explorers</p>
-
+        <!-- 🔥 CTA -->
         <div class="hero-cta">
-          <a href="/tools" class="btn primary">Explore 100+ Tools</a>
+          <a href="/tools" class="btn primary">Explore Tools</a>
+          <a href="/trending" class="btn ghost">🔥 Trending</a>
         </div>
 
       </div>
 
     </section>
 
+    <section class="section">
+      <h2 class="section-title">⚡ AI Results</h2>
+
+      <div id="aiResults" class="ai-grid">
+        <div class="ai-card smart">
+          <h3>🧠 Smart</h3>
+          <p id="smartText">Waiting...</p>
+          <button onclick="copyText('smartText', this)">Copy</button>
+        </div>
+
+        <div class="ai-card creative">
+          <h3>🎨 Creative</h3>
+          <p id="creativeText">Waiting...</p>
+          <button onclick="copyText('creativeText', this)">Copy</button>
+        </div>
+
+        <div class="ai-card fast">
+          <h3>⚡ Fast</h3>
+          <p id="fastText">Waiting...</p>
+          <button onclick="copyText('fastText', this)">Copy</button>
+        </div>
+      </div>
+    </section>
 
     <section class="section">
       <h2 class="section-title">🔥 Trending AI Tools</h2>
@@ -188,7 +194,20 @@
               </div>    
             </section>    
 
+            <!-- 📲 DOWNLOAD APP CTA -->
+            <section class="section apk-section">
+              <h2 class="section-title">🚀 Get AQUIPLEX App</h2>
 
+              <div style="text-align:center; margin-top:20px;">
+                <a href="/download" class="btn primary" style="font-size:18px; padding:14px 28px;">
+                  📥 Download APK
+                </a>
+
+                <p style="margin-top:10px; opacity:0.7;">
+                  Fast. Lightweight. Built for AI explorers.
+                </p>
+              </div>
+            </section>
 
 <!-- FOOTER -->    
 
@@ -317,7 +336,10 @@
 
             <script>    
               if (!/Android/i.test(navigator.userAgent)) {    
-                document.querySelector(".apk-section").style.display = "none";    
+                    const apk = document.querySelector(".apk-section");
+                    if (apk && !/Android/i.test(navigator.userAgent)) {
+                      apk.style.display = "none";
+                    }
               }    
             </script>    
 

@@ -2707,3 +2707,56 @@ HOOKED HERO (NEXT LEVEL UI)
   position: relative;
   overflow: hidden;
 }
+
+/* 🔍 NAV SEARCH */
+.nav-search input {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  width: 180px;
+  background: #0f172a;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.nav-search input::placeholder {
+  color: rgba(255,255,255,0.5);
+}
+
+@media (max-width: 768px) {
+  .nav-search {
+    display: none;
+  }
+}
+
+.hero {
+  padding: 80px 20px;
+  text-align: center;
+}
+
+.hero h1 {
+  font-size: 42px;
+  font-weight: 700;
+}
+
+.hero h1 span {
+  color: #3b82f6;
+}
+
+.hero-sub {
+  margin-top: 10px;
+  opacity: 0.7;
+}
+
+.hero-ai {
+  margin-top: 30px;
+}
+
+.hero-cta {
+  margin-top: 25px;
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
