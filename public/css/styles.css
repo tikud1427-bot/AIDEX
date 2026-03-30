@@ -3148,3 +3148,37 @@ MOBILE SAFE (no break)
 .card-dots .active {
   background: #38bdf8;
 }
+
+.ai-grid {
+  display: flex;
+  overflow-x: auto;
+  gap: 15px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ai-card {
+  min-width: 90%;
+  flex-shrink: 0;
+  scroll-snap-align: start;
+}
+
+.card-dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.card-dots span {
+  width: 6px;
+  height: 6px;
+  background: #475569;
+  border-radius: 50%;
+  transition: 0.3s;
+}
+
+.card-dots .active {
+  background: #38bdf8;
+  transform: scale(1.3);
+}
