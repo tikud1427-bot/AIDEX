@@ -2953,3 +2953,35 @@ z-index: 10;
 .chat-box {
   overflow: visible !important;
 }
+
+/* 🔥 FINAL FORCE FIX (NO CONFLICTS) */
+
+.ai-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+
+.chat-box {
+  display: flex !important;
+  flex: 1 !important;
+  gap: 6px !important;
+}
+
+.chat-box input {
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.chat-box button {
+  flex: 0 0 auto !important;
+  padding: 8px 12px !important;
+  display: inline-block !important;
+  visibility: visible !important;
+}
+
+.ai-actions button {
+  font-size: 13px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
