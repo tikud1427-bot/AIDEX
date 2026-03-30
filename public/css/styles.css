@@ -2843,3 +2843,80 @@ PASTE AT VERY BOTTOM ONLY
   padding: 8px 12px;
   white-space: nowrap;
 }
+
+/* =========================
+🚀 AQUIPLEX SAFE FIX (NO BREAK METHOD)
+========================= */
+
+/* FORCE CLEAN AI LAYOUT */
+.ai-grid,
+.ai-results,
+#aiResults {
+  display: grid !important;
+  grid-template-columns: repeat(3, 1fr) !important;
+  gap: 18px !important;
+}
+
+/* MOBILE FIX */
+@media (max-width: 768px) {
+  .ai-grid,
+  .ai-results,
+  #aiResults {
+    display: flex !important;
+    overflow-x: auto;
+    gap: 12px;
+  }
+
+  .ai-card {
+    min-width: 85% !important;
+  }
+}
+
+/* CLEAN CARD */
+.ai-card {
+  display: flex !important;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 250px;
+}
+
+/* FIX ACTION BAR */
+.ai-actions {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+/* CHAT BOX */
+.chat-box {
+  display: flex !important;
+  flex: 1;
+  gap: 6px;
+}
+
+/* INPUT FIX */
+.chat-box input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* SEND BUTTON FIX */
+.chat-box button {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+}
+
+/* REMOVE BROKEN GRID SYSTEM */
+.ai-actions {
+  grid-template-columns: none !important;
+}
+
+/* FIX CLICK ISSUES */
+.ai-card,
+.ai-actions,
+.ai-actions button,
+.ai-actions input {
+  position: relative;
+  z-index: 10;
+}
