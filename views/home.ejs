@@ -118,8 +118,8 @@
           <div class="ai-actions">
             <button type="button" onclick="copyText('fastText', this)">Copy</button>
             <button type="button" onclick="shareText('fastText')">Share</button>
-            <input id="creativeInput" placeholder="Continue chat..." />
-            <button onclick="continueChat('creative')">Send</button>
+            <input id="fastInput" placeholder="Continue chat..." />
+            <button onclick="continueChat('fast')">Send</button>
           </div>
         </div>
 
@@ -277,19 +277,18 @@
                   document.getElementById("fastText").innerText = "⚡ Answering...";
 
                   try {
+                    // ✅ reset chats FIRST
+                    chats.smart = [{ role: "user", content: prompt }];
+                    chats.creative = [{ role: "user", content: prompt }];
+                    chats.fast = [{ role: "user", content: prompt }];
+
                     const res = await fetch("/multi-generate", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      // reset chats
-                      chats.smart = [{ role: "user", content: prompt }];
-                      chats.creative = [{ role: "user", content: prompt }];
-                      chats.fast = [{ role: "user", content: prompt }];
-
                       body: JSON.stringify({
-                        messages: chats.smart // temporary, we only need one call
+                        messages: chats.smart
                       })
                     });
-
                     const data = await res.json();
 
                    data.responses.forEach(r => {

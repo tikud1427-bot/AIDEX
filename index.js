@@ -314,7 +314,9 @@ const models = [
 app.post("/multi-generate", async (req, res) => {
   const { prompt, messages } = req.body;
 
-  if (!prompt) return res.status(400).send("Prompt required");
+  if (!prompt && (!messages || messages.length === 0)) {
+    return res.status(400).send("Input required");
+  }
 
   try {
     const responses = await Promise.all(
@@ -328,7 +330,11 @@ app.post("/multi-generate", async (req, res) => {
 
               messages: [
                 { role: "system", content: ai.system },
-                ...(messages && messages.length ? messages : [{ role: "user", content: prompt }])
+                ...(messages?.length
+                  ? messages
+                  : prompt
+                    ? [{ role: "user", content: prompt }]
+                    : [])
               ]
             },
             {
