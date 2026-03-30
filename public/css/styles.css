@@ -2985,3 +2985,53 @@ z-index: 10;
   padding: 8px 10px;
   border-radius: 8px;
 }
+
+/* 🔥 AI ACTION BAR – CLEAN UI FIX */
+
+.ai-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+/* ICON BUTTONS (copy/share) */
+.ai-actions button {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  font-size: 14px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* CHAT BOX */
+.chat-box {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+}
+
+/* INPUT */
+.chat-box input {
+  flex: 1;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+/* SEND BUTTON */
+.chat-box button {
+  height: 36px;
+  padding: 0 12px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+
+.ai-actions button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
