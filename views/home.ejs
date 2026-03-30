@@ -449,17 +449,23 @@
               }
 
               async function continueChat(type) {
-                const input = document.getElementById(type + "Input").value;
+                const inputEl = document.getElementById(type + "Input");
+                const input = inputEl.value;
 
                 if (!input) return;
+
+                const el = document.getElementById(type + "Text");
+
+                // show user message immediately
+                el.innerText += "\n\nYou: " + input;
 
                 chats[type].push({
                   role: "user",
                   content: input
                 });
 
-                // loading
-                document.getElementById(type + "Text").innerText = "⏳ Thinking...";
+                // show loading
+                el.innerText += "\nAI: ⏳ Thinking...";
 
                 try {
                   const res = await fetch("/multi-generate", {
@@ -473,22 +479,24 @@
 
                   const data = await res.json();
                   const aiResponse = data.responses[0];
+
                   if (aiResponse) {
                     chats[type].push({
                       role: "assistant",
                       content: aiResponse.output
                     });
 
-                    const el = document.getElementById(type + "Text");
+                    // replace last "Thinking..." with actual response
+                    el.innerText = el.innerText.replace(
+                      "⏳ Thinking...",
+                      aiResponse.output
+                    );
+                  }
 
-                    el.innerText += "\n\nYou: " + input;
-                    el.innerText += "\nAI: " + aiResponse.output;
-                   }
-
-                  document.getElementById(type + "Input").value = "";
+                  inputEl.value = "";
 
                 } catch {
-                  document.getElementById(type + "Text").innerText = "❌ Error";
+                  el.innerText += "\n❌ Error";
                 }
               }
           
