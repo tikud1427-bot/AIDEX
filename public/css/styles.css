@@ -3035,3 +3035,87 @@ z-index: 10;
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
 }
+
+
+/* =========================
+AQUIPLEX FINAL BUTTON FIX (DESKTOP SAFE)
+========================= */
+
+/* Input + Button Layout */
+.ai-input {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+/* Input takes remaining space */
+.ai-input input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+/* Prevent buttons from shrinking */
+.ai-input button {
+  flex-shrink: 0;
+}
+
+/* Actions (Copy + Share) FIX */
+.ai-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* Button Styling */
+.ai-actions button {
+  padding: 8px 12px;
+  font-size: 13px;
+  border-radius: 8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* =========================
+DESKTOP FIX (MAIN SOLUTION)
+Moves buttons above input to avoid compression
+========================= */
+@media (min-width: 1024px) {
+
+  .ai-card {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* Move buttons ABOVE input */
+  .ai-actions {
+    order: 1;
+    justify-content: flex-end;
+  }
+
+  .ai-input {
+    order: 2;
+  }
+
+  /* Make buttons slightly bigger for desktop */
+  .ai-actions button {
+    padding: 8px 14px;
+    font-size: 14px;
+  }
+}
+
+/* =========================
+MOBILE SAFE (no break)
+========================= */
+@media (max-width: 768px) {
+  .ai-actions {
+    justify-content: flex-start;
+  }
+
+  .ai-actions button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+}
