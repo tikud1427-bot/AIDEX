@@ -358,6 +358,9 @@ app.post("/multi-generate", async (req, res) => {
         m.name.toLowerCase().includes(aiType.toLowerCase())
       )
     : models;
+    // ✅ GET TOP TOOLS (SAFE)
+    const topTools = await Tool.find().limit(5).lean();
+    const toolList = topTools.map(t => t.name).join(", ");
     const responses = await Promise.all(
       selectedModels.map(async (ai) => {
         try {
@@ -365,11 +368,41 @@ app.post("/multi-generate", async (req, res) => {
             ? messages
             : [{ role: "user", content: prompt || "Hello" }];
 
-          const result = await axios.post(
+           const result = await axios.post(
             "https://api.groq.com/openai/v1/chat/completions",
             {
               model: "llama-3.1-8b-instant",
               messages: [
+                {
+                  role: "system",
+                  content: `
+              You are AQUIPLEX AI — a smart assistant that not only answers questions but also guides users to the best AI tools.
+              Available tools on this platform:
+              ${toolList}
+
+              Your tasks:
+              1. Answer clearly
+              2. Suggest relevant AI tools if helpful
+              3. Keep answers clean and useful
+              4. ALWAYS suggest at least one relevant tool when possible
+
+              Available tool categories:
+              - Writing AI (ChatGPT, Jasper)
+              - Image AI (Midjourney, DALL·E)
+              - Video AI (Runway, Pika)
+              - Coding AI (Copilot, Codeium)
+
+              If user asks something like:
+              - "write blog" → suggest writing tools
+              - "generate image" → suggest image tools
+              - "build app" → suggest coding tools
+
+              Keep suggestions SHORT at the end like:
+              "🔧 Recommended Tools: ChatGPT, Jasper"
+
+              Tone: helpful, modern, not robotic.
+              `
+                },
                 { role: "system", content: ai.system },
                 ...finalMessages
               ]
