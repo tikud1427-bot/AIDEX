@@ -316,12 +316,12 @@
 
                      if (r.model.includes("Creative")) {
                        chats.creative.push({ role: "assistant", content: r.output });
-                       document.getElementById("Creative").innerHTML = renderWithTools(r.output);
+                       document.getElementById("creativeText").innerHTML = renderWithTools(r.output);
                      }
 
                      if (r.model.includes("Fast")) {
                        chats.fast.push({ role: "assistant", content: r.output });
-                       document.getElementById("Fast").innerHTML = renderWithTools(r.output);
+                       document.getElementById("fastText").innerHTML = renderWithTools(r.output);
                      }
                    });
 
@@ -476,7 +476,7 @@
                 const el = document.getElementById(type + "Text");
 
                 // show user message immediately
-                el.innerText += "\n\nYou: " + input;
+                el.innerHTML += `<br><br><strong>You:</strong> ${input}`;
 
                 chats[type].push({
                   role: "user",
@@ -484,7 +484,7 @@
                 });
 
                 // show loading
-                el.innerText += "\nAI: ⏳ Thinking...";
+                el.innerHTML += `<br><strong>AI:</strong> ⏳ Thinking...`;
 
                 try {
                   const res = await fetch("/multi-generate", {
@@ -551,7 +551,11 @@
                 const answer = parts[0];
                 const toolsRaw = parts[1];
 
-                const tools = toolsRaw.split(",").map(t => t.trim());
+                 const tools = toolsRaw
+                 .replace(/\n/g, "")
+                 .split(",")
+                 .map(t => t.replace(/[^\w\s]/g, "").trim())
+                 .filter(Boolean);
 
                 const buttons = tools.map(tool => {
                   return `<a href="/tools?q=${encodeURIComponent(tool)}" class="tool-btn">${tool}</a>`;
