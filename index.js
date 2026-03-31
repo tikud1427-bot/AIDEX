@@ -338,9 +338,9 @@ app.post("/multi-generate", async (req, res) => {
             : [{ role: "user", content: prompt || "Hello" }];
 
           const result = await axios.post(
-            "https://openrouter.ai/api/v1/chat/completions",
+            "https://api.groq.com/openai/v1/chat/completions",
             {
-              model: "mistralai/mistral-7b-instruct",
+              model: "llama3-8b-8192",
               messages: [
                 { role: "system", content: ai.system },
                 ...finalMessages
@@ -348,10 +348,8 @@ app.post("/multi-generate", async (req, res) => {
             },
             {
               headers: {
-                Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-                "Content-Type": "application/json",
-                "HTTP-Referer": req.headers.origin || "https://aquiplex.com",
-                "X-Title": "AQUIPLEX"
+                Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+                "Content-Type": "application/json"
               }
             }
           );

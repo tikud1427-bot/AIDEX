@@ -296,17 +296,18 @@
                     chats.creative = [{ role: "user", content: prompt }];
                     chats.fast = [{ role: "user", content: prompt }];
 
-                    fetch("/multi-generate", {
+                    const res = await fetch("/multi-generate", {
                       method: "POST",
                       headers: {
                         "Content-Type": "application/json"
                       },
+                      credentials: "include",
                       body: JSON.stringify({
                         prompt: document.getElementById("aiPrompt").value
                       })
                     });
-                    const data = await res.json();
 
+                    const data = await res.json();
                    data.responses.forEach(r => {
                      if (r.model.includes("Smart")) {
                        chats.smart.push({ role: "assistant", content: r.output });
@@ -493,9 +494,11 @@
                     },
                     credentials: "include",
                     body: JSON.stringify({
-                      prompt: document.getElementById("aiPrompt").value
+                      messages: chats[type],
+                      aiType: type
                     })
                   });
+
                   const data = await res.json();
                   const aiResponse = data.responses[0];
 
