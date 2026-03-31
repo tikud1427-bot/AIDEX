@@ -299,6 +299,7 @@
                     const res = await fetch("/multi-generate", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
+                      credentials: "include", // ✅ ADD THIS LINE
                       body: JSON.stringify({
                         messages: chats.smart
                       })
@@ -334,7 +335,9 @@
 
               async function loadHistory() {
                 try {
-                  const res = await fetch("/history");
+                  const res = await fetch("/history", {
+                    credentials: "include" // ✅ ADD THIS
+                  });
                   const container = document.getElementById("history");
 
                   if (!container) return;
@@ -485,6 +488,7 @@
                   const res = await fetch("/multi-generate", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
+                    credentials: "include", // ✅ ADD THIS LINE
                     body: JSON.stringify({
                       messages: chats[type],
                       aiType: type
