@@ -150,13 +150,12 @@ res.send("Error loading home");
 // TEST AI (DEBUG ROUTE)
 app.get("/test-ai", async (req, res) => {
   try {
-    const result = await axios.post(
+    const r = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
       {
         model: "llama3-8b-8192",
         messages: [
-          { role: "system", content: ai.system },
-          ...finalMessages
+          { role: "user", content: "hello" }
         ]
       },
       {
