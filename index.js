@@ -19,10 +19,10 @@ app.set("trust proxy", 1);
 app.use((req, res, next) => {
   const proto = req.headers["x-forwarded-proto"];
 
-  // If header exists AND not https → redirect
-  if (proto && proto !== "https") {
-    return res.redirect("https://" + req.headers.host + req.url);
-  }
+  // ❌ DISABLED FOR REPLIT (causes issues)
+  // if (proto && proto !== "https") {
+  //   return res.redirect("https://" + req.headers.host + req.url);
+  // }
 
   next();
 });
@@ -151,24 +151,25 @@ res.send("Error loading home");
 app.get("/test-ai", async (req, res) => {
   try {
     const r = await axios.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        {
-          model: "llama3-70b-8192",
-          messages: [
-            { role: "system", content: ai.system },
-            ...finalMessages
-          ]
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-            "Content-Type": "application/json"
-          }
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama3-70b-8192",
+        messages: [
+          { role: "user", content: "hello" }
+        ]
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json"
         }
-      );
+      }
+    );
 
     res.json(r.data);
+
   } catch (e) {
+    console.error("TEST AI ERROR:", e.response?.data || e.message);
     res.json({
       error: e.response?.data || e.message
     });
@@ -377,7 +378,8 @@ app.post("/multi-generate", async (req, res) => {
               headers: {
                 Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
                 "Content-Type": "application/json"
-              }
+              },
+              timeout: 10000
             }
           );
                 
