@@ -408,14 +408,18 @@ app.post("/multi-generate", async (req, res) => {
     const best =
       responses.find(r => !r.output.includes("⚠️")) || responses[0];
 
-    // ✅ SAVE HISTORY
-    if (req.session.userId) {
-      await History.create({
-        userId: req.session.userId,
-        prompt,
-        response: best.output, // store all AI outputs
-        model: best.model
-      });
+    // ✅ SAVE HISTORY (SAFE)
+    if (req.session?.userId) {
+      try {
+        await History.create({
+          userId: req.session.userId,
+          prompt: prompt || "chat",
+          response: best.output,
+          model: best.model
+        });
+      } catch (err) {
+        console.log("History save failed:", err.message);
+      }
     }
 
     res.json({
