@@ -153,7 +153,7 @@ app.get("/test-ai", async (req, res) => {
     const r = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
       {
-        model: "llama3-8b-8192",
+        model: "llama-3.1-70b-versatile",
         messages: [
           { role: "user", content: "hello" }
         ]
@@ -368,7 +368,7 @@ app.post("/multi-generate", async (req, res) => {
           const result = await axios.post(
             "https://api.groq.com/openai/v1/chat/completions",
             {
-              model: "llama3-8b-8192",
+              model: "llama-3.1-70b-versatile",
               messages: [
                 { role: "system", content: ai.system },
                 ...finalMessages
