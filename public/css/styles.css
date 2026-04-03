@@ -3428,3 +3428,61 @@ MOBILE SAFE (no break)
     margin-top: 10px !important;
   }
 }
+
+/* =========================
+🚨 AQUIPLEX BUNDLE FINAL FIX (NUCLEAR)
+========================= */
+
+/* FORCE COLUMN LAYOUT ALWAYS */
+.bundle-box {
+  display: block !important;
+  width: 100% !important;
+  max-width: 500px !important;
+  margin: 20px auto !important;
+}
+
+/* INPUT FULL WIDTH */
+.bundle-box input {
+  display: block !important;
+  width: 100% !important;
+  margin-bottom: 10px !important;
+}
+
+/* BUTTON FULL WIDTH */
+.bundle-box > button {
+  display: block !important;
+  width: 100% !important;
+  margin-bottom: 10px !important;
+}
+
+/* CATEGORY BUTTONS BELOW */
+.bundle-box .category-buttons {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 8px !important;
+  justify-content: center !important;
+}
+
+/* FIX BUTTON SIZE */
+.bundle-box .category-buttons button {
+  flex: 1 1 auto !important;
+  white-space: nowrap !important;
+}
+
+/* 🔥 KILL ANY SIDE-BY-SIDE LAYOUT */
+.bundle-box * {
+  float: none !important;
+}
+
+/* 🔥 PREVENT FLEX FROM PARENT */
+body .bundle-box,
+body .bundle-box * {
+  flex: unset !important;
+}
+
+/* 🔥 FORCE STACK ON SMALL DEVICES */
+@media (max-width: 768px) {
+  .bundle-box {
+    width: 100% !important;
+  }
+}
