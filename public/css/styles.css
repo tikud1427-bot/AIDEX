@@ -3224,305 +3224,32 @@ MOBILE SAFE (no break)
   border-radius: 6px;
 }
 
-/* ===== MOBILE OPTIMIZATION ===== */
-@media (max-width: 768px) {
-
-  body {
-    padding: 10px;
-  }
-
-  h1 {
-    font-size: 22px;
-    text-align: center;
-  }
-
-  .bundle-box {
-    width: 100%;
-    padding: 15px;
-    border-radius: 14px;
-  }
-
-  /* Input + Button stack */
-  .bundle-box input {
-    width: 100%;
-    font-size: 14px;
-    padding: 12px;
-    margin-bottom: 10px;
-    border-radius: 10px;
-  }
-
-  .bundle-box button {
-    width: 100%;
-    padding: 12px;
-    font-size: 15px;
-    border-radius: 10px;
-  }
-
-  /* Category buttons */
-  .bundle-box div {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    justify-content: center;
-    margin-top: 10px;
-  }
-
-  .bundle-box div button {
-    flex: 1 1 auto;
-    font-size: 12px;
-    padding: 8px 10px;
-    border-radius: 20px;
-    white-space: nowrap;
-  }
-}
-
-/* CATEGORY BUTTONS FIX */
-.category-buttons {
+.tool-info {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-  margin-top: 10px;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
 }
 
-.category-buttons button {
-  padding: 8px 12px;
-  border-radius: 20px;
-  border: none;
-  background: #1f2937;
+.tool-info span {
+  font-size: 14px;
+}
+
+.use-btn {
+  background: #6366f1;
   color: white;
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-decoration: none;
   font-size: 12px;
-  cursor: pointer;
+  transition: 0.2s;
 }
 
-/* MOBILE PERFECT FIX */
-@media (max-width: 600px) {
-  .bundle-box {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .bundle-box input,
-  .bundle-box button {
-    width: 100%;
-  }
-
-  .category-buttons {
-    justify-content: center;
-  }
+.use-btn:hover {
+  background: #4f46e5;
 }
 
-/* ===== FORCE MOBILE FIX (OVERRIDE EVERYTHING) ===== */
-
-/* Force vertical layout */
-.bundle-box {
-  display: flex !important;
-  flex-direction: column !important;
-  gap: 10px !important;
-  max-width: 500px !important;
-  margin: auto !important;
-}
-
-/* Input full width */
-.bundle-box input {
-  width: 100% !important;
-  box-sizing: border-box !important;
-}
-
-/* Button full width */
-.bundle-box > button {
-  width: 100% !important;
-}
-
-/* Fix category buttons container */
-.category-buttons {
-  display: flex !important;
-  flex-wrap: wrap !important;
-  justify-content: center !important;
-  gap: 8px !important;
-  margin-top: 10px !important;
-}
-
-/* Fix category buttons */
-.category-buttons button {
-  flex: 1 1 auto !important;
-  white-space: nowrap !important;
-}
-
-/* 🔥 EXTRA: fix if old .suggestions still affects layout */
-.suggestions {
-  display: none !important;
-}
-
-/* ===== MOBILE APP STYLE (FINAL FIX) ===== */
-
-@media (max-width: 768px) {
-
-  body {
-    padding: 12px !important;
-  }
-
-  /* Make everything full-width like an app */
-  .bundle-box {
-    max-width: 100% !important;
-    width: 100% !important;
-  }
-
-  /* Input */
-  .bundle-box input {
-    width: 100% !important;
-    font-size: 16px !important;
-    padding: 16px !important;
-    border-radius: 12px !important;
-  }
-
-  /* Button */
-  .bundle-box > button {
-    width: 100% !important;
-    padding: 16px !important;
-    font-size: 16px !important;
-    border-radius: 12px !important;
-  }
-
-  /* Category buttons row */
-  .category-buttons {
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    overflow-x: auto !important;
-    gap: 10px !important;
-    padding-bottom: 5px;
-  }
-
-  /* Hide scrollbar (mobile clean look) */
-  .category-buttons::-webkit-scrollbar {
-    display: none;
-  }
-
-  .category-buttons button {
-    flex: 0 0 auto !important;
-    padding: 10px 14px !important;
-    font-size: 13px !important;
-    border-radius: 20px !important;
-  }
-
-  /* 🔥 RESULT CARDS FULL WIDTH */
-  .step {
-    width: 100% !important;
-    padding: 16px !important;
-    border-radius: 14px !important;
-  }
-
-  /* Title spacing */
-  h1 {
-    font-size: 20px !important;
-    margin-bottom: 16px !important;
-  }
-
-  h2 {
-    font-size: 18px !important;
-    margin-top: 20px !important;
-  }
-
-  /* Remove desktop "boxed" feel */
-  #result {
-    margin-top: 10px !important;
-  }
-}
-
-/* =========================
-🚨 AQUIPLEX BUNDLE FINAL FIX (NUCLEAR)
-========================= */
-
-/* FORCE COLUMN LAYOUT ALWAYS */
-.bundle-box {
-  display: block !important;
-  width: 100% !important;
-  max-width: 500px !important;
-  margin: 20px auto !important;
-}
-
-/* INPUT FULL WIDTH */
-.bundle-box input {
-  display: block !important;
-  width: 100% !important;
-  margin-bottom: 10px !important;
-}
-
-/* BUTTON FULL WIDTH */
-.bundle-box > button {
-  display: block !important;
-  width: 100% !important;
-  margin-bottom: 10px !important;
-}
-
-/* CATEGORY BUTTONS BELOW */
-.bundle-box .category-buttons {
-  display: flex !important;
-  flex-wrap: wrap !important;
-  gap: 8px !important;
-  justify-content: center !important;
-}
-
-/* FIX BUTTON SIZE */
-.bundle-box .category-buttons button {
-  flex: 1 1 auto !important;
-  white-space: nowrap !important;
-}
-
-/* 🔥 KILL ANY SIDE-BY-SIDE LAYOUT */
-.bundle-box * {
-  float: none !important;
-}
-
-/* 🔥 PREVENT FLEX FROM PARENT */
-body .bundle-box,
-body .bundle-box * {
-  flex: unset !important;
-}
-
-/* 🔥 FORCE STACK ON SMALL DEVICES */
-@media (max-width: 768px) {
-  .bundle-box {
-    width: 100% !important;
-  }
-}
-
-/* =========================
-🔥 BUNDLE PAGE CLEAN FIX
-========================= */
-
-.bundle-box {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  max-width: 500px;
-  margin: 20px auto;
-}
-
-.bundle-box input,
-.bundle-box button {
-  width: 100%;
-}
-
-/* Category buttons */
-.category-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px;
-}
-
-.category-buttons button {
-  flex: 1 1 auto;
-  white-space: nowrap;
-}
-
-/* Result cards spacing */
-#result {
-  max-width: 700px;
-  margin: 20px auto;
-}
-
-.step {
-  width: 100%;
+.tool-card-mini:hover {
+  transform: scale(1.03);
+  transition: 0.2s;
 }
