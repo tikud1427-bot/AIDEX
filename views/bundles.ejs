@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>AI Bundles | Aquiplex</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+<h1>✨ AI Bundles</h1>
+
+<div class="bundle-box">
+  <input id="goalInput" placeholder="What do you want to do?" />
+  <button onclick="generateBundle()">Generate Bundle</button>
+</div>
+
+<div class="suggestions">
+  <button onclick="quick('Start a YouTube channel')">🎥 YouTuber</button>
+  <button onclick="quick('Learn coding fast')">💻 Developer</button>
+  <button onclick="quick('Learn video editing')">🎨 Editor</button>
+</div>
+
+<div id="result"></div>
+
+<script>
+async function generateBundle() {
+  const goal = document.getElementById("goalInput").value;
+
+  const res = await fetch("/generate-bundle", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ goal })
+  });
+
+  const data = await res.json();
+
+  if (data.error) {
+    document.getElementById("result").innerText = data.error;
+    return;
+  }
+
+  render(data);
+}
+
+function quick(text) {
+  document.getElementById("goalInput").value = text;
+  generateBundle();
+}
+
+function render(data) {
+  let html = `<h2>${data.title}</h2>`;
+
+  data.steps.forEach(step => {
+    html += `
+      <div class="step">
+        <h3>Step ${step.step}: ${step.title}</h3>
+        <p>${step.description}</p>
+        <div>${step.tools.map(t => `<span>${t}</span>`).join("")}</div>
+      </div>
+    `;
+  });
+
+  document.getElementById("result").innerHTML = html;
+}
+</script>
+
+<style>
+body {
+  background: #0b1120;
+  color: white;
+  font-family: sans-serif;
+  padding: 20px;
+}
+
+.bundle-box input {
+  padding: 10px;
+  width: 70%;
+}
+
+.bundle-box button {
+  padding: 10px;
+}
+
+.step {
+  background: #111827;
+  padding: 15px;
+  margin: 10px 0;
+  border-radius: 10px;
+}
+
+.step span {
+  background: #1f2937;
+  padding: 5px 10px;
+  margin-right: 5px;
+  border-radius: 6px;
+}
+</style>
+
+</body>
+</html>

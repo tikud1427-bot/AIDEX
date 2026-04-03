@@ -148,6 +148,10 @@ app.get("/", async (req, res) => {
     res.send("Error loading home");
   }
 });
+// AI BUNDLES PAGE
+app.get("/bundles", (req, res) => {
+  res.render("bundles");
+});
 
 // TEST AI (DEBUG ROUTE)
 app.get("/test-ai", async (req, res) => {
@@ -353,7 +357,80 @@ app.post("/multi-generate", async (req, res) => {
       recommended: "Error"
     });
   }
+//
+  // GENERATE AI BUNDLE
+  app.post("/generate-bundle", async (req, res) => {
+    const { goal } = req.body;
 
+    if (!goal) {
+      return res.json({ error: "No goal provided" });
+    }
+
+    try {
+      const result = await axios.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          model: "llama-3.1-8b-instant",
+          messages: [
+            {
+              role: "system",
+              content: `
+  You are AQUIPLEX AI Bundle Generator.
+
+  Convert user goals into structured step-by-step AI workflows.
+
+  Return ONLY JSON:
+
+  {
+    "title": "",
+    "steps": [
+      {
+        "step": 1,
+        "title": "",
+        "description": "",
+        "tools": ["", ""]
+      }
+    ]
+  }
+
+  Rules:
+  - Max 5 steps
+  - Keep it practical
+  - Use real AI tools
+  - No explanation outside JSON
+  `
+            },
+            {
+              role: "user",
+              content: goal
+            }
+          ]
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      const text = result.data.choices[0].message.content;
+
+      // Try parsing JSON safely
+      let parsed;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        return res.json({ error: "Invalid AI response", raw: text });
+      }
+
+      res.json(parsed);
+
+    } catch (err) {
+      console.error(err.response?.data || err.message);
+      res.status(500).json({ error: "Bundle generation failed" });
+    }
+  });
   try {
     const selectedModels = aiType
     ? models.filter(m =>

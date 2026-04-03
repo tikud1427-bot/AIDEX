@@ -3253,3 +3253,19 @@ MOBILE SAFE (no break)
   transform: scale(1.03);
   transition: 0.2s;
 }
+
+
+.bundle-btn {
+  display: inline-block;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, #3b82f6, #06b6d4);
+  color: white;
+  border-radius: 10px;
+  font-size: 14px;
+  text-decoration: none;
+  transition: 0.2s;
+}
+
+.bundle-btn:hover {
+  opacity: 0.9;
+}
