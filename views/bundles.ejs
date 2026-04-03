@@ -8,6 +8,31 @@
   </head>
   <body class="bundle-page">
 
+    <header class="main-header">
+      <div class="header-container">
+
+        <a href="/" class="logo">
+          <img src="/images/logo.png" class="logo-img">
+          <span class="logo-text">Aquiplex</span>
+        </a>
+
+        <nav class="nav-links">
+          <a href="/" class="nav-item">Home</a>
+          <a href="/tools" class="nav-item">Tools</a>
+          <a href="/bundles" class="nav-item highlight">Bundles</a>
+        </nav>
+
+        <div class="menu-toggle" onclick="toggleMenu()">☰</div>
+      </div>
+
+      <!-- Mobile Menu -->
+      <div class="mobile-menu" id="mobileMenu">
+        <a href="/">Home</a>
+        <a href="/tools">Tools</a>
+        <a href="/bundles">Bundles</a>
+      </div>
+    </header>
+
 <h1>✨ AI Bundles</h1>
 
   <div class="bundle-box">
@@ -97,16 +122,62 @@ function render(data) {
       <div class="step">
         <h3>Step ${step.step || ""}: ${step.title || ""}</h3>
         <p>${step.description || ""}</p>
+
         <div class="tools">
-          ${(step.tools || []).map(t => `<span>${t}</span>`).join("")}
+          ${(step.tools || []).map(t => {
+            let name, url;
+
+            if (typeof t === "object") {
+              name = t.name;
+              url = t.url;
+            } else {
+              name = t;
+              const links = {
+                "PyCharm": "https://www.jetbrains.com/pycharm/",
+                "VS Code": "https://code.visualstudio.com/",
+                "Spyder": "https://www.spyder-ide.org/",
+                "W3Schools": "https://www.w3schools.com/",
+                "Real Python": "https://realpython.com/"
+              };
+              url = links[name] || `https://www.google.com/search?q=${encodeURIComponent(name)}`;
+            }
+
+            return `
+              <div class="tool-card-mini recommended">
+                <img 
+                  src="https://www.google.com/s2/favicons?sz=64&domain_url=${url}" 
+                  onerror="this.src='/images/default-tool.png'"
+                />
+
+                <div class="tool-info">
+                  <span>${name}</span>
+                  <button class="use-btn" onclick="openTool('${url}')">Use</button>
+                </div>
+              </div>
+            `;
+          }).join("")}
         </div>
+
       </div>
     `;
   });
-
   document.getElementById("result").innerHTML = html;
 }
 </script>
+
+    <script>
+    function toggleMenu() {
+      document.getElementById("mobileMenu").classList.toggle("active");
+    }
+    </script>
+
+    <script>
+    function openTool(url) {
+      window.open(url, "_blank");
+    }
+    </script>
+
+
   
 </body>
 </html>

@@ -3382,3 +3382,58 @@ MOBILE SAFE (no break)
   transform: scale(1.05);
   box-shadow: 0 6px 20px rgba(56, 189, 248, 0.4);
 }
+
+.tools {
+  margin-top: 10px;
+}
+
+.tool-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 6px 0 0;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #3b82f6, #06b6d4);
+  color: white;
+  border-radius: 10px;
+  font-size: 13px;
+  text-decoration: none;
+  transition: all 0.25s ease;
+}
+
+.tool-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.4);
+}
+
+.recommended {
+  border: 1px solid #22d3ee;
+  box-shadow: 0 0 10px rgba(34,211,238,0.3);
+}
+
+.bundle-box {
+  max-width: 600px;
+  margin: 100px auto 20px;
+  padding: 20px;
+}
+
+#result {
+  max-width: 800px;
+  margin: 20px auto;
+  padding: 10px;
+}
+
+.step {
+  background: #0f172a;
+  padding: 18px;
+  border-radius: 14px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.tools {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
