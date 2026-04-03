@@ -554,6 +554,43 @@ app.get("/history", requireLogin, async (req, res) => {
     res.status(500).send("Error fetching history");
   }
 });
+
+const Bundle = require("./models/Bundle");
+
+// SAVE BUNDLE
+app.post("/bundle/save", requireLogin, async (req, res) => {
+  try {
+    const { title, steps } = req.body;
+
+    if (!title || !steps) {
+      return res.status(400).json({ error: "Invalid bundle" });
+    }
+
+    const saved = await new Bundle({
+      userId: req.session.userId,
+      title,
+      steps
+    }).save();
+
+    res.json({ success: true, id: saved._id });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to save bundle" });
+  }
+});
+app.get("/bundle/:id", async (req, res) => {
+  try {
+    const bundle = await Bundle.findById(req.params.id).lean();
+
+    if (!bundle) return res.send("Bundle not found");
+
+    res.render("bundle-view", { bundle });
+
+  } catch {
+    res.send("Error loading bundle");
+  }
+});
 // ================= AUTH =================
 
 // LOGIN PAGE
@@ -646,21 +683,24 @@ res.redirect("/");
 // ================= WORKSPACE =================
 
 // VIEW
+
 app.get("/workspace", requireLogin, async (req, res) => {
-let workspace = await Workspace.findOne({
-userId: req.session.userId,
-})
-.populate("tools")
-.lean();
+  let workspace = await Workspace.findOne({
+    userId: req.session.userId,
+  }).populate("tools").lean();
 
-if (!workspace) {
-workspace = await new Workspace({
-userId: req.session.userId,
-tools: [],
-}).save();
-}
+  if (!workspace) {
+    workspace = await new Workspace({
+      userId: req.session.userId,
+      tools: [],
+    }).save();
+  }
 
-res.render("workspace", { workspace });
+  const bundles = await Bundle.find({
+    userId: req.session.userId
+  }).sort({ createdAt: -1 }).lean();
+
+  res.render("workspace", { workspace, bundles });
 });
 
 // ADD
@@ -701,6 +741,7 @@ console.error(err);
 res.status(500).send("Error removing tool");
 }
 });
+
 
 // ================= START =================
 async function startServer() {

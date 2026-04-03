@@ -101,7 +101,19 @@ function render(data) {
     return;
   }
 
-  let html = `<h2>${data.title || "AI Bundle"}</h2>`;
+  let html = `
+    <div class="bundle-header">
+      <h2>${data.title || "AI Bundle"}</h2>
+
+      <button onclick='saveBundle(${JSON.stringify(data).replace(/"/g, '&quot;')})' class="save-btn">
+        💾 Save Bundle
+      </button>
+
+      <button onclick='shareBundle(${JSON.stringify(data).replace(/"/g, '&quot;')})' class="share-btn">
+        🔗 Share
+      </button>
+    </div>
+  `;
 
   data.steps.forEach(step => {
     html += `
@@ -149,6 +161,33 @@ function render(data) {
   });
   document.getElementById("result").innerHTML = html;
 }
+
+  async function saveBundle(data) {
+    try {
+      const res = await fetch("/bundle/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          title: data.title,
+          steps: data.steps
+        })
+      });
+
+      const result = await res.json();
+
+      if (result.success) {
+        alert("✅ Bundle saved to workspace!");
+      } else {
+        alert("❌ Failed to save bundle");
+      }
+
+    } catch (err) {
+      console.error(err);
+      alert("❌ Error saving bundle");
+    }
+  }
 </script>
 
   
@@ -156,6 +195,30 @@ function render(data) {
     function openTool(url) {
       window.open(url, "_blank");
     }
+
+      async function shareBundle(data){
+        try {
+          const res = await fetch("/bundle/save", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+          });
+
+          const result = await res.json();
+
+          if(result.success){
+            const url = window.location.origin + "/bundle/" + result.id;
+
+            navigator.clipboard.writeText(url);
+            alert("🔗 Link copied!");
+          }
+
+        } catch(err){
+          alert("Error sharing bundle");
+        }
+      }
     </script>
 
 

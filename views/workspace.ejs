@@ -24,7 +24,25 @@
 
   <div id="active-tools" class="active-tools-panel"></div>
 
-  
+  <section class="bundle-section">
+    <h2>📦 Saved Bundles</h2>
+
+    <% if (bundles && bundles.length > 0) { %>
+      <div class="bundle-grid">
+        <% bundles.forEach(bundle => { %>
+          <div class="bundle-card">
+            <h3><%= bundle.title %></h3>
+
+            <button onclick='viewBundle(<%- JSON.stringify(bundle) %>)'>
+              👀 View
+            </button>
+          </div>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <p class="muted">No bundles saved yet</p>
+    <% } %>
+  </section>
 
  <!-- GRID -->    
   <div class="workspace-grid" id="workspaceGrid">    
@@ -241,6 +259,25 @@
           alert("Error removing tool");
         }
       }
+
+        function viewBundle(bundle){
+          let html = `<h2>${bundle.title}</h2>`;
+
+          bundle.steps.forEach(step => {
+            html += `
+              <div class="step">
+                <h3>${step.title}</h3>
+                <p>${step.description}</p>
+              </div>
+            `;
+          });
+
+          document.body.innerHTML += `
+            <div class="modal">
+              ${html}
+            </div>
+          `;// later upgrade to modal UI
+        }
 
       </script>
 
