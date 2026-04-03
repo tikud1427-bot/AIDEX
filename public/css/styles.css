@@ -3224,3 +3224,90 @@ MOBILE SAFE (no break)
   border-radius: 6px;
 }
 
+/* ===== MOBILE OPTIMIZATION ===== */
+@media (max-width: 768px) {
+
+  body {
+    padding: 10px;
+  }
+
+  h1 {
+    font-size: 22px;
+    text-align: center;
+  }
+
+  .bundle-box {
+    width: 100%;
+    padding: 15px;
+    border-radius: 14px;
+  }
+
+  /* Input + Button stack */
+  .bundle-box input {
+    width: 100%;
+    font-size: 14px;
+    padding: 12px;
+    margin-bottom: 10px;
+    border-radius: 10px;
+  }
+
+  .bundle-box button {
+    width: 100%;
+    padding: 12px;
+    font-size: 15px;
+    border-radius: 10px;
+  }
+
+  /* Category buttons */
+  .bundle-box div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 10px;
+  }
+
+  .bundle-box div button {
+    flex: 1 1 auto;
+    font-size: 12px;
+    padding: 8px 10px;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+}
+
+/* CATEGORY BUTTONS FIX */
+.category-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.category-buttons button {
+  padding: 8px 12px;
+  border-radius: 20px;
+  border: none;
+  background: #1f2937;
+  color: white;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* MOBILE PERFECT FIX */
+@media (max-width: 600px) {
+  .bundle-box {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .bundle-box input,
+  .bundle-box button {
+    width: 100%;
+  }
+
+  .category-buttons {
+    justify-content: center;
+  }
+}
