@@ -3353,3 +3353,78 @@ MOBILE SAFE (no break)
 .suggestions {
   display: none !important;
 }
+
+/* ===== MOBILE APP STYLE (FINAL FIX) ===== */
+
+@media (max-width: 768px) {
+
+  body {
+    padding: 12px !important;
+  }
+
+  /* Make everything full-width like an app */
+  .bundle-box {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
+
+  /* Input */
+  .bundle-box input {
+    width: 100% !important;
+    font-size: 16px !important;
+    padding: 16px !important;
+    border-radius: 12px !important;
+  }
+
+  /* Button */
+  .bundle-box > button {
+    width: 100% !important;
+    padding: 16px !important;
+    font-size: 16px !important;
+    border-radius: 12px !important;
+  }
+
+  /* Category buttons row */
+  .category-buttons {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    gap: 10px !important;
+    padding-bottom: 5px;
+  }
+
+  /* Hide scrollbar (mobile clean look) */
+  .category-buttons::-webkit-scrollbar {
+    display: none;
+  }
+
+  .category-buttons button {
+    flex: 0 0 auto !important;
+    padding: 10px 14px !important;
+    font-size: 13px !important;
+    border-radius: 20px !important;
+  }
+
+  /* 🔥 RESULT CARDS FULL WIDTH */
+  .step {
+    width: 100% !important;
+    padding: 16px !important;
+    border-radius: 14px !important;
+  }
+
+  /* Title spacing */
+  h1 {
+    font-size: 20px !important;
+    margin-bottom: 16px !important;
+  }
+
+  h2 {
+    font-size: 18px !important;
+    margin-top: 20px !important;
+  }
+
+  /* Remove desktop "boxed" feel */
+  #result {
+    margin-top: 10px !important;
+  }
+}
