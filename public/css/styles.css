@@ -3371,3 +3371,64 @@ h1 {
     padding: 15px;
   }
 }
+
+/* =========================
+🔥 AI BUNDLE FINAL POLISH (CENTER + FULLSCREEN)
+========================= */
+
+/* Make page vertically centered */
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* 🔥 this fixes top-heavy issue */
+  align-items: center;
+}
+
+/* Push content slightly down (header safe) */
+h1 {
+  margin-top: 20px;
+}
+
+/* Bigger main card */
+.bundle-box {
+  width: 92%;
+  max-width: 650px;
+  padding: 24px;
+  border-radius: 18px;
+}
+
+/* Bigger input */
+.bundle-box input {
+  padding: 16px;
+  font-size: 15px;
+}
+
+/* Bigger main button */
+.bundle-box > button {
+  padding: 16px;
+  font-size: 15px;
+}
+
+/* Make category buttons full width (clean mobile UX) */
+.category-buttons {
+  width: 100%;
+  flex-direction: column;
+}
+
+.category-buttons button {
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+}
+
+/* Description spacing */
+.bundle-box + p {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+/* RESULT spacing */
+#result {
+  margin-top: 40px;
+}
