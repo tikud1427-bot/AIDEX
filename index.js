@@ -416,7 +416,6 @@ app.post("/multi-generate", async (req, res) => {
 
       const text = result.data.choices[0].message.content;
 
-      // Try parsing JSON safely
       let parsed;
       try {
         parsed = JSON.parse(text);
