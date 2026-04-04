@@ -3510,159 +3510,132 @@ MOBILE SAFE (no break)
 }
 
 
-/* ================= LANDING PAGE ================= */
+/* ================= PREMIUM UPGRADE ================= */
 
-.landing-page {
-  background: linear-gradient(135deg, #0f172a, #020617);
-  color: white;
-  font-family: 'Poppins', sans-serif;
-  margin: 0;
-  padding: 0;
+/* Smooth font + rendering */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* NAVBAR */
+/* NAVBAR UPGRADE */
 .navbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 40px;
-}
-
-.logo {
-  font-size: 22px;
-  font-weight: 600;
+  backdrop-filter: blur(10px);
+  background: rgba(15, 23, 42, 0.6);
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
 .nav-btn {
-  background: #2563eb;
-  padding: 10px 18px;
-  border-radius: 8px;
-  color: white;
-  text-decoration: none;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  transition: all 0.3s ease;
 }
 
-/* HERO */
-.hero {
-  text-align: center;
-  padding: 80px 20px;
+.nav-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 0 20px rgba(59,130,246,0.4);
 }
 
+/* HERO GLOW EFFECT */
 .hero h1 {
-  font-size: 42px;
-  max-width: 700px;
-  margin: auto;
+  background: linear-gradient(90deg, #ffffff, #a5b4fc);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  line-height: 1.2;
 }
 
-.hero p {
-  margin-top: 20px;
-  font-size: 18px;
-  color: #cbd5f5;
-}
-
-.hero-buttons {
-  margin-top: 30px;
-}
-
+/* BUTTONS PREMIUM */
 .primary-btn {
-  background: #3b82f6;
-  border: none;
-  padding: 12px 22px;
-  border-radius: 10px;
-  color: white;
-  font-size: 16px;
-  cursor: pointer;
-  margin: 10px;
+  background: linear-gradient(135deg, #3b82f6, #6366f1);
+  transition: all 0.3s ease;
+  box-shadow: 0 10px 30px rgba(59,130,246,0.3);
 }
 
-.secondary-btn {
-  background: transparent;
-  border: 1px solid #475569;
-  padding: 12px 22px;
-  border-radius: 10px;
-  color: white;
-  cursor: pointer;
+.primary-btn:hover {
+  transform: translateY(-3px) scale(1.03);
+  box-shadow: 0 15px 40px rgba(59,130,246,0.5);
 }
 
-/* DEMO INPUT */
+.secondary-btn:hover {
+  border-color: #6366f1;
+  color: #a5b4fc;
+}
+
+/* DEMO BOX GLASS EFFECT */
 .demo-box {
-  margin-top: 40px;
+  margin-top: 50px;
+  display: inline-flex;
+  padding: 10px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.3);
 }
 
 .demo-box input {
-  padding: 12px;
-  width: 250px;
-  border-radius: 8px;
-  border: none;
+  background: transparent;
+  color: white;
+  outline: none;
 }
 
 .demo-box button {
-  padding: 12px 16px;
-  margin-left: 8px;
-  border-radius: 8px;
-  border: none;
-  background: #22c55e;
-  color: white;
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  transition: 0.3s;
 }
 
-.examples {
-  margin-top: 20px;
-  font-size: 14px;
-  color: #94a3b8;
+.demo-box button:hover {
+  transform: scale(1.05);
 }
 
-.examples span {
-  margin: 0 10px;
-}
-
-/* SECTIONS */
-section {
-  padding: 60px 20px;
-  text-align: center;
-}
-
-.steps, .features {
-  display: flex;
-  justify-content: center;
-  gap: 30px;
-  flex-wrap: wrap;
-}
-
+/* CARDS (How it works + features) */
 .step, .features div {
-  background: #0f172a;
-  padding: 20px;
-  border-radius: 12px;
-  max-width: 250px;
+  background: rgba(255,255,255,0.04);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.05);
+  transition: all 0.3s ease;
+}
+
+.step:hover, .features div:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 50px rgba(0,0,0,0.4);
+}
+
+/* SECTION HEADINGS */
+section h2 {
+  font-size: 28px;
+  margin-bottom: 30px;
 }
 
 /* USE CASES */
-.use-cases ul {
-  list-style: none;
-  padding: 0;
-}
-
 .use-cases li {
-  margin: 10px 0;
+  font-size: 16px;
+  transition: 0.2s;
 }
 
-/* FINAL CTA */
+.use-cases li:hover {
+  color: #a5b4fc;
+  transform: translateX(5px);
+}
+
+/* FINAL CTA GLOW */
 .final-cta {
-  background: #020617;
+  background: radial-gradient(circle at center, #1e293b, #020617);
 }
 
+.final-cta h2 {
+  background: linear-gradient(90deg, #ffffff, #60a5fa);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* FOOTER */
 .footer {
-  text-align: center;
-  padding: 20px;
-  color: #64748b;
+  border-top: 1px solid rgba(255,255,255,0.05);
 }
 
-/* MOBILE */
-@media (max-width: 768px) {
-  .hero h1 {
-    font-size: 28px;
-  }
-
-  .steps, .features {
-    flex-direction: column;
-    align-items: center;
-  }
+/* SCROLL SMOOTH */
+html {
+  scroll-behavior: smooth;
 }
