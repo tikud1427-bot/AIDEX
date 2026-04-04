@@ -3,7 +3,12 @@ const express = require("express");
 const fetch = require("node-fetch");
 
 const app = express();
+
+/* =========================
+   🔧 MIDDLEWARE (TOP)
+========================= */
 app.use(express.json());
+app.use(express.static("public"));
 
 /* =========================
    🧠 GROQ (MAIN CHAT)
@@ -22,7 +27,10 @@ async function chatWithGroq(message) {
   });
 
   const data = await res.json();
-  console.log(data); // 👈 ADD THIS
+  console.log("Groq:", data);
+
+  if (!data.choices) throw new Error("Groq failed");
+
   return data.choices[0].message.content;
 }
 
@@ -43,10 +51,9 @@ async function chatWithOpenRouter(message) {
   });
 
   const data = await res.json();
-  if (!data.choices) {
-    console.log("Groq Error:", data);
-    throw new Error("Groq failed");
-  }
+
+  if (!data.choices) throw new Error("OpenRouter failed");
+
   return data.choices[0].message.content;
 }
 
@@ -66,44 +73,61 @@ async function searchWeb(query) {
   const data = await res.json();
 
   return data.organic
-    .slice(0, 3)
+    ?.slice(0, 3)
     .map((r) => `${r.title}: ${r.snippet}`)
-    .join("\n");
+    .join("\n") || "No results";
 }
 
 /* =========================
-   🖼️ IMAGE (Pollinations)
+   🖼️ IMAGE
 ========================= */
 function generateImage(prompt) {
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 }
 
 /* =========================
-   🚀 MAIN ROUTER
+   🚀 ROUTES
 ========================= */
+
+app.get("/", (req, res) => {
+  res.send("Aquiplex AI is running 🚀");
+});
+
+app.get("/test", async (req, res) => {
+  try {
+    const reply = await chatWithGroq("Hello");
+    res.send(reply);
+  } catch (err) {
+    res.send("Error: " + err.message);
+  }
+});
+
 app.post("/chat", async (req, res) => {
   const { message } = req.body;
 
   try {
-    // 🖼️ Image request detection
-    if (message.toLowerCase().includes("image")) {
-      const img = generateImage(message);
-      return res.json({ type: "image", data: img });
+    if (!message) {
+      return res.json({ type: "text", data: "No message provided" });
     }
 
-    // 🌐 Search detection
+    // 🖼️ Image
+    if (message.toLowerCase().includes("image")) {
+      return res.json({ type: "image", data: generateImage(message) });
+    }
+
+    // 🌐 Search
     if (
       message.toLowerCase().includes("latest") ||
       message.toLowerCase().includes("news")
     ) {
       const searchData = await searchWeb(message);
-      const final = await chatWithGroq(
+      const reply = await chatWithGroq(
         `Answer using this data:\n${searchData}`
       );
-      return res.json({ type: "text", data: final });
+      return res.json({ type: "text", data: reply });
     }
 
-    // 💬 Normal chat with fallback
+    // 💬 Chat
     let reply;
     try {
       reply = await chatWithGroq(message);
@@ -112,23 +136,16 @@ app.post("/chat", async (req, res) => {
     }
 
     res.json({ type: "text", data: reply });
+
   } catch (err) {
+    console.log(err);
     res.status(500).json({ error: "Something broke" });
   }
 });
 
-app.get("/", (req, res) => {
-  res.send("Aquiplex AI is running 🚀");
-});
 /* =========================
    🚀 START SERVER
 ========================= */
-app.listen(3000, "0.0.0.0", () => {
-  console.log("Server running");
-});
-  console.log("Server running on http://localhost:3000");
-});
-app.get("/test", async (req, res) => {
-  const reply = await chatWithGroq("Hello");
-  res.send(reply);
+app.listen(5000, "0.0.0.0", () => {
+  console.log("Server running on port 5000");
 });
