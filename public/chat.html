@@ -77,7 +77,7 @@ async function send() {
   addMessage(message, "user");
   input.value = "";
 
-  const res = await fetch("/chat", {
+  fetch("https://ai-directory--tikud1427.replit.app/chat", {
     method: "POST",
     headers: {
       "Content-Type": "application/json"
