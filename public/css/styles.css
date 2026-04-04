@@ -3508,3 +3508,161 @@ MOBILE SAFE (no break)
   font-weight: 600;
   margin-bottom: 10px;
 }
+
+
+/* ================= LANDING PAGE ================= */
+
+.landing-page {
+  background: linear-gradient(135deg, #0f172a, #020617);
+  color: white;
+  font-family: 'Poppins', sans-serif;
+  margin: 0;
+  padding: 0;
+}
+
+/* NAVBAR */
+.navbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 40px;
+}
+
+.logo {
+  font-size: 22px;
+  font-weight: 600;
+}
+
+.nav-btn {
+  background: #2563eb;
+  padding: 10px 18px;
+  border-radius: 8px;
+  color: white;
+  text-decoration: none;
+}
+
+/* HERO */
+.hero {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.hero h1 {
+  font-size: 42px;
+  max-width: 700px;
+  margin: auto;
+}
+
+.hero p {
+  margin-top: 20px;
+  font-size: 18px;
+  color: #cbd5f5;
+}
+
+.hero-buttons {
+  margin-top: 30px;
+}
+
+.primary-btn {
+  background: #3b82f6;
+  border: none;
+  padding: 12px 22px;
+  border-radius: 10px;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  margin: 10px;
+}
+
+.secondary-btn {
+  background: transparent;
+  border: 1px solid #475569;
+  padding: 12px 22px;
+  border-radius: 10px;
+  color: white;
+  cursor: pointer;
+}
+
+/* DEMO INPUT */
+.demo-box {
+  margin-top: 40px;
+}
+
+.demo-box input {
+  padding: 12px;
+  width: 250px;
+  border-radius: 8px;
+  border: none;
+}
+
+.demo-box button {
+  padding: 12px 16px;
+  margin-left: 8px;
+  border-radius: 8px;
+  border: none;
+  background: #22c55e;
+  color: white;
+}
+
+.examples {
+  margin-top: 20px;
+  font-size: 14px;
+  color: #94a3b8;
+}
+
+.examples span {
+  margin: 0 10px;
+}
+
+/* SECTIONS */
+section {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.steps, .features {
+  display: flex;
+  justify-content: center;
+  gap: 30px;
+  flex-wrap: wrap;
+}
+
+.step, .features div {
+  background: #0f172a;
+  padding: 20px;
+  border-radius: 12px;
+  max-width: 250px;
+}
+
+/* USE CASES */
+.use-cases ul {
+  list-style: none;
+  padding: 0;
+}
+
+.use-cases li {
+  margin: 10px 0;
+}
+
+/* FINAL CTA */
+.final-cta {
+  background: #020617;
+}
+
+.footer {
+  text-align: center;
+  padding: 20px;
+  color: #64748b;
+}
+
+/* MOBILE */
+@media (max-width: 768px) {
+  .hero h1 {
+    font-size: 28px;
+  }
+
+  .steps, .features {
+    flex-direction: column;
+    align-items: center;
+  }
+}

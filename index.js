@@ -132,12 +132,16 @@ next();
 }
 
 // ================= ROUTES =================
-
-// HOME
-app.get("/", async (req, res) => {
+//new landing page
+// NEW LANDING PAGE
+app.get("/", (req, res) => {
+  res.render("landing");
+});
+// YOUR OLD HOME → NOW APP PAGE
+app.get("/app", async (req, res) => {
   try {
-    const tools = await Tool.find().limit(12).lean(); // for UI
-    const allTools = await Tool.find().lean(); // 🔥 FULL DB
+    const tools = await Tool.find().limit(12).lean();
+    const allTools = await Tool.find().lean();
 
     const trendingTools = await getTrendingTools(10);
     const trendingIds = trendingTools.map(t => t._id.toString());
@@ -145,9 +149,10 @@ app.get("/", async (req, res) => {
     res.render("home", { tools, trendingIds, allTools });
 
   } catch {
-    res.send("Error loading home");
+    res.send("Error loading app");
   }
 });
+
 // AI BUNDLES PAGE
 app.get("/bundles", (req, res) => {
   res.render("bundles");
