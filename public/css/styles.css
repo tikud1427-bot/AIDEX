@@ -4030,3 +4030,64 @@ html {
   color: #777;
   margin-bottom: 20px;
 }
+
+/* 🚀 FINAL CTA FIX */
+.final-cta {
+  text-align: center;
+  padding: 80px 20px;
+  background: linear-gradient(135deg, #f5f7ff, #eef2ff);
+}
+
+/* Heading */
+.final-cta h2 {
+  font-size: 32px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-bottom: 12px;
+}
+
+/* Subtext */
+.final-cta p {
+  font-size: 16px;
+  color: #64748b; /* darker = readable */
+  margin-bottom: 30px;
+}
+
+/* Button upgrade */
+.final-cta .primary-btn {
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
+  color: white;
+  padding: 14px 26px;
+  border-radius: 999px;
+  font-size: 16px;
+  font-weight: 500;
+  text-decoration: none;
+  display: inline-block;
+  transition: all 0.3s ease;
+  box-shadow: 0 8px 25px rgba(37, 99, 235, 0.3);
+}
+
+.final-cta .primary-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, 0.4);
+}
+
+/* 📱 MOBILE FIX */
+@media (max-width: 768px) {
+  .final-cta {
+    padding: 60px 15px;
+  }
+
+  .final-cta h2 {
+    font-size: 24px;
+  }
+
+  .final-cta p {
+    font-size: 14px;
+  }
+
+  .final-cta .primary-btn {
+    font-size: 14px;
+    padding: 12px 20px;
+  }
+}
