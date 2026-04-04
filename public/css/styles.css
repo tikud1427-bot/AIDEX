@@ -4432,3 +4432,37 @@ html {
   }
 
 }
+
+/* =========================
+🎯 PERFECT CENTER FIX (FINAL)
+========================= */
+
+/* FORCE TRUE CENTER */
+body.landing-page .hero {
+  margin-left: auto !important;
+  margin-right: auto !important;
+  width: 100% !important;
+}
+
+/* CENTER INNER CONTENT PROPERLY */
+body.landing-page .hero > * {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* FIX BUTTON ALIGNMENT */
+body.landing-page .hero-buttons {
+  justify-content: center !important;
+  align-items: center !important;
+}
+
+/* FIX INPUT CENTER */
+body.landing-page .demo-box {
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* EXTRA SAFETY (kills hidden offset bugs) */
+body.landing-page {
+  overflow-x: hidden;
+}
