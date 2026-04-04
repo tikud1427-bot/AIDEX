@@ -5,7 +5,8 @@ const cors = require("cors");
 const path = require("path");
 
 const app = express();
-
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
 app.use(cors());
 app.use(express.json());
 
@@ -155,14 +156,12 @@ app.get("/image", (req, res) => {
 📄 ROUTES (FRONTEND)
 ========================= */
 
-// Home page
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.render("chatbot");
 });
 
-// Optional custom route
 app.get("/mychatbot", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.render("chatbot");
 });
 
 /* =========================
