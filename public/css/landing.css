@@ -1,436 +1,213 @@
 /* =========================
-🚀 AQUIPLEX LANDING FINAL (FIXED + SAFE)
-NO BREAK • MOBILE FIXED • PREMIUM UI
+🚀 AQUIPLEX PREMIUM LANDING (FINAL)
+Mobile Perfect • Desktop Clean • Modern SaaS UI
 ========================= */
 
 /* ===== BASE ===== */
 body.landing-page {
+  font-family: 'Poppins', sans-serif;
   background: linear-gradient(180deg, #f8fafc, #eef2ff);
   color: #0f172a;
   overflow-x: hidden;
-  padding-top: 0 !important;
+  margin: 0;
 }
 
 /* ===== NAVBAR ===== */
-.landing-page .navbar {
-  position: fixed;
+.navbar {
+  position: sticky;
   top: 0;
-  width: 100%;
-  padding: 16px 20px;
-
+  z-index: 100;
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
   display: flex;
   justify-content: space-between;
   align-items: center;
-
-  background: rgba(255,255,255,0.75);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-  z-index: 999;
+  padding: 12px 20px;
 }
 
-.landing-page .logo {
+.logo {
   display: flex;
   align-items: center;
   gap: 10px;
   font-weight: 600;
+  font-size: 18px;
   color: #2563eb;
 }
 
-.landing-page .logo img {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
+/* Buttons */
+.nav-buttons {
+  display: flex;
+  gap: 10px;
 }
 
-/* ===== NAV BUTTONS ===== */
-.landing-page .nav-btn {
+.btn-outline {
+  padding: 8px 16px;
   border-radius: 999px;
-  padding: 8px 18px;
+  border: 1px solid #2563eb;
+  background: transparent;
+  color: #2563eb;
   font-size: 14px;
 }
 
-.nav-btn.primary {
-  background: #2563eb;
-  color: #fff;
+.btn-primary {
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  border: none;
+  font-size: 14px;
+  box-shadow: 0 6px 18px rgba(37,99,235,0.3);
 }
 
-.nav-btn.secondary {
-  background: transparent;
-  border: 1px solid #2563eb;
-  color: #2563eb;
-}
-
-/* ===== HERO ===== */
-.landing-page .hero {
-  margin-top: 80px;
-  padding: 100px 20px 60px;
-
+/* ===== HERO SECTION ===== */
+.hero {
+  min-height: calc(100vh - 70px);
   display: flex;
   flex-direction: column;
+  justify-content: center;
   align-items: center;
+  gap: 25px;
+  padding: 20px;
   text-align: center;
-
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-
-  position: relative;
+  animation: fadeUp 0.8s ease;
 }
 
-/* Glow */
-.landing-page .hero::before {
+/* Gradient glow background */
+.hero::before {
   content: "";
   position: absolute;
-  width: 500px;
-  height: 500px;
-  background: radial-gradient(circle, rgba(59,130,246,0.25), transparent 70%);
-  top: -100px;
-  left: 50%;
-  transform: translateX(-50%);
+  width: 300px;
+  height: 300px;
+  background: radial-gradient(circle, rgba(59,130,246,0.2), transparent);
   filter: blur(80px);
-  z-index: 0;
+  z-index: -1;
 }
 
-.landing-page .hero * {
-  position: relative;
-  z-index: 1;
-}
-
-/* TEXT */
-.landing-page .hero h1 {
-  font-size: 48px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-.landing-page .gradient-text {
-  background: linear-gradient(90deg, #2563eb, #06b6d4);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.landing-page .hero p {
-  margin: 15px 0 25px;
-  font-size: 16px;
-  color: #475569;
-}
-
-/* BUTTONS */
-.landing-page .hero-buttons {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.landing-page .primary-btn {
-  background: #2563eb;
-  padding: 14px 24px;
-  border-radius: 999px;
-  color: white;
-  border: none;
-  transition: 0.25s;
-}
-
-.landing-page .primary-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 30px rgba(37,99,235,0.3);
-}
-
-.landing-page .secondary-btn {
-  background: white;
-  border: 1px solid #e2e8f0;
-  padding: 14px 24px;
-  border-radius: 999px;
-}
-
-/* INPUT */
-.landing-page .demo-box {
-  display: flex;
-  width: 100%;
-  max-width: 420px;
-  margin: 25px auto;
-  padding: 6px;
-
-  border-radius: 999px;
-  background: white;
-  border: 1px solid #e5e7eb;
-
-  box-shadow: 0 8px 25px rgba(0,0,0,0.08);
-}
-
-.landing-page .demo-box input {
-  flex: 1;
-  border: none;
-  outline: none;
-  background: transparent;
-  padding: 12px;
-}
-
-.landing-page .demo-box button {
-  border: none;
-  border-radius: 999px;
-  padding: 10px 16px;
-  background: linear-gradient(135deg, #3b82f6, #06b6d4);
-  color: white;
-}
-
-/* ===== SECTIONS ===== */
-.landing-page section {
-  padding: 80px 20px;
-  text-align: center;
-  max-width: 1100px;
-  margin: auto;
-}
-
-.landing-page section h2 {
-  font-size: 30px;
-  margin-bottom: 30px;
-}
-
-/* STEPS */
-.landing-page .steps {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.landing-page .step {
-  background: rgba(255,255,255,0.7);
-  backdrop-filter: blur(10px);
-  padding: 24px;
-  border-radius: 16px;
-  max-width: 260px;
-  border: 1px solid rgba(0,0,0,0.05);
-  transition: 0.3s;
-}
-
-.landing-page .step:hover {
-  transform: translateY(-6px);
-}
-
-/* FEATURES */
-.landing-page .features {
-  display: flex;
-  gap: 20px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.landing-page .feature-card {
-  max-width: 260px;
-}
-
-/* USE CASES */
-.landing-page .use-grid {
+/* ===== USE CASES ===== */
+.use-cases {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
   gap: 10px;
+  max-width: 600px;
 }
 
-.landing-page .use-grid div {
-  background: white;
+.use-cases button {
   padding: 10px 16px;
   border-radius: 999px;
-  border: 1px solid #e2e8f0;
+  border: none;
+  background: rgba(255,255,255,0.7);
+  backdrop-filter: blur(10px);
+  font-size: 14px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.05);
+  transition: 0.25s;
 }
 
-/* CTA */
-.landing-page .final-cta {
-  padding: 80px 20px;
+.use-cases button:hover {
+  transform: translateY(-2px);
 }
 
-.landing-page .big-btn {
-  font-size: 16px;
+/* ===== HEADINGS ===== */
+.hero h1 {
+  font-size: 30px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.hero h1 span {
+  background: linear-gradient(135deg, #3b82f6, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hero p {
+  font-size: 15px;
+  opacity: 0.7;
+  max-width: 500px;
+}
+
+/* ===== CTA BUTTON ===== */
+.cta-button {
   padding: 16px 28px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  font-weight: 500;
+  border: none;
+  font-size: 16px;
+  box-shadow: 0 10px 25px rgba(37,99,235,0.35);
+  transition: 0.3s ease;
 }
 
-/* FOOTER */
-.landing-page .footer {
+.cta-button:hover {
+  transform: translateY(-3px);
+}
+
+.cta-button:active {
+  transform: scale(0.96);
+}
+
+/* ===== FOOTER ===== */
+footer {
   text-align: center;
   padding: 20px;
-  color: #64748b;
+  font-size: 13px;
+  opacity: 0.6;
 }
 
-/* ===== MOBILE FIX ===== */
+/* ===== ANIMATION ===== */
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(25px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* =========================
+📱 MOBILE IMPROVEMENTS
+========================= */
 @media (max-width: 768px) {
 
-  .landing-page .hero {
-    padding: 80px 15px 40px;
+  .hero {
+    gap: 20px;
   }
 
-  .landing-page .hero h1 {
+  .hero h1 {
     font-size: 26px;
   }
 
-  .landing-page .hero-buttons {
-    flex-direction: column;
-  }
-
-  .landing-page .hero-buttons a {
+  .cta-button {
     width: 100%;
     max-width: 280px;
   }
 
-  .landing-page .steps {
-    flex-direction: column;
-    align-items: center;
-  }
 }
 
 /* =========================
-📱 MOBILE FIX PATCH (SAFE)
-Fix blur, contrast, spacing
+💻 DESKTOP IMPROVEMENTS
 ========================= */
+@media (min-width: 1024px) {
 
-@media (max-width: 768px) {
-
-  /* 🔥 HERO FIX */
   .hero {
-    padding: 60px 16px !important;
-    border-radius: 18px;
+    padding: 60px 20px;
   }
 
-  /* Remove washed overlay effect */
-  .hero::before {
-    background: rgba(255, 255, 255, 0.85) !important;
-    backdrop-filter: blur(3px) !important;
-  }
-
-  /* Fix text clarity */
   .hero h1 {
-    font-size: 24px !important;
-    line-height: 1.4;
-    color: #0f172a !important;
+    font-size: 42px;
   }
 
   .hero p {
-    font-size: 14px !important;
-    color: #334155 !important;
+    font-size: 18px;
   }
 
-  /* 🔥 BUTTON FIX */
-  .btn-primary {
-    width: 100%;
-    padding: 14px;
-    font-size: 15px;
-    border-radius: 12px;
-  }
-
-  .btn-secondary {
-    width: 100%;
-    padding: 12px;
-    font-size: 14px;
-    margin-top: 10px;
-  }
-
-  /* 🔥 INPUT + GENERATE BAR */
-  .hero-input {
-    flex-direction: column !important;
-    gap: 10px;
-  }
-
-  .hero-input input {
-    width: 100%;
-    padding: 12px;
-  }
-
-  .hero-input button {
-    width: 100%;
-  }
-
-  /* 🔥 HOW IT WORKS CARDS */
-  .steps {
-    flex-direction: column !important;
-    gap: 16px;
-  }
-
-  .step-card {
-    width: 100% !important;
-    padding: 18px;
-  }
-
-  /* 🔥 USE CASE BUTTONS */
-  .use-cases {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-    justify-content: center;
-  }
-
-  .use-case {
-    font-size: 13px;
-    padding: 8px 12px;
-  }
-
-  /* 🔥 GENERAL TEXT CENTERING */
-  .hero,
-  .section {
-    text-align: center;
-  }
-
-}
-
-/* =========================
-🔥 REAL MOBILE FIX (CRITICAL)
-Kills fog + fixes layout
-========================= */
-
-@media (max-width: 768px) {
-
-  /* ❌ REMOVE GLOW COMPLETELY */
-  .landing-page .hero::before {
-    display: none !important;
-  }
-
-  /* ✅ CLEAN HERO */
-  .landing-page .hero {
-    padding: 70px 16px 40px !important;
-  }
-
-  /* ✅ TEXT FIX */
-  .landing-page .hero h1 {
-    font-size: 26px !important;
-    line-height: 1.3;
-    color: #0f172a !important;
-  }
-
-  .landing-page .hero p {
-    font-size: 14px !important;
-    color: #334155 !important;
-  }
-
-  /* ✅ BUTTON FIX (YOUR CLASSES) */
-  .landing-page .primary-btn,
-  .landing-page .secondary-btn {
-    width: 100% !important;
-    max-width: 280px;
-    margin: auto;
-  }
-
-  /* ✅ INPUT FIX (IMPORTANT — your class is demo-box, NOT hero-input) */
-  .landing-page .demo-box {
-    flex-direction: column !important;
-    border-radius: 16px;
-    padding: 10px;
-  }
-
-  .landing-page .demo-box input {
-    width: 100%;
-    padding: 12px;
-  }
-
-  .landing-page .demo-box button {
-    width: 100%;
-    margin-top: 8px;
-  }
-
-  /* ✅ CARDS FIX */
-  .landing-page .step {
-    width: 100% !important;
-    max-width: 100%;
+  .cta-button {
+    font-size: 18px;
+    padding: 18px 36px;
   }
 
 }
