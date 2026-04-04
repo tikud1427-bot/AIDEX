@@ -4,9 +4,9 @@
   <title>Aquiplex AI</title>
   <style>
     body {
-      font-family: Arial;
       background: #0f172a;
       color: white;
+      font-family: Arial;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -54,7 +54,6 @@ async function send() {
   if (!message) return;
 
   chat.innerHTML += `<p class="user"><b>You:</b> ${message}</p>`;
-
   input.value = "";
 
   const res = await fetch("/chat", {
