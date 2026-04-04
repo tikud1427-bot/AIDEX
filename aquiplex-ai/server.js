@@ -149,6 +149,10 @@ app.get("/image", (req, res) => {
   const url = generateImage(prompt);
   res.json({ url });
 });
+//
+app.get("/chatbot", (req, res) => {
+  res.sendFile(__dirname + "/public/chatbot.html");
+});
 
 /* =========================
 🚀 START SERVER
