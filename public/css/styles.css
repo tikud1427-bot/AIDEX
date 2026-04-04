@@ -4091,3 +4091,115 @@ html {
     padding: 12px 20px;
   }
 }
+
+/* 📱 MOBILE OPTIMIZATION (IMPORTANT) */
+@media (max-width: 768px) {
+
+  /* HERO */
+  .hero {
+    padding: 40px 15px;
+    text-align: center;
+  }
+
+  .hero h1 {
+    font-size: 24px;
+    line-height: 1.4;
+  }
+
+  .hero p {
+    font-size: 14px;
+    margin: 15px 0;
+  }
+
+  /* BUTTONS STACK */
+  .hero-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .hero-buttons a {
+    width: 100%;
+    max-width: 280px;
+    text-align: center;
+  }
+
+  /* INPUT BOX FIX */
+  .demo-box {
+    width: 100%;
+    max-width: 100%;
+    display: flex;
+    gap: 8px;
+    margin-top: 20px;
+  }
+
+  .demo-box input {
+    flex: 1;
+    width: 100%;
+    font-size: 14px;
+  }
+
+  .demo-box button {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+
+  /* EXAMPLES TEXT */
+  .examples {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12px;
+  }
+
+  /* HOW IT WORKS */
+  .steps {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 20px 15px;
+  }
+
+  .step {
+    width: 100%;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .step h3 {
+    font-size: 16px;
+  }
+
+  .step p {
+    font-size: 13px;
+  }
+
+  /* USE CASES GRID FIX */
+  .use-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+  }
+
+  .use-grid div {
+    font-size: 13px;
+    padding: 8px 12px;
+  }
+
+  /* NAVBAR FIX */
+  .navbar {
+    padding: 10px 15px;
+  }
+
+  .logo span {
+    font-size: 16px;
+  }
+
+  .nav-btn {
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+}
