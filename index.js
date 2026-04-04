@@ -130,11 +130,17 @@ function requireLogin(req, res, next) {
 if (!req.session.userId) return res.redirect("/login");
 next();
 }
-
+//
+function redirectIfLoggedIn(req, res, next) {
+  if (req.session.userId) {
+    return res.redirect("/workspace"); // your main app
+  }
+  next();
+}
 // ================= ROUTES =================
 //new landing page
 // NEW LANDING PAGE
-app.get("/", (req, res) => {
+app.get("/", redirectIfLoggedIn, (req, res) => {
   res.render("landing");
 });
 // YOUR OLD HOME → NOW APP PAGE
