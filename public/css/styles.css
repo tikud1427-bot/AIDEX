@@ -3839,10 +3839,7 @@ body:not(.landing-page) .logo span {
     drop-shadow(0 0 40px rgba(59,130,246,0.25));
 }
 
-.landing-page .hero {
-  position: relative; /* VERY IMPORTANT */
-  overflow: hidden;
-}
+
 
 /* ================= FLOATING OBJECTS ================= */
 
@@ -3906,32 +3903,34 @@ body:not(.landing-page) .logo span {
 
 .landing-page .ai-wave {
   position: absolute;
-  width: 1000px;
-  height: 500px;
 
-  top: 10%;
+  width: 1400px;   /* 🔥 bigger = no box feel */
+  height: 700px;
+
+  top: -10%;
   left: 50%;
-  transform: translateX(-50%) rotate(-10deg);
+  transform: translateX(-50%) rotate(-8deg);
 
   background: 
-    radial-gradient(circle at 30% 50%, rgba(34,211,238,0.7), transparent 60%),
-    radial-gradient(circle at 70% 50%, rgba(59,130,246,0.7), transparent 60%),
-    radial-gradient(circle at 50% 50%, rgba(147,197,253,0.4), transparent 70%);
+    radial-gradient(circle at 20% 50%, rgba(59,130,246,0.5), transparent 60%),
+    radial-gradient(circle at 80% 50%, rgba(34,211,238,0.5), transparent 60%);
 
-  filter: blur(60px);
-  opacity: 0.7;
+  filter: blur(100px); /* 🔥 more blur = smoother blend */
+  opacity: 0.6;
 
   z-index: 0;
   pointer-events: none;
 
-  animation: waveMove 12s ease-in-out infinite alternate;
+  animation: waveMove 14s ease-in-out infinite alternate;
 }
-
-@keyframes waveMove {
-  0% {
-    transform: translateX(-50%) rotate(-10deg) scale(1);
-  }
-  100% {
-    transform: translateX(-50%) rotate(8deg) scale(1.1);
-  }
+.landing-page .hero {
+  background: transparent !important;
+}
+.landing-page {
+  background: linear-gradient(
+    180deg,
+    #f8fafc 0%,
+    #eef2ff 40%,
+    #f8fafc 100%
+  );
 }
