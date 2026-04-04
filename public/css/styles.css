@@ -3532,38 +3532,55 @@ body::before {
 
 /* ================= NAVBAR ================= */
 
+/* ================= NAVBAR FIX ================= */
+
 .navbar {
+  position: fixed;
+  top: 0;
+  width: 100%;
+  padding: 16px 40px;
+
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 18px 40px;
-  backdrop-filter: blur(12px);
-  background: rgba(2, 6, 23, 0.6);
-  border-bottom: 1px solid rgba(255,255,255,0.05);
-  position: sticky;
-  top: 0;
-  z-index: 100;
+
+  background: rgba(2, 6, 23, 0.4);
+  backdrop-filter: blur(16px);
+
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+
+  z-index: 1000;
 }
 
+/* logo */
 .logo {
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
+/* right side */
+.nav-right {
+  display: flex;
+  align-items: center;
+}
+
+/* button */
 .nav-btn {
   background: linear-gradient(135deg, #3b82f6, #6366f1);
-  padding: 10px 18px;
-  border-radius: 10px;
+  padding: 8px 16px;
+  border-radius: 999px;
   color: white;
   text-decoration: none;
-  transition: 0.3s;
+  font-size: 14px;
+
+  transition: all 0.25s ease;
 }
 
 .nav-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 25px rgba(59,130,246,0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(59,130,246,0.4);
 }
-
 /* ================= HERO ================= */
 
 .hero {
