@@ -151,12 +151,11 @@ app.get("/image", (req, res) => {
   const url = generateImage(prompt);
   res.json({ url });
 });
+//
+const path = require("path");
 
-/* =========================
-📄 CHATBOT PAGE ROUTE
-========================= */
-app.get("/chatbot", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "chatbot.html"));
+app.get("/mychatbot", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 /* =========================
