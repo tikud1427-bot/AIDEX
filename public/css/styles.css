@@ -3823,3 +3823,81 @@ body:not(.landing-page) .logo span {
 .landing-page {
   background: linear-gradient(135deg, #eef3ff, #f8fbff);
 }
+
+/* 🔥 LOGO BLENDING */
+.landing-page .logo img {
+  filter: 
+    drop-shadow(0 4px 12px rgba(59,130,246,0.25))
+    drop-shadow(0 0 20px rgba(59,130,246,0.15));
+  transition: all 0.4s ease;
+}
+
+.landing-page .logo:hover img {
+  transform: scale(1.08) rotate(-2deg);
+  filter: 
+    drop-shadow(0 6px 20px rgba(59,130,246,0.4))
+    drop-shadow(0 0 40px rgba(59,130,246,0.25));
+}
+
+.landing-page .hero {
+  position: relative; /* VERY IMPORTANT */
+  overflow: hidden;
+}
+
+/* ================= FLOATING OBJECTS ================= */
+
+.landing-page .floating-shape {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(90px);
+  opacity: 0.35;
+  z-index: 0; /* 🔥 changed from -1 */
+  pointer-events: none;
+}
+
+/* Shape 1 */
+.landing-page .shape1 {
+  width: 250px;
+  height: 250px;
+  background: #3b82f6;
+  top: 10%;
+  left: 15%;
+  animation: float1 12s ease-in-out infinite;
+}
+
+/* Shape 2 */
+.landing-page .shape2 {
+  width: 300px;
+  height: 300px;
+  background: #60a5fa;
+  bottom: 10%;
+  right: 15%;
+  animation: float2 15s ease-in-out infinite;
+}
+
+/* Shape 3 */
+.landing-page .shape3 {
+  width: 200px;
+  height: 200px;
+  background: #93c5fd;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: float3 18s ease-in-out infinite;
+}
+
+/* Animations */
+@keyframes float1 {
+  0%,100% { transform: translateY(0px); }
+  50% { transform: translateY(-40px); }
+}
+
+@keyframes float2 {
+  0%,100% { transform: translateY(0px); }
+  50% { transform: translateY(30px); }
+}
+
+@keyframes float3 {
+  0%,100% { transform: translate(-50%, -50%); }
+  50% { transform: translate(-50%, -60%); }
+}
