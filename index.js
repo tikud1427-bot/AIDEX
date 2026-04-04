@@ -133,9 +133,9 @@ next();
 //
 function redirectIfLoggedIn(req, res, next) {
   if (req.session.userId) {
-    return res.redirect("/workspace"); // your main app
+    return res.redirect("/home"); // ✅ stop here
   }
-  next();
+  next(); // ✅ only runs if NOT logged in
 }
 // ================= ROUTES =================
 //new landing page
@@ -144,7 +144,7 @@ app.get("/", redirectIfLoggedIn, (req, res) => {
   res.render("landing");
 });
 // YOUR OLD HOME → NOW APP PAGE
-app.get("/app", async (req, res) => {
+app.get("/home", requireLogin, async (req, res) => {
   try {
     const tools = await Tool.find().limit(12).lean();
     const allTools = await Tool.find().lean();
@@ -155,7 +155,7 @@ app.get("/app", async (req, res) => {
     res.render("home", { tools, trendingIds, allTools });
 
   } catch {
-    res.send("Error loading app");
+    res.send("Error loading home");
   }
 });
 
@@ -637,50 +637,50 @@ req.session.user = {
 };  
 
 req.session.userId = user._id; // 🔥 ADD THIS  
-req.session.save(() => {  
-  res.redirect("/workspace");  
-});
+  req.session.save(() => {  
+    res.redirect("/home");  
+  });
 
 } catch (err) {
 console.error(err);
 res.send("Login error");
 }
 });
-
-// SIGNUP
+//signup
 app.post("/signup", async (req, res) => {
-try {
-const { email, password } = req.body;
+  try {
+    const { email, password } = req.body;
 
-if (!email || !password)  
-  return res.send("All fields are required");  
+    if (!email || !password)
+      return res.send("All fields are required");
 
-const exists = await User.findOne({ email });  
-if (exists) return res.send("User already exists");  
+    const exists = await User.findOne({ email });
+    if (exists) return res.send("User already exists");
 
-const hashedPassword = await bcrypt.hash(password, 12);  
+    const hashedPassword = await bcrypt.hash(password, 12);
 
-const newUser = await new User({  
-  email,  
-  password: hashedPassword,  
-}).save();  
+    const newUser = await new User({
+      email,
+      password: hashedPassword,
+    }).save();
 
-// 🔥 AUTO LOGIN AFTER SIGNUP  
-req.session.user = {  
-  _id: newUser._id,  
-  email: newUser.email,  
-  username: newUser.email.split("@")[0]  
-};  
+    // ✅ AUTO LOGIN
+    req.session.user = {
+      _id: newUser._id,
+      email: newUser.email,
+      username: newUser.email.split("@")[0]
+    };
 
-req.session.userId = newUser._id; // 🔥 ADD THIS  
-req.session.save(() => {  
-  res.redirect("/workspace");  
-});
+    req.session.userId = newUser._id;
 
-} catch (err) {
-console.error(err);
-res.send("Signup error");
-}
+    req.session.save(() => {
+      res.redirect("/home"); // 🔥 FIXED
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.send("Signup error");
+  }
 });
 
 // LOGOUT
