@@ -3753,3 +3753,78 @@ section h2 {
   }
 
 }
+
+/* ================= LANDING PAGE ONLY ================= */
+
+.landing-page {
+  background: linear-gradient(180deg, #f8fafc, #eef2ff);
+  color: #0f172a;
+}
+
+/* background glow */
+.landing-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(circle at 80% 90%, rgba(59,130,246,0.2), transparent 50%);
+  z-index: -1;
+}
+
+/* NAVBAR */
+.landing-page .navbar {
+  background: rgba(255,255,255,0.6);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
+}
+
+.landing-page .logo {
+  color: #1e3a8a;
+}
+
+.landing-page .nav-btn {
+  background: #2563eb;
+}
+
+.landing-page .nav-btn:hover {
+  background: #1d4ed8;
+}
+
+/* HERO */
+.landing-page .hero p {
+  color: #475569;
+}
+
+/* BUTTONS */
+.landing-page .secondary-btn {
+  background: white;
+  border: 1px solid #e2e8f0;
+  color: #0f172a;
+}
+
+/* DEMO BOX */
+.landing-page .demo-box {
+  background: white;
+  border: 1px solid #e2e8f0;
+}
+
+.landing-page .demo-box input {
+  color: #0f172a;
+}
+
+/* CARDS */
+.landing-page .step,
+.landing-page .feature-card {
+  background: white;
+  border: 1px solid #e2e8f0;
+}
+
+/* USE CASES */
+.landing-page .use-grid div {
+  background: white;
+  border: 1px solid #e2e8f0;
+}
+
+/* FINAL CTA */
+.landing-page .final-cta {
+  background: linear-gradient(180deg, #eef2ff, #f8fafc);
+}
