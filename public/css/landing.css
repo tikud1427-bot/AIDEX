@@ -459,3 +459,111 @@ body.landing-page::before {
               radial-gradient(circle at 80% 60%, rgba(14,165,233,0.1), transparent 40%);
   z-index: -1;
 }
+
+/* =========================
+🔥 HERO PREMIUM UPGRADE
+========================= */
+
+/* Bigger, stronger headline */
+.landing-page .hero h1 {
+  font-size: 52px;
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+
+/* Gradient stronger */
+.landing-page .gradient-text {
+  background: linear-gradient(90deg, #2563eb, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Subtext softer */
+.landing-page .hero p {
+  font-size: 17px;
+  opacity: 0.8;
+}
+
+/* CTA spacing */
+.landing-page .hero-buttons {
+  margin-top: 10px;
+}
+
+/* Hero input glow */
+.landing-page .demo-box {
+  box-shadow: 0 15px 50px rgba(37, 99, 235, 0.25);
+}
+
+/* =========================
+🔥 SECTION DEPTH SYSTEM
+========================= */
+
+/* Alternate backgrounds */
+.landing-page .how-it-works {
+  background: rgba(255,255,255,0.4);
+}
+
+.landing-page .why {
+  background: transparent;
+}
+
+.landing-page .use-cases {
+  background: rgba(255,255,255,0.4);
+}
+
+.landing-page .final-cta {
+  background: linear-gradient(180deg, transparent, rgba(59,130,246,0.08));
+}
+
+
+/* =========================
+🔥 CARD INTERACTION BOOST
+========================= */
+
+.landing-page .step,
+.landing-page .feature-card {
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.landing-page .step:hover,
+.landing-page .feature-card:hover {
+  transform: translateY(-8px) scale(1.03);
+  box-shadow: 0 25px 60px rgba(0,0,0,0.12);
+}
+
+/* Icon pop */
+.landing-page .step-icon {
+  transition: transform 0.3s ease;
+}
+
+.landing-page .step:hover .step-icon {
+  transform: scale(1.2) rotate(5deg);
+}
+
+/* smoother reveal */
+.reveal {
+  opacity: 0;
+  transform: translateY(60px) scale(0.98);
+  transition: all 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.reveal.active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* subtle hover on navbar */
+.landing-page .navbar {
+  transition: all 0.3s ease;
+}
+
+.landing-page .navbar:hover {
+  background: rgba(255,255,255,0.9);
+}
+
+/* button click feel */
+.landing-page button:active,
+.landing-page a:active {
+  transform: scale(0.96);
+}
