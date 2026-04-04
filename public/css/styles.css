@@ -3741,3 +3741,29 @@ MOBILE SAFE (no break)
   }
 
 }
+
+/* LOGO STYLING */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+/* logo image */
+.logo img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+/* landing page version */
+.landing-page .logo span {
+  color: #2563eb;
+}
+
+/* dark pages version */
+body:not(.landing-page) .logo span {
+  color: white;
+}
