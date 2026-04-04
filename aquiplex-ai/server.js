@@ -2,12 +2,15 @@ require("dotenv").config();
 const express = require("express");
 const fetch = require("node-fetch");
 const cors = require("cors");
+const path = require("path"); // ✅ IMPORTANT
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-app.use(express.static("public"));
+
+// ✅ Serve static files
+app.use(express.static(path.join(__dirname, "public")));
 
 const PORT = process.env.PORT || 3000;
 
@@ -18,7 +21,7 @@ async function chatWithGroq(message) {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -43,7 +46,7 @@ async function chatWithOpenRouter(message) {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
       "Content-Type": "application/json",
       "HTTP-Referer": "http://localhost:3000",
       "X-Title": "Aquiplex AI",
@@ -111,7 +114,6 @@ app.post("/chat", async (req, res) => {
     }
 
     res.json({ reply });
-
   } catch (error) {
     console.error(error.message);
     res.status(500).json({ error: "AI failed to respond" });
@@ -149,9 +151,19 @@ app.get("/image", (req, res) => {
   const url = generateImage(prompt);
   res.json({ url });
 });
-//
+
+/* =========================
+📄 CHATBOT PAGE ROUTE
+========================= */
 app.get("/chatbot", (req, res) => {
-  res.sendFile(__dirname + "/public/chatbot.html");
+  res.sendFile(path.join(__dirname, "public", "chatbot.html"));
+});
+
+/* =========================
+🏠 OPTIONAL HOME REDIRECT
+========================= */
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "chatbot.html"));
 });
 
 /* =========================
