@@ -1,23 +1,24 @@
 require("dotenv").config();
 const express = require("express");
 const fetch = require("node-fetch");
+const cors = require("cors");
 
 const app = express();
 
-/* =========================
-   🔧 MIDDLEWARE (TOP)
-========================= */
+app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
+const PORT = process.env.PORT || 3000;
+
 /* =========================
-   🧠 GROQ (MAIN CHAT)
+🧠 GROQ
 ========================= */
 async function chatWithGroq(message) {
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
@@ -27,38 +28,43 @@ async function chatWithGroq(message) {
   });
 
   const data = await res.json();
-  console.log("Groq:", data);
 
-  if (!data.choices) throw new Error("Groq failed");
+  if (!res.ok || !data.choices) {
+    throw new Error("Groq API failed");
+  }
 
   return data.choices[0].message.content;
 }
 
 /* =========================
-   🔁 OPENROUTER (FALLBACK)
+🔄 OPENROUTER
 ========================= */
 async function chatWithOpenRouter(message) {
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
       "Content-Type": "application/json",
+      "HTTP-Referer": "http://localhost:3000",
+      "X-Title": "Aquiplex AI",
     },
     body: JSON.stringify({
-      model: "meta-llama/llama-3-8b-instruct",
+      model: "openai/gpt-4o-mini",
       messages: [{ role: "user", content: message }],
     }),
   });
 
   const data = await res.json();
 
-  if (!data.choices) throw new Error("OpenRouter failed");
+  if (!res.ok || !data.choices) {
+    throw new Error("OpenRouter API failed");
+  }
 
   return data.choices[0].message.content;
 }
 
 /* =========================
-   🌐 SERPER SEARCH
+🌐 SERPER SEARCH
 ========================= */
 async function searchWeb(query) {
   const res = await fetch("https://google.serper.dev/search", {
@@ -72,80 +78,81 @@ async function searchWeb(query) {
 
   const data = await res.json();
 
-  return data.organic
-    ?.slice(0, 3)
-    .map((r) => `${r.title}: ${r.snippet}`)
-    .join("\n") || "No results";
+  if (!res.ok) throw new Error("Search failed");
+
+  return data.organic?.slice(0, 3) || [];
 }
 
 /* =========================
-   🖼️ IMAGE
+🎨 IMAGE (Pollinations)
 ========================= */
 function generateImage(prompt) {
   return `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
 }
 
 /* =========================
-   🚀 ROUTES
+💬 CHAT ROUTE
 ========================= */
-
-app.get("/", (req, res) => {
-  res.send("Aquiplex AI is running 🚀");
-});
-
-app.get("/test", async (req, res) => {
-  try {
-    const reply = await chatWithGroq("Hello");
-    res.send(reply);
-  } catch (err) {
-    res.send("Error: " + err.message);
-  }
-});
-
 app.post("/chat", async (req, res) => {
   const { message } = req.body;
 
+  if (!message) {
+    return res.status(400).json({ error: "Message is required" });
+  }
+
   try {
-    if (!message) {
-      return res.json({ type: "text", data: "No message provided" });
-    }
-
-    // 🖼️ Image
-    if (message.toLowerCase().includes("image")) {
-      return res.json({ type: "image", data: generateImage(message) });
-    }
-
-    // 🌐 Search
-    if (
-      message.toLowerCase().includes("latest") ||
-      message.toLowerCase().includes("news")
-    ) {
-      const searchData = await searchWeb(message);
-      const reply = await chatWithGroq(
-        `Answer using this data:\n${searchData}`
-      );
-      return res.json({ type: "text", data: reply });
-    }
-
-    // 💬 Chat
     let reply;
+
     try {
       reply = await chatWithGroq(message);
-    } catch {
+    } catch (err) {
+      console.log("⚠️ Groq failed → switching to OpenRouter");
       reply = await chatWithOpenRouter(message);
     }
 
-    res.json({ type: "text", data: reply });
+    res.json({ reply });
 
-  } catch (err) {
-    console.log(err);
-    res.status(500).json({ error: "Something broke" });
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({ error: "AI failed to respond" });
   }
 });
 
 /* =========================
-   🚀 START SERVER
+🔍 SEARCH ROUTE
 ========================= */
-app.listen(3000, "0.0.0.0", () => {
-  console.log("Server running on port 3000");
+app.post("/search", async (req, res) => {
+  const { query } = req.body;
+
+  if (!query) {
+    return res.status(400).json({ error: "Query is required" });
+  }
+
+  try {
+    const results = await searchWeb(query);
+    res.json(results);
+  } catch (err) {
+    res.status(500).json({ error: "Search failed" });
+  }
+});
+
+/* =========================
+🖼 IMAGE ROUTE
+========================= */
+app.get("/image", (req, res) => {
+  const { prompt } = req.query;
+
+  if (!prompt) {
+    return res.status(400).json({ error: "Prompt is required" });
+  }
+
+  const url = generateImage(prompt);
+  res.json({ url });
+});
+
+/* =========================
+🚀 START SERVER
+========================= */
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Aquiplex AI</title>
+</head>
+<body>
+
+<h2>Aquiplex AI Chat</h2>
+
+<input id="msg" placeholder="Ask anything..." />
+<button onclick="send()">Send</button>
+
+<div id="chat"></div>
+
+<hr>
+
+<input id="imgPrompt" placeholder="Generate image..." />
+<button onclick="genImg()">Generate Image</button>
+
+<img id="img" width="300"/>
+
+<script>
+async function send() {
+  const msg = document.getElementById("msg").value;
+
+  const res = await fetch("/chat", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ message: msg })
+  });
+
+  const data = await res.json();
+  document.getElementById("chat").innerHTML += "<p><b>You:</b> " + msg + "</p>";
+  document.getElementById("chat").innerHTML += "<p><b>AI:</b> " + data.reply + "</p>";
+}
+
+async function genImg() {
+  const prompt = document.getElementById("imgPrompt").value;
+
+  const res = await fetch(`/image?prompt=${encodeURIComponent(prompt)}`);
+  const data = await res.json();
+
+  document.getElementById("img").src = data.url;
+}
+</script>
+
+</body>
+</html>
