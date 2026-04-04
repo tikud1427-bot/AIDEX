@@ -3901,3 +3901,34 @@ body:not(.landing-page) .logo span {
   0%,100% { transform: translate(-50%, -50%); }
   50% { transform: translate(-50%, -60%); }
 }
+
+/* ================= AI WAVE OBJECT ================= */
+
+.landing-page .ai-wave {
+  position: absolute;
+  width: 800px;
+  height: 400px;
+
+  top: 20%;
+  left: 50%;
+  transform: translateX(-50%) rotate(-8deg);
+
+  background: radial-gradient(circle at 30% 50%, #22d3ee, transparent 60%),
+              radial-gradient(circle at 70% 50%, #3b82f6, transparent 60%);
+
+  filter: blur(40px);
+  opacity: 0.6;
+  z-index: 0;
+
+  animation: waveMove 10s ease-in-out infinite alternate;
+}
+
+/* animation */
+@keyframes waveMove {
+  0% {
+    transform: translateX(-50%) rotate(-8deg) scale(1);
+  }
+  100% {
+    transform: translateX(-50%) rotate(6deg) scale(1.1);
+  }
+}
