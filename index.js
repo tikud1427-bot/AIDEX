@@ -602,6 +602,56 @@ app.get("/bundle/:id", async (req, res) => {
     res.send("Error loading bundle");
   }
 });
+
+// ================= CHATBOT =================
+app.get("/chatbot", (req, res) => {
+  res.render("chatbot");
+});
+
+app.post("/chat", async (req, res) => {
+  const { message, history } = req.body;
+
+  if (!message) {
+    return res.json({ reply: "⚠️ Message required" });
+  }
+
+  try {
+    const response = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama-3.1-8b-instant",
+        messages: [
+          {
+            role: "system",
+            content: "You are Aquiplex AI — helpful and smart assistant."
+          },
+          ...(history || []),
+          {
+            role: "user",
+            content: message
+          }
+        ]
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    const reply =
+      response?.data?.choices?.[0]?.message?.content ||
+      "⚠️ No reply";
+
+    res.json({ reply });
+
+  } catch (err) {
+    console.error("CHAT ERROR:", err.response?.data || err.message);
+
+    res.json({ reply: "⚠️ AI failed" });
+  }
+});
 // ================= AUTH =================
 
 // LOGIN PAGE
