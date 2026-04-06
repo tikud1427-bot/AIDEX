@@ -1,0 +1,95 @@
+.new-hero {
+  position: relative;
+  height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background: radial-gradient(circle at top, #0ea5e9, #020617 60%);
+  overflow: hidden;
+}
+
+.hero-glow {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: #0ea5e9;
+  filter: blur(180px);
+  opacity: 0.2;
+}
+
+.hero-content h1 {
+  font-size: 3rem;
+  font-weight: 700;
+}
+
+.hero-content p {
+  margin-top: 10px;
+  color: #94a3b8;
+}
+
+.hero-stats {
+  margin-top: 25px;
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  color: #38bdf8;
+  font-size: 0.9rem;
+}
+
+.features {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.feature-card {
+  background: rgba(255,255,255,0.03);
+  padding: 25px;
+  border-radius: 16px;
+  width: 250px;
+  border: 1px solid rgba(255,255,255,0.05);
+  transition: 0.3s;
+}
+
+.feature-card:hover {
+  transform: translateY(-5px);
+  border-color: #0ea5e9;
+}
+
+.tool-card {
+  background: linear-gradient(145deg, #020617, #0f172a);
+  padding: 20px;
+  border-radius: 18px;
+  transition: 0.3s;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.tool-card:hover {
+  transform: translateY(-8px) scale(1.02);
+  border-color: #38bdf8;
+  box-shadow: 0 0 25px rgba(14,165,233,0.2);
+}
+
+.category-card {
+  backdrop-filter: blur(10px);
+  background: rgba(255,255,255,0.03);
+  border-radius: 20px;
+  padding: 30px;
+  transition: 0.3s;
+}
+
+.category-card:hover {
+  transform: scale(1.05);
+  background: rgba(14,165,233,0.1);
+}
+
+* {
+  transition: all 0.25s ease;
+}
+
+.btn.primary:hover {
+  box-shadow: 0 0 20px #0ea5e9;
+}
+
