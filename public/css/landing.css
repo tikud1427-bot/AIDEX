@@ -1,845 +1,161 @@
-/* =========================
-🚀 AQUIPLEX NEXT-LEVEL PREMIUM UI
-Stripe + OpenAI Inspired
-========================= */
-
-/* ===== BASE ===== */
-body.landing-page {
-  font-family: 'Poppins', sans-serif;
+/* ===== RESET ===== */
+* {
   margin: 0;
-  color: #0f172a;
-  overflow-x: hidden;
-
-  /* Animated gradient */
-  background: linear-gradient(-45deg, #eef2ff, #f8fafc, #e0f2fe, #eef2ff);
-  background-size: 400% 400%;
-  animation: gradientShift 12s ease infinite;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Segoe UI', sans-serif;
 }
 
-/* Gradient animation */
-@keyframes gradientShift {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+body {
+  background: #020617;
+  color: #e2e8f0;
+  overflow-x: hidden;
 }
 
 /* ===== NAVBAR ===== */
 .navbar {
-  position: sticky;
+  position: fixed;
+  width: 100%;
   top: 0;
-  z-index: 100;
-
-  background: rgba(255,255,255,0.6);
-  backdrop-filter: blur(16px);
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 14px 20px;
+  padding: 16px 20px;
+  backdrop-filter: blur(12px);
+  background: rgba(2,6,23,0.6);
+  z-index: 100;
 }
 
 .logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-weight: 600;
-  font-size: 18px;
-  color: #2563eb;
+  font-weight: bold;
+  color: #38bdf8;
 }
 
-/* ===== NAV BUTTONS ===== */
-.nav-buttons {
-  display: flex;
-  gap: 10px;
+/* ===== BUTTONS ===== */
+.btn-primary {
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  padding: 8px 16px;
+  border-radius: 999px;
+  color: white;
+  text-decoration: none;
 }
 
 .btn-outline {
+  border: 1px solid #38bdf8;
   padding: 8px 16px;
   border-radius: 999px;
-  border: 1px solid rgba(37,99,235,0.4);
-  background: transparent;
-  color: #2563eb;
-  transition: 0.3s;
-}
-
-.btn-outline:hover {
-  background: rgba(37,99,235,0.08);
-}
-
-.btn-primary {
-  padding: 8px 16px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
-  border: none;
-  box-shadow: 0 8px 20px rgba(37,99,235,0.35);
-  transition: 0.3s;
-}
-
-.btn-primary:hover {
-  transform: translateY(-2px);
+  color: #38bdf8;
+  text-decoration: none;
 }
 
 /* ===== HERO ===== */
 .hero {
-  min-height: calc(100vh - 70px);
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   justify-content: center;
   align-items: center;
-  gap: 30px;
-  padding: 20px;
+  padding: 80px 20px;
   text-align: center;
-  position: relative;
+  animation: fadeIn 1s ease;
 }
 
-/* ===== FLOATING ORBS (AI EFFECT) ===== */
-.hero::before,
-.hero::after {
-  content: "";
-  position: absolute;
-  width: 300px;
-  height: 300px;
-  border-radius: 50%;
-  filter: blur(90px);
-  opacity: 0.6;
-  z-index: -1;
-}
-
-.hero::before {
-  background: #3b82f6;
-  top: 10%;
-  left: 10%;
-  animation: float 8s ease-in-out infinite;
-}
-
-.hero::after {
-  background: #06b6d4;
-  bottom: 10%;
-  right: 10%;
-  animation: float 10s ease-in-out infinite;
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-30px); }
-}
-
-/* ===== USE CASES ===== */
-.use-cases {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  max-width: 600px;
-}
-
-.use-cases button {
-  padding: 10px 18px;
-  border-radius: 999px;
-
-  background: rgba(255,255,255,0.6);
-  backdrop-filter: blur(12px);
-
-  border: 1px solid rgba(255,255,255,0.3);
-  box-shadow: 0 6px 20px rgba(0,0,0,0.05);
-
-  transition: 0.25s;
-}
-
-.use-cases button:hover {
-  transform: translateY(-3px) scale(1.03);
-}
-
-/* ===== HEADINGS ===== */
 .hero h1 {
   font-size: 32px;
-  font-weight: 700;
-  line-height: 1.3;
 }
 
-.hero h1 span {
-  background: linear-gradient(135deg, #3b82f6, #06b6d4);
+.hero span {
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .hero p {
-  font-size: 15px;
-  opacity: 0.75;
-  max-width: 500px;
-}
-
-/* ===== CTA BUTTON ===== */
-.cta-button {
-  padding: 16px 30px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
-  font-weight: 500;
-  font-size: 16px;
-
-  box-shadow: 0 12px 30px rgba(37,99,235,0.4);
-  transition: 0.3s;
-}
-
-.cta-button:hover {
-  transform: translateY(-4px) scale(1.02);
-}
-
-.cta-button:active {
-  transform: scale(0.96);
-}
-
-/* ===== FOOTER ===== */
-footer {
-  text-align: center;
-  padding: 20px;
-  font-size: 13px;
-  opacity: 0.6;
-}
-
-/* =========================
-📱 MOBILE
-========================= */
-@media (max-width: 768px) {
-
-  .hero h1 {
-    font-size: 26px;
-  }
-
-  .cta-button {
-    width: 100%;
-    max-width: 280px;
-  }
-
-}
-
-/* =========================
-💻 DESKTOP
-========================= */
-@media (min-width: 1024px) {
-
-  .hero {
-    padding: 80px 20px;
-  }
-
-  .hero h1 {
-    font-size: 48px;
-  }
-
-  .hero p {
-    font-size: 18px;
-  }
-
-  .cta-button {
-    font-size: 18px;
-    padding: 18px 40px;
-  }
-
-}
-
-.hero img {
-  width: 100%;
-  max-width: 220px; /* 🔥 THIS FIXES THE GIANT IMAGE */
-  height: auto;
-  display: block;
-  margin: 0 auto;
-}
-
-.hero {
-  display: flex;
-  flex-direction: column; /* mobile default */
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  gap: 30px;
-  padding: 20px;
-}
-
-/* Desktop layout */
-@media (min-width: 1024px) {
-  .hero {
-    flex-direction: row;
-    text-align: left;
-    justify-content: space-between;
-    max-width: 1100px;
-    margin: auto;
-  }
-
-  .hero-text {
-    flex: 1;
-  }
-
-  .hero img {
-    flex: 1;
-    max-width: 400px;
-  }
-}
-
-/* =========================
-🔥 FORCE FIX (NO HTML CHANGE)
-========================= */
-
-/* Fix navbar buttons (your HTML uses different classes) */
-.auth-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.nav-btn {
-  padding: 8px 16px;
-  border-radius: 999px;
-  font-size: 14px;
-  text-decoration: none;
-}
-
-.nav-btn.primary {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
-}
-
-.nav-btn.secondary {
-  border: 1px solid #2563eb;
-  color: #2563eb;
-}
-
-
-/* =========================
-🔥 HERO FIX
-========================= */
-
-/* Force proper layout */
-.hero {
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  justify-content: center !important;
-  text-align: center !important;
-  gap: 20px;
-  padding: 20px;
-}
-
-/* Fix giant logo */
-.hero img {
-  width: 100% !important;
-  max-width: 180px !important;
-  height: auto;
-  margin: 0 auto;
-  display: block;
-}
-
-/* Fix heading */
-.hero h1 {
-  font-size: 26px;
-  line-height: 1.3;
-}
-
-/* Fix paragraph */
-.hero p {
-  font-size: 14px;
-  opacity: 0.7;
-}
-
-/* Fix buttons */
-.hero-buttons {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-
-.primary-btn {
-  padding: 12px 20px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  color: white;
-  text-decoration: none;
-}
-
-.secondary-btn {
-  padding: 12px 20px;
-  border-radius: 999px;
-  border: 1px solid #2563eb;
-  color: #2563eb;
-  text-decoration: none;
-}
-
-/* =========================
-🔥 REMOVE BROKEN ELEMENTS
-========================= */
-
-.ai-wave,
-.floating-shape {
-  display: none !important;
-}
-
-/* =========================
-💻 DESKTOP FIX
-========================= */
-
-@media (min-width: 1024px) {
-  .hero {
-    flex-direction: row !important;
-    text-align: left !important;
-    max-width: 1100px;
-    margin: auto;
-  }
-
-  .hero > * {
-    flex: 1;
-  }
-
-  .hero img {
-    max-width: 350px !important;
-  }
-}
-
-/* =========================
-🔥 SECTION SPACING
-========================= */
-
-section {
-  padding: 60px 20px;
-}
-
-h2 {
-  text-align: center;
-  font-size: 28px;
-  margin-bottom: 20px;
-}
-
-/* =========================
-🔥 HOW IT WORKS (CARDS)
-========================= */
-
-.steps {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-  max-width: 900px;
-  margin: auto;
-}
-
-.step {
-  background: rgba(15, 23, 42, 0.9);
-  color: white;
-  padding: 20px;
-  border-radius: 16px;
-  transition: 0.3s;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-}
-
-.step:hover {
-  transform: translateY(-5px);
-}
-
-.step-icon {
-  font-size: 22px;
-  margin-bottom: 10px;
-}
-
-/* =========================
-💻 DESKTOP GRID
-========================= */
-
-@media (min-width: 768px) {
-  .steps {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* =========================
-🔥 WHY SECTION
-========================= */
-
-.features {
-  display: grid;
-  gap: 20px;
-  max-width: 900px;
-  margin: auto;
-}
-
-.feature-card {
-  background: rgba(255,255,255,0.6);
-  backdrop-filter: blur(12px);
-  padding: 20px;
-  border-radius: 16px;
-  box-shadow: 0 8px 20px rgba(0,0,0,0.08);
-  transition: 0.3s;
-}
-
-.feature-card:hover {
-  transform: translateY(-5px);
-}
-
-/* Desktop */
-@media (min-width: 768px) {
-  .features {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-/* =========================
-🔥 USE CASES
-========================= */
-
-.use-grid {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  max-width: 700px;
-  margin: auto;
-}
-
-.use-grid div {
-  padding: 12px 18px;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.7);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 6px 15px rgba(0,0,0,0.08);
-  transition: 0.25s;
-}
-
-.use-grid div:hover {
-  transform: translateY(-3px);
-}
-
-/* =========================
-🔥 FINAL CTA
-========================= */
-
-.final-cta {
-  text-align: center;
-}
-
-.final-cta h2 {
-  font-size: 32px;
-  margin-bottom: 10px;
-}
-
-.final-cta p {
-  opacity: 0.7;
-  margin-bottom: 20px;
-}
-
-.final-cta .btn-primary {
-  padding: 16px 30px;
-  font-size: 16px;
-}
-
-/* =========================
-🔥 HERO UPGRADE
-========================= */
-
-.hero img {
-  max-width: 160px;
-  border-radius: 24px;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.25);
   margin-top: 10px;
+  opacity: 0.7;
 }
 
-/* Add glow behind logo */
-.hero img {
-  position: relative;
-}
-
-.hero img::after {
-  content: "";
-  position: absolute;
-  inset: -20px;
-  background: radial-gradient(circle, rgba(59,130,246,0.4), transparent);
-  filter: blur(40px);
-  z-index: -1;
-}
-
-/* =========================
-🔥 BUTTON UPGRADE
-========================= */
-
-.btn-primary {
-  position: relative;
-  overflow: hidden;
-}
-
-/* subtle glow pulse */
-.btn-primary::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at center, rgba(255,255,255,0.4), transparent);
-  opacity: 0;
-  transition: 0.3s;
-}
-
-.btn-primary:hover::after {
-  opacity: 1;
-}
-
-/* =========================
-🔥 SECTION SEPARATION
-========================= */
-
-.how-it-works {
-  background: linear-gradient(180deg, transparent, rgba(0,0,0,0.03));
-}
-
-.why {
-  background: rgba(255,255,255,0.5);
-  backdrop-filter: blur(10px);
-}
-
-.use-cases {
-  background: linear-gradient(180deg, rgba(0,0,0,0.02), transparent);
-}
-
-/* =========================
-🔥 CARD DEPTH BOOST
-========================= */
-
-.step {
-  background: linear-gradient(135deg, #0f172a, #1e293b);
-  border: 1px solid rgba(255,255,255,0.05);
-}
-
-.feature-card {
-  border: 1px solid rgba(0,0,0,0.05);
-}
-
-/* =========================
-🔥 TYPOGRAPHY BOOST
-========================= */
-
-h1 {
-  letter-spacing: -0.5px;
-}
-
-h2 {
-  font-weight: 700;
-}
-
-/* =========================
-🔥 MICRO ANIMATIONS
-========================= */
-
-.step,
-.feature-card,
-.use-grid div {
-  transition: all 0.3s ease;
-}
-
-.step:hover,
-.feature-card:hover,
-.use-grid div:hover {
-  transform: translateY(-6px) scale(1.02);
-}
-
-/* =========================
-🔥 HERO CLEAN (NO IMAGE)
-========================= */
-
-.hero {
-  flex-direction: column !important;
-  text-align: center !important;
-  max-width: 700px;
-  margin: auto;
-}
-
-.hero-text {
-  width: 100%;
-}
-
-/* Remove any leftover image space */
-.hero img {
-  display: none !important;
-}
-
-/* =========================
-🔥 HERO CENTER UPGRADE
-========================= */
-
-.hero {
-  gap: 25px;
-}
-
-/* Bigger, stronger heading */
-.hero h1 {
-  font-size: 40px;
-  line-height: 1.2;
-}
-
-/* Better paragraph */
-.hero p {
-  font-size: 17px;
-  opacity: 0.8;
-}
-
-/* Center buttons properly */
-.hero-buttons {
-  justify-content: center;
-}
-
-/* Examples styling */
-.examples {
+/* ===== INPUT ===== */
+.input-box {
+  margin-top: 20px;
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
-  font-size: 14px;
-  opacity: 0.7;
-}
-
-@media (max-width: 768px) {
-  .hero h1 {
-    font-size: 28px;
-  }
-
-  .hero p {
-    font-size: 15px;
-  }
-}
-
-/* =========================
-🔥 FINAL FIX OVERRIDES (SAFE)
-Paste at VERY END of CSS
-========================= */
-
-/* ===== FIX NAVBAR ===== */
-.navbar {
-  position: fixed !important;
-  top: 0;
-  left: 0;
-  width: 100%;
-  z-index: 1000;
-
-  background: rgba(255,255,255,0.75);
-  backdrop-filter: blur(14px);
-  border-bottom: 1px solid rgba(0,0,0,0.05);
-}
-
-/* Prevent content going under navbar */
-body.landing-page {
-  padding-top: 70px !important;
-}
-
-
-/* ===== CLEAN HERO ===== */
-.hero {
-  min-height: calc(100vh - 70px) !important;
-
-  display: flex !important;
-  flex-direction: column !important;
-  justify-content: center !important;
-  align-items: center !important;
-
-  text-align: center !important;
-  gap: 16px !important;
-  padding: 40px 20px !important;
-}
-
-/* Fix text */
-.hero h1 {
-  font-size: 28px !important;
-  line-height: 1.25 !important;
-}
-
-.hero p {
-  font-size: 14px !important;
-  max-width: 420px;
-  opacity: 0.7;
-}
-
-
-/* ===== BUTTONS ===== */
-.hero-buttons {
-  display: flex !important;
-  gap: 12px !important;
-  flex-wrap: wrap;
-  justify-content: center;
-  margin-top: 10px;
-}
-
-
-/* ===== DEMO INPUT FIX ===== */
-.demo-box {
-  display: flex !important;
-  gap: 8px;
-  background: rgba(0,0,0,0.6);
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
   padding: 6px;
-  border-radius: 14px;
-  margin-top: 10px;
   width: 100%;
-  max-width: 420px;
+  max-width: 400px;
 }
 
-.demo-box input {
+.input-box input {
   flex: 1;
   border: none;
   background: transparent;
   color: white;
   padding: 10px;
-  outline: none;
 }
 
-.demo-box button {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+.input-box button {
+  background: #38bdf8;
   border: none;
-  color: white;
-  padding: 10px 14px;
+  padding: 10px;
   border-radius: 10px;
+  color: black;
 }
 
-
-/* ===== EXAMPLES CLEAN ===== */
+/* ===== EXAMPLES ===== */
 .examples {
-  display: flex !important;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
-  font-size: 13px;
-  opacity: 0.7;
+  margin-top: 10px;
 }
 
 .examples span {
-  background: rgba(255,255,255,0.6);
-  padding: 6px 10px;
+  margin: 5px;
+  padding: 5px 10px;
+  background: rgba(255,255,255,0.1);
   border-radius: 999px;
+  cursor: pointer;
 }
 
-
-/* ===== REMOVE JUNK ELEMENTS ===== */
-.ai-wave,
-.floating-shape {
-  display: none !important;
+/* ===== HOW ===== */
+.how {
+  padding: 60px 20px;
+  text-align: center;
 }
 
-
-/* ===== IMAGE FIX ===== */
-.hero img {
-  max-width: 160px !important;
-  margin-top: 10px;
-  border-radius: 20px;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.25);
+.grid {
+  display: grid;
+  gap: 20px;
+  margin-top: 20px;
 }
 
+.card {
+  background: rgba(255,255,255,0.05);
+  padding: 20px;
+  border-radius: 12px;
+  transition: 0.3s;
+}
 
-/* ===== DESKTOP FIX ===== */
-@media (min-width: 1024px) {
-  .hero {
-    flex-direction: row !important;
-    text-align: left !important;
-    justify-content: space-between;
-    max-width: 1100px;
-    margin: auto;
+.card:hover {
+  transform: translateY(-5px);
+}
+
+/* ===== CTA ===== */
+.cta {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+/* ===== ANIMATION ===== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(20px);}
+  to { opacity: 1; transform: translateY(0);}
+}
+
+/* ===== DESKTOP ===== */
+@media(min-width:768px){
+  .hero h1 {
+    font-size: 48px;
   }
 
-  .hero > * {
-    flex: 1;
-  }
-
-  .hero img {
-    max-width: 320px !important;
+  .grid {
+    grid-template-columns: repeat(3,1fr);
   }
 }

@@ -138,13 +138,13 @@ function redirectIfLoggedIn(req, res, next) {
   next(); // ✅ only runs if NOT logged in
 }
 // ================= ROUTES =================
-//new landing page
-// NEW LANDING PAGE
-app.get("/", redirectIfLoggedIn, (req, res) => {
+// LANDING PAGE (public)
+app.get("/", (req, res) => {
   res.render("landing");
 });
-// YOUR OLD HOME → NOW APP PAGE
-app.get("/home", requireLogin, async (req, res) => {
+
+// HOME (main app - public)
+app.get("/home", async (req, res) => {
   try {
     const tools = await Tool.find().limit(12).lean();
     const allTools = await Tool.find().lean();
@@ -152,9 +152,14 @@ app.get("/home", requireLogin, async (req, res) => {
     const trendingTools = await getTrendingTools(10);
     const trendingIds = trendingTools.map(t => t._id.toString());
 
-    res.render("home", { tools, trendingIds, allTools });
+    res.render("home", {
+      tools: tools || [],
+      trendingIds: trendingIds || [],
+      allTools: allTools || []
+    });
 
-  } catch {
+  } catch (err) {
+    console.error(err);
     res.send("Error loading home");
   }
 });

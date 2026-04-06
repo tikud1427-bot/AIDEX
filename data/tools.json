@@ -235,7 +235,202 @@
     "dislikes": 0,
     "comments": [],"logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQF-YflBT1kHmPv-rla5LuC-L6LhkLkz7A76w&s","clicks":0},
 
-  {"id":"uizard","name":"Uizard","category":"Design AI","url":"https://uizard.io","description":"AI UI/UX design tool","logo":"https://cdn2.futurepedia.io/2026-02-26T18-58-37.134Z-A3PKgWU9mlZHWvu7pL7KZK3gFxNzsy92M.png?w=256","clicks":0},
+  {"id":"uizard","name":"Uizard","category":"Design AI","url":"https://uizard.io","description":"AI UI/UX design tool",<!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>Aquiplex — AI Workflows Made Simple</title>
+      <link rel="stylesheet" href="/css/styles.css">
+      <link rel="stylesheet" href="/css/landing.css">
+    </head>
+
+    <body class="landing-page">
+
+      <!-- 🔝 NAVBAR -->
+      <header class="navbar">
+        <div class="logo">
+          <img src="https://aquiplex.com/logo/logo.png" alt="Aquiplex Logo" style="width:32px;">
+          <span>Aquiplex</span>
+        </div>
+
+        <div class="nav-buttons">
+          <a href="/login" class="btn-outline">Login</a>
+          <a href="/signup" class="btn-primary">Sign Up</a>
+        </div>
+      </header>
+
+      <!-- 🚀 HERO -->
+      <section class="hero">
+
+        <!-- TEXT SIDE -->
+        <div class="hero-text">
+
+          <h1>
+            Build the Perfect <span>AI Workflow</span><br>
+            for Anything
+          </h1>
+
+          <p>
+            Tell us your goal — Aquiplex builds your perfect set of AI tools instantly.
+          </p>
+
+          <div class="hero-buttons">
+            <a href="/signup" class="btn-primary">🚀 Get Started Free</a>
+            <a href="/login" class="btn-outline">🔑 Login</a>
+          </div>
+
+          <!-- DEMO INPUT -->
+          <div class="demo-box">
+            <input id="demoInput" type="text" placeholder="Create a YouTube video..." readonly>
+            <button>Generate</button>
+          </div>
+
+          <div class="examples">
+            <span>Write an essay</span>
+            <span>Start a business</span>
+            <span>Grow on Instagram</span>
+          </div>
+
+        </div>
+
+
+
+      </section>
+
+      <!-- 💡 HOW IT WORKS -->
+      <section id="how-it-works" class="how-it-works">
+        <h2>How It Works</h2>
+
+        <div class="steps">
+
+          <div class="step">
+            <div class="step-icon">🎯</div>
+            <h3>Tell Your Goal</h3>
+            <p>Describe what you want to achieve in simple words.</p>
+          </div>
+
+          <div class="step">
+            <div class="step-icon">⚙️</div>
+            <h3>Get AI Bundle</h3>
+            <p>We generate the best tools for your exact task.</p>
+          </div>
+
+          <div class="step">
+            <div class="step-icon">🚀</div>
+            <h3>Start Creating</h3>
+            <p>Use tools instantly and get results faster.</p>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- ✨ WHY -->
+      <section class="why">
+        <h2>Why Aquiplex?</h2>
+
+        <div class="features">
+
+          <div class="feature-card">
+            <h3>⚡ Save Hours</h3>
+            <p>No more searching. We do the work for you.</p>
+          </div>
+
+          <div class="feature-card">
+            <h3>🧠 Smart AI</h3>
+            <p>Real workflows, not random tool lists.</p>
+          </div>
+
+          <div class="feature-card">
+            <h3>🧰 Workspace</h3>
+            <p>Save and reuse your workflows anytime.</p>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 🌍 USE CASES -->
+      <section class="use-cases">
+        <h2>Use Cases</h2>
+
+        <p class="subtitle">
+          Choose what you want to do, and Aquiplex builds your AI workflow instantly.
+        </p>
+
+        <div class="use-grid">
+          <div>🎥 YouTube Content</div>
+          <div>📚 Study & Essays</div>
+          <div>💼 Online Income</div>
+          <div>📱 Social Growth</div>
+          <div>🧑‍💻 Coding Projects</div>
+        </div>
+      </section>
+
+      <!-- 🚀 CTA -->
+      <section class="final-cta">
+
+        <h2>
+          Stop Searching.<br>
+          Start Creating.
+        </h2>
+
+        <p>Build your AI workflow in seconds.</p>
+
+        <a href="/signup" class="btn-primary">
+          🚀 Get Started Free
+        </a>
+
+      </section>
+
+      <!-- 🧭 FOOTER -->
+      <footer class="footer">
+        <p>© 2026 Aquiplex</p>
+      </footer>
+
+      <!-- ✨ JS -->
+      <script>
+        const texts = [
+          "Create a YouTube video...",
+          "Write an essay...",
+          "Start an online business...",
+          "Grow on Instagram..."
+        ];
+
+        let i = 0;
+        let j = 0;
+        let current = "";
+        let isDeleting = false;
+
+        const input = document.getElementById("demoInput");
+
+        function typeEffect() {
+          current = texts[i];
+
+          if (isDeleting) {
+            input.placeholder = current.substring(0, j--);
+          } else {
+            input.placeholder = current.substring(0, j++);
+          }
+
+          if (!isDeleting && j === current.length) {
+            isDeleting = true;
+            setTimeout(typeEffect, 1200);
+            return;
+          }
+
+          if (isDeleting && j === 0) {
+            isDeleting = false;
+            i = (i + 1) % texts.length;
+          }
+
+          setTimeout(typeEffect, isDeleting ? 40 : 70);
+        }
+
+        typeEffect();
+      </script>
+
+    </body>
+    </html>"logo":"https://cdn2.futurepedia.io/2026-02-26T18-58-37.134Z-A3PKgWU9mlZHWvu7pL7KZK3gFxNzsy92M.png?w=256","clicks":0},
 
   {"id":"framerai","name":"Framer AI","category":"Design AI","url":"https://framer.com","description":"AI website builder","logo":"https://res.cloudinary.com/apideck/image/upload/w_196,f_auto/v1557455842/catalog/framer/icon128x128.jpg","clicks":0},
 

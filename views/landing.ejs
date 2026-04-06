@@ -4,193 +4,93 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aquiplex — AI Workflows Made Simple</title>
-  <link rel="stylesheet" href="/css/styles.css">
+
   <link rel="stylesheet" href="/css/landing.css">
 </head>
 
-<body class="landing-page">
+<body>
 
-  <!-- 🔝 NAVBAR -->
-  <header class="navbar">
-    <div class="logo">
-      <img src="https://aquiplex.com/logo/logo.png" alt="Aquiplex Logo" style="width:32px;">
-      <span>Aquiplex</span>
+<!-- NAVBAR -->
+<header class="navbar">
+  <div class="logo">
+    🌊 Aquiplex
+  </div>
+
+  <div class="nav-buttons">
+    <a href="/login" class="btn-outline">Login</a>
+    <a href="/signup" class="btn-primary">Sign Up</a>
+  </div>
+</header>
+
+<!-- HERO -->
+<section class="hero">
+
+  <h1>
+    Tell Us What You Want.<br>
+    <span>We Give You The Exact AI Tools ⚡</span>
+  </h1>
+
+  <p>
+    No more searching. Just type your goal and get everything instantly.
+  </p>
+
+  <!-- INPUT -->
+  <div class="input-box">
+    <input id="goalInput" type="text" placeholder="Create a YouTube video...">
+    <button onclick="goToHome()">⚡ Generate</button>
+  </div>
+
+  <!-- EXAMPLES -->
+  <div class="examples">
+    <span onclick="setGoal('Write an essay')">Write essay</span>
+    <span onclick="setGoal('Start a business')">Start business</span>
+    <span onclick="setGoal('Grow Instagram')">Grow Instagram</span>
+  </div>
+
+</section>
+
+<!-- HOW -->
+<section class="how">
+
+  <h2>How It Works</h2>
+
+  <div class="grid">
+
+    <div class="card">
+      <h3>🎯 Type Goal</h3>
+      <p>Just tell what you want</p>
     </div>
 
-    <div class="nav-buttons">
-      <a href="/login" class="btn-outline">Login</a>
-      <a href="/signup" class="btn-primary">Sign Up</a>
-    </div>
-  </header>
-
-  <!-- 🚀 HERO -->
-  <section class="hero">
-
-    <!-- TEXT SIDE -->
-    <div class="hero-text">
-
-      <h1>
-        Build the Perfect <span>AI Workflow</span><br>
-        for Anything
-      </h1>
-
-      <p>
-        Tell us your goal — Aquiplex builds your perfect set of AI tools instantly.
-      </p>
-
-      <div class="hero-buttons">
-        <a href="/signup" class="btn-primary">🚀 Get Started Free</a>
-        <a href="/login" class="btn-outline">🔑 Login</a>
-      </div>
-
-      <!-- DEMO INPUT -->
-      <div class="demo-box">
-        <input id="demoInput" type="text" placeholder="Create a YouTube video..." readonly>
-        <button>Generate</button>
-      </div>
-
-      <div class="examples">
-        <span>Write an essay</span>
-        <span>Start a business</span>
-        <span>Grow on Instagram</span>
-      </div>
-
+    <div class="card">
+      <h3>⚙️ AI Builds</h3>
+      <p>We pick best tools</p>
     </div>
 
-    
-
-  </section>
-
-  <!-- 💡 HOW IT WORKS -->
-  <section id="how-it-works" class="how-it-works">
-    <h2>How It Works</h2>
-
-    <div class="steps">
-
-      <div class="step">
-        <div class="step-icon">🎯</div>
-        <h3>Tell Your Goal</h3>
-        <p>Describe what you want to achieve in simple words.</p>
-      </div>
-
-      <div class="step">
-        <div class="step-icon">⚙️</div>
-        <h3>Get AI Bundle</h3>
-        <p>We generate the best tools for your exact task.</p>
-      </div>
-
-      <div class="step">
-        <div class="step-icon">🚀</div>
-        <h3>Start Creating</h3>
-        <p>Use tools instantly and get results faster.</p>
-      </div>
-
+    <div class="card">
+      <h3>🚀 Execute</h3>
+      <p>Start instantly</p>
     </div>
-  </section>
 
-  <!-- ✨ WHY -->
-  <section class="why">
-    <h2>Why Aquiplex?</h2>
+  </div>
 
-    <div class="features">
+</section>
 
-      <div class="feature-card">
-        <h3>⚡ Save Hours</h3>
-        <p>No more searching. We do the work for you.</p>
-      </div>
+<!-- CTA -->
+<section class="cta">
+  <h2>Stop Searching. Start Creating.</h2>
+  <a href="/home" class="btn-primary">Try Now →</a>
+</section>
 
-      <div class="feature-card">
-        <h3>🧠 Smart AI</h3>
-        <p>Real workflows, not random tool lists.</p>
-      </div>
+<script>
+function goToHome() {
+  const value = document.getElementById("goalInput").value;
+  window.location.href = "/home?goal=" + encodeURIComponent(value);
+}
 
-      <div class="feature-card">
-        <h3>🧰 Workspace</h3>
-        <p>Save and reuse your workflows anytime.</p>
-      </div>
-
-    </div>
-  </section>
-
-  <!-- 🌍 USE CASES -->
-  <section class="use-cases">
-    <h2>Use Cases</h2>
-
-    <p class="subtitle">
-      Choose what you want to do, and Aquiplex builds your AI workflow instantly.
-    </p>
-
-    <div class="use-grid">
-      <div>🎥 YouTube Content</div>
-      <div>📚 Study & Essays</div>
-      <div>💼 Online Income</div>
-      <div>📱 Social Growth</div>
-      <div>🧑‍💻 Coding Projects</div>
-    </div>
-  </section>
-
-  <!-- 🚀 CTA -->
-  <section class="final-cta">
-
-    <h2>
-      Stop Searching.<br>
-      Start Creating.
-    </h2>
-
-    <p>Build your AI workflow in seconds.</p>
-
-    <a href="/signup" class="btn-primary">
-      🚀 Get Started Free
-    </a>
-
-  </section>
-
-  <!-- 🧭 FOOTER -->
-  <footer class="footer">
-    <p>© 2026 Aquiplex</p>
-  </footer>
-
-  <!-- ✨ JS -->
-  <script>
-    const texts = [
-      "Create a YouTube video...",
-      "Write an essay...",
-      "Start an online business...",
-      "Grow on Instagram..."
-    ];
-
-    let i = 0;
-    let j = 0;
-    let current = "";
-    let isDeleting = false;
-
-    const input = document.getElementById("demoInput");
-
-    function typeEffect() {
-      current = texts[i];
-
-      if (isDeleting) {
-        input.placeholder = current.substring(0, j--);
-      } else {
-        input.placeholder = current.substring(0, j++);
-      }
-
-      if (!isDeleting && j === current.length) {
-        isDeleting = true;
-        setTimeout(typeEffect, 1200);
-        return;
-      }
-
-      if (isDeleting && j === 0) {
-        isDeleting = false;
-        i = (i + 1) % texts.length;
-      }
-
-      setTimeout(typeEffect, isDeleting ? 40 : 70);
-    }
-
-    typeEffect();
-  </script>
+function setGoal(text) {
+  document.getElementById("goalInput").value = text;
+}
+</script>
 
 </body>
 </html>
