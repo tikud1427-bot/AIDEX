@@ -124,6 +124,9 @@
 </head>
 
 <body>
+  
+  <%- include('partials/nav') %>    
+
 
 <h2> 🌊 AQUA by Aquiplex</h2>
 
@@ -141,6 +144,13 @@
   <input id="msg" placeholder="Ask something..." />
   <button class="send-btn" onclick="send()">Send</button>
 </div>
+
+   <!-- FOOTER -->    
+
+         <footer class="footer">    
+    <p>© <%= new Date().getFullYear() %> AQUIPLEX All rights reserved.</p>    
+
+    </footer> 
 
 <script>
 let history = [];
