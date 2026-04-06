@@ -137,11 +137,14 @@ function redirectIfLoggedIn(req, res, next) {
   next(); // ✅ only runs if NOT logged in
 }
 // ================= ROUTES =================
-// LANDING PAGE (public)
-app.get("/", (req, res) => {
+
+// Landing page
+app.get("/landing", (req, res) => {
+  if (req.session.userId) {
+    return res.redirect("/home");
+  }
   res.render("landing");
 });
-
 // HOME (main app - public)
 app.get("/home", async (req, res) => {
   try {

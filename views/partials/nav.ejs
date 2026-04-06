@@ -10,7 +10,7 @@
     <!-- NAV LINKS (DESKTOP ONLY) -->
     <nav class="nav-links">
 
-      <a href="/">Home</a>
+      <a href="<%= user ? '/home' : '/' %>">Home</a>
       <a href="/tools">Tools</a>
       <a href="/trending" class="highlight">🔥 Trending</a>
 
@@ -83,7 +83,7 @@
       >
     </form>
 
-    <a href="/">Home</a>
+    <a href="<%= user ? '/home' : '/' %>">Home</a>
     <a href="/chatbot" class="btn ai-btn">🌊 Aqua AI</a>
     <a href="/tools">Tools</a>
     <a href="/trending">🔥 Trending</a>
