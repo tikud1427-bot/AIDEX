@@ -616,27 +616,76 @@ app.post("/chat", async (req, res) => {
   }
 
   try {
-    // 🌐 WEB SEARCH MODE
+    // 🌐 SMART WEB SEARCH (FALLBACK + AI SUMMARY)
     if (mode === "search") {
-      const search = await axios.post(
-        "https://google.serper.dev/search",
-        { q: message },
-        {
-          headers: {
-            "X-API-KEY": process.env.SERPER_API_KEY,
-            "Content-Type": "application/json"
+      try {
+        const search = await axios.post(
+          "https://google.serper.dev/search",
+          { q: message },
+          {
+            headers: {
+              "X-API-KEY": process.env.SERPER_API_KEY,
+              "Content-Type": "application/json"
+            },
+            timeout: 5000
           }
+        );
+
+        const organic = search.data.organic;
+
+        // ❌ If no results (quota / error)
+        if (!organic || organic.length === 0) {
+          throw new Error("No results");
         }
-      );
 
-      const results = search.data.organic
-        ?.slice(0, 3)
-        .map(r => `${r.title}: ${r.snippet}`)
-        .join("\n");
+        // 🧠 Prepare text for AI
+        const resultsText = organic
+          .slice(0, 5)
+          .map(r => `${r.title}: ${r.snippet}`)
+          .join("\n");
 
-      return res.json({
-        reply: "🔎 Top results:\n\n" + results
-      });
+        // 🤖 AI SUMMARY (GROQ)
+        const ai = await axios.post(
+          "https://api.groq.com/openai/v1/chat/completions",
+          {
+            model: "llama-3.1-8b-instant",
+            messages: [
+              {
+                role: "system",
+                content: "Summarize search results clearly and helpfully."
+              },
+              {
+                role: "user",
+                content: `Query: ${message}\n\nResults:\n${resultsText}`
+              }
+            ]
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+
+        const summary =
+          ai?.data?.choices?.[0]?.message?.content ||
+          "⚠️ Could not summarize";
+
+        return res.json({
+          reply: `🔎 ${message}\n\n${summary}`
+        });
+
+      } catch (err) {
+        console.error("SEARCH ERROR:", err.response?.data || err.message);
+
+        // 🔁 FALLBACK (never break)
+        return res.json({
+          reply:
+            `⚠️ Search limit reached.\n\n` +
+            `🔗 Try this:\nhttps://www.google.com/search?q=${encodeURIComponent(message)}`
+        });
+      }
     }
 
     // 🎨 IMAGE MODE (Pollinations)

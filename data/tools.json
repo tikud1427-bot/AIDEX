@@ -1,27 +1,55 @@
 [
-{"id":"chatgpt","name":"ChatGPT","category":"Writing AI","url":"https://chat.openai.com","description":"AI chatbot for writing, coding, and research.","trending":true,"rating":0,"ratingsCount":0,"logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRIg4CnZC_9QQXSUq5q9Fd-QcA_asqCVxEZaA&s","clicks":200},
+{"id":"chatgpt","name":"ChatGPT","category":"Writing AI","url":"https://chat.openai.com","description":"AI chatbot for writing, coding, and research.","trending":true,"rating":0,"ratingsCount":0,"logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRIg4CnZC_9QQXSUq5q9Fd-QcA_asqCVxEZaA&s",
 
-{"id":"claude","name":"Claude","category":"Writing AI","url":"https://claude.ai","description":"Advanced AI assistant by Anthropic.","trending":true,"rating":0,"ratingsCount":0,"logo":"https://media.licdn.com/dms/image/v2/D4E0BAQFko-zWIZk_pw/company-logo_200_200/B4EZhiRWKvHgAI-/0/1753995371543/claude_logo?e=2147483647&v=beta&t=CVNmFKyWig0Uo78oAr3II6KVLu_o0aXPtnt4S6XgOr8","clicks":120},
+  "likes": 0,
+  "dislikes": 0,
+  "comments": [],"clicks":200},
 
-{"id":"grammarly","name":"Grammarly","category":"Writing AI","url":"https://grammarly.com","description":"AI grammar and writing assistant.","trending":true,"rating":0,"ratingsCount":0,"logo":"https://play-lh.googleusercontent.com/6Xe9DWiMC76daosOC80Im9gqe25Q9P55LxJIGPTLbcdFkMXOur4mk8jTVxoqOaiAvAG4=w600-h300-pc0xffffff-pd","clicks":150},
+{"id":"claude","name":"Claude","category":"Writing AI","url":"https://claude.ai","description":"Advanced AI assistant by Anthropic.","trending":true,"rating":0,"ratingsCount":0,
 
-{"id":"jasper","name":"Jasper","category":"Writing AI","url":"https://jasper.ai","description":"AI marketing copywriter.","trending":false,"rating":0,"ratingsCount":0,"logo":"https://cdn.prod.website-files.com/6807f44ec8a964d38a705332/683ba90f27d44bc11e5687ea_Jasper%20Logo%20Square.svg","clicks":130},
+  "likes": 0,
+  "dislikes": 0,
+  "comments": [], "logo":"https://media.licdn.com/dms/image/v2/D4E0BAQFko-zWIZk_pw/company-logo_200_200/B4EZhiRWKvHgAI-/0/1753995371543/claude_logo?e=2147483647&v=beta&t=CVNmFKyWig0Uo78oAr3II6KVLu_o0aXPtnt4S6XgOr8","clicks":120},
 
-{"id":"copyai","name":"Copy.ai","category":"Writing AI","url":"https://copy.ai","description":"AI content generator for marketing.","trending":false,"rating":0,"ratingsCount":0,"logo":"https://pbs.twimg.com/profile_images/1882909654545551360/QPAmppjU_400x400.jpg","clicks":0},
+{"id":"grammarly","name":"Grammarly","category":"Writing AI","url":"https://grammarly.com","description":"AI grammar and writing assistant.","trending":true,"rating":0,"ratingsCount":0,"likes": 0,
+  "dislikes": 0,
+  "comments": [],"logo":"https://play-lh.googleusercontent.com/6Xe9DWiMC76daosOC80Im9gqe25Q9P55LxJIGPTLbcdFkMXOur4mk8jTVxoqOaiAvAG4=w600-h300-pc0xffffff-pd","clicks":150},
 
-{"id":"notionai","name":"Notion AI","category":"Writing AI","url":"https://notion.so","description":"AI writing and productivity assistant.","trending":false,"rating":0,"ratingsCount":0,"logo":"https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png","clicks":0},
+{"id":"jasper","name":"Jasper","category":"Writing AI","url":"https://jasper.ai","description":"AI marketing copywriter.","trending":false,"rating":0,"ratingsCount":0,"likes": 0,
+  "dislikes": 0,
+  "comments": [],"logo":"https://cdn.prod.website-files.com/6807f44ec8a964d38a705332/683ba90f27d44bc11e5687ea_Jasper%20Logo%20Square.svg","clicks":130},
 
-{"id":"wordtune","name":"Wordtune","category":"Writing AI","url":"https://wordtune.com","description":"AI tool to rewrite sentences.","trending":false,"rating":0,"ratingsCount":0,"logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQw8HisgRfadLLaFV72fAXDsCvydREoGi13zQ&s","clicks":0},
+{"id":"copyai","name":"Copy.ai","category":"Writing AI","url":"https://copy.ai","description":"AI content generator for marketing.","trending":false,"rating":0,"ratingsCount":0,"likes": 0,
+  "dislikes": 0,
+  "comments": [],"logo":"https://pbs.twimg.com/profile_images/1882909654545551360/QPAmppjU_400x400.jpg","clicks":0},
 
-{"id":"midjourney","name":"Midjourney","category":"Image AI","url":"https://midjourney.com","description":"AI art generator using prompts.","trending":true,"rating":0,"ratingsCount":0,"logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSKjw2R-gQxbBQW4Q61r8zNl-qoJodNDJBchw&s","clicks":0},
+{"id":"notionai","name":"Notion AI","category":"Writing AI","url":"https://notion.so","description":"AI writing and productivity assistant.","trending":false,"rating":0,"ratingsCount":0,"likes": 0,
+  "dislikes": 0,
+  "comments": [],"logo":"https://upload.wikimedia.org/wikipedia/commons/4/45/Notion_app_logo.png","clicks":0},
 
-{"id":"dalle","name":"DALL-E","category":"Image AI","url":"https://openai.com/dall-e","description":"AI image generation by OpenAI.","trending":true,"rating":0,"ratingsCount":0,"logo":"https://i.pinimg.com/736x/7e/ee/2f/7eee2fc41654561afbe2ded749b06b29.jpg","clicks":0},
+{"id":"wordtune","name":"Wordtune","category":"Writing AI","url":"https://wordtune.com","description":"AI tool to rewrite sentences.","trending":false,"rating":0,"ratingsCount":0,"likes": 0,
+  "dislikes": 0,
+  "comments": [],"logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQw8HisgRfadLLaFV72fAXDsCvydREoGi13zQ&s","clicks":0},
 
-{"id":"stablediffusion","name":"Stable Diffusion","category":"Image AI","url":"https://stability.ai","description":"Open-source AI image generator.","trending":false,"rating":0,"ratingsCount":0,"logo":"https://assets.topadvisor.com/media/_solution_logo_04032024_26265377.png","clicks":0},
+{"id":"midjourney","name":"Midjourney","category":"Image AI","url":"https://midjourney.com","description":"AI art generator using prompts.","trending":true,"rating":0,"ratingsCount":0,"likes": 0,
+  "dislikes": 0,
+  "comments": [],"logo":"https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSKjw2R-gQxbBQW4Q61r8zNl-qoJodNDJBchw&s","clicks":0},
 
-{"id":"leonardoai","name":"Leonardo AI","category":"Image AI","url":"https://leonardo.ai","description":"AI art generator for creators.","trending":false,"rating":0,"ratingsCount":0,"logo":"https://images.seeklogo.com/logo-png/62/1/leonardo-ai-logo-png_seeklogo-621169.png","clicks":0},
+{"id":"dalle","name":"DALL-E","category":"Image AI","url":"https://openai.com/dall-e","description":"AI image generation by OpenAI.","trending":true,"rating":0,"ratingsCount":0,"likes": 0,
+  "dislikes": 0,
+  "comments": [],"logo":"https://i.pinimg.com/736x/7e/ee/2f/7eee2fc41654561afbe2ded749b06b29.jpg","clicks":0},
 
-{"id":"canvaai","name":"Canva AI","category":"Image AI","url":"https://canva.com","description":"AI design and image tools.","trending":false,"rating":0,"ratingsCount":0,"logo":"https://miro.medium.com/v2/resize:fit:1400/0*tviVu77uKID2H6Jn.png","clicks":0},
+{"id":"stablediffusion","name":"Stable Diffusion","category":"Image AI","url":"https://stability.ai","description":"Open-source AI image generator.","trending":false,"rating":0,"ratingsCount":0,"likes": 0,
+  "dislikes": 0,
+  "comments": [],"logo":"https://assets.topadvisor.com/media/_solution_logo_04032024_26265377.png","clicks":0},
+
+{"id":"leonardoai","name":"Leonardo AI","category":"Image AI","url":"https://leonardo.ai","description":"AI art generator for creators.","trending":false,"rating":0,"ratingsCount":0,"likes": 0,
+  "dislikes": 0,
+  "comments": [],"logo":"https://images.seeklogo.com/logo-png/62/1/leonardo-ai-logo-png_seeklogo-621169.png","clicks":0},
+
+{"id":"canvaai","name":"Canva AI","category":"Image AI","url":"https://canva.com","description":"AI design and image tools.","trending":false,"rating":0,"ratingsCount":0,"likes": 0,
+  "dislikes": 0,
+  "comments": [],"logo":"https://miro.medium.com/v2/resize:fit:1400/0*tviVu77uKID2H6Jn.png","clicks":0},
 
 {"id":"playgroundai","name":"Playground AI","category":"Image AI","url":"https://playgroundai.com","description":"Create images using AI.","trending":false,"rating":0,"ratingsCount":0,"logo":"https://gdm-catalog-fmapi-prod.imgix.net/ProductLogo/dcc4ccc7-63ff-4537-8737-91a4b603d489.jpeg?w=90&h=90&fit=max&dpr=3&auto=format&q=50","clicks":0},
 
