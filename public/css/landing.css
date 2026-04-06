@@ -7,39 +7,41 @@
 }
 
 body {
-  background: radial-gradient(circle at top, #0f172a, #020617);
+  background: linear-gradient(270deg, #020617, #0f172a, #020617);
+  background-size: 400% 400%;
+  animation: gradientMove 15s ease infinite;
   color: #e2e8f0;
   overflow-x: hidden;
 }
 
-/* ===== ANIMATED BACKGROUND ===== */
-body::before {
-  content: "";
-  position: fixed;
-  width: 600px;
-  height: 600px;
-  background: radial-gradient(circle, #38bdf8, transparent);
-  top: -100px;
-  left: -100px;
-  filter: blur(120px);
-  animation: moveBg 10s infinite alternate;
-}
-
+/* 🔥 PERFORMANCE FIX: reduce heavy blur */
+body::before,
 body::after {
   content: "";
   position: fixed;
-  width: 600px;
-  height: 600px;
+  width: 400px;
+  height: 400px;
+  filter: blur(80px); /* reduced from 120px */
+  z-index: -1;
+}
+
+body::before {
+  background: radial-gradient(circle, #38bdf8, transparent);
+  top: -100px;
+  left: -100px;
+  animation: moveBg 12s infinite alternate;
+}
+
+body::after {
   background: radial-gradient(circle, #6366f1, transparent);
   bottom: -100px;
   right: -100px;
-  filter: blur(120px);
-  animation: moveBg 12s infinite alternate;
+  animation: moveBg 14s infinite alternate;
 }
 
 @keyframes moveBg {
   0% { transform: translate(0,0); }
-  100% { transform: translate(100px, 50px); }
+  100% { transform: translate(60px, 30px); }
 }
 
 /* ===== NAVBAR ===== */
@@ -49,19 +51,31 @@ body::after {
   top: 0;
   display: flex;
   justify-content: space-between;
-  padding: 16px 24px;
-  backdrop-filter: blur(20px);
-  background: rgba(2,6,23,0.4);
-  z-index: 100;
+  align-items: center;
+  padding: 14px 20px;
+  backdrop-filter: blur(10px); /* reduced */
+  background: rgba(2,6,23,0.6);
+  z-index: 1000;
 }
 
-.logo {
-  font-weight: bold;
-  font-size: 18px;
-  color: #38bdf8;
+.logo img {
+  height: 34px;
+  object-fit: contain;
+  filter: drop-shadow(0 0 6px rgba(56,189,248,0.4));
+  transition: 0.3s;
+}
+
+.logo img:hover {
+  transform: scale(1.05);
 }
 
 /* ===== BUTTONS ===== */
+.btn-primary,
+.btn-outline {
+  position: relative;
+  z-index: 10; /* FIX click issue */
+}
+
 .btn-primary {
   background: linear-gradient(135deg, #38bdf8, #6366f1);
   padding: 8px 18px;
@@ -73,7 +87,7 @@ body::after {
 
 .btn-primary:hover {
   transform: scale(1.05);
-  box-shadow: 0 0 20px #38bdf8;
+  box-shadow: 0 0 15px #38bdf8;
 }
 
 .btn-outline {
@@ -99,12 +113,13 @@ body::after {
   align-items: center;
   gap: 16px;
   text-align: center;
-  padding: 80px 20px;
+  padding: 90px 20px 60px;
 }
 
 .hero h1 {
   font-size: 34px;
   line-height: 1.3;
+  animation: floatText 4s ease-in-out infinite;
 }
 
 .hero span {
@@ -115,23 +130,13 @@ body::after {
 
 .hero p {
   opacity: 0.7;
+  font-size: 14px;
 }
 
-/* ===== TYPING EFFECT ===== */
-.typing {
-  border-right: 2px solid #38bdf8;
-  white-space: nowrap;
-  overflow: hidden;
-  animation: typing 4s steps(30), blink 0.7s infinite;
-}
-
-@keyframes typing {
-  from { width: 0 }
-  to { width: 100% }
-}
-
-@keyframes blink {
-  50% { border-color: transparent }
+/* 🔥 reduce animation intensity */
+@keyframes floatText {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
 }
 
 /* ===== INPUT ===== */
@@ -143,12 +148,13 @@ body::after {
   padding: 6px;
   width: 100%;
   max-width: 450px;
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(10px); /* reduced */
   transition: 0.3s;
+  z-index: 10;
 }
 
 .input-box:hover {
-  box-shadow: 0 0 25px rgba(56,189,248,0.3);
+  box-shadow: 0 0 15px rgba(56,189,248,0.2);
 }
 
 .input-box input {
@@ -158,6 +164,7 @@ body::after {
   color: white;
   padding: 12px;
   outline: none;
+  font-size: 14px;
 }
 
 .input-box button {
@@ -190,37 +197,78 @@ body::after {
 
 /* ===== HOW ===== */
 .how {
-  padding: 80px 20px;
+  padding: 60px 20px;
   text-align: center;
 }
 
 .grid {
   display: grid;
-  gap: 20px;
+  gap: 16px;
   margin-top: 30px;
 }
 
 .card {
   background: rgba(255,255,255,0.05);
-  padding: 25px;
+  padding: 20px;
   border-radius: 16px;
-  backdrop-filter: blur(20px);
+  backdrop-filter: blur(10px);
   transition: 0.3s;
 }
 
 .card:hover {
-  transform: translateY(-10px) scale(1.03);
-  box-shadow: 0 0 25px rgba(99,102,241,0.3);
+  transform: translateY(-6px);
+  box-shadow: 0 0 15px rgba(99,102,241,0.2);
 }
 
 /* ===== CTA ===== */
 .cta {
   text-align: center;
-  padding: 80px 20px;
+  padding: 60px 20px;
 }
 
 .cta h2 {
   margin-bottom: 20px;
+}
+
+/* ===== PARTICLES FIX ===== */
+.particles {
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: -1;
+  pointer-events: none; /* 🔥 FIX CLICK ISSUE */
+}
+
+.particles span {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  background: #38bdf8;
+  border-radius: 50%;
+  opacity: 0.2;
+  animation: floatParticles linear infinite;
+}
+
+@keyframes floatParticles {
+  from {
+    transform: translateY(100vh);
+  }
+  to {
+    transform: translateY(-10vh);
+  }
+}
+
+/* ===== CURSOR GLOW ===== */
+.cursor-glow {
+  position: fixed;
+  width: 200px;
+  height: 200px;
+  background: radial-gradient(circle, rgba(56,189,248,0.2), transparent);
+  pointer-events: none;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 0;
 }
 
 /* ===== DESKTOP ===== */
@@ -229,84 +277,46 @@ body::after {
     font-size: 52px;
   }
 
+  .hero p {
+    font-size: 16px;
+  }
+
   .grid {
     grid-template-columns: repeat(3,1fr);
   }
 }
 
-.logo img {
-  height: 36px;
-  object-fit: contain;
-}
+/* ===== MOBILE FIX ===== */
+@media (max-width: 768px) {
 
-.logo img {
-  height: 36px;
-  object-fit: contain;
-  filter: drop-shadow(0 0 8px rgba(56,189,248,0.5));
-  transition: 0.3s;
-}
-
-.logo img:hover {
-  transform: scale(1.05);
-}
-
-/* ===== PARTICLES ===== */
-.particles {
-  position: fixed;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  z-index: -1;
-}
-
-.particles span {
-  position: absolute;
-  display: block;
-  width: 6px;
-  height: 6px;
-  background: #38bdf8;
-  border-radius: 50%;
-  opacity: 0.3;
-  animation: floatParticles linear infinite;
-}
-
-@keyframes floatParticles {
-  from {
-    transform: translateY(100vh) scale(0);
+  .hero {
+    padding: 100px 15px 50px;
   }
-  to {
-    transform: translateY(-10vh) scale(1);
+
+  .hero h1 {
+    font-size: 26px;
+  }
+
+  .hero p {
+    font-size: 13px;
+  }
+
+  .input-box {
+    flex-direction: column;
+    padding: 10px;
+  }
+
+  .input-box button {
+    width: 100%;
+    margin-top: 8px;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
   }
 }
 
-.cursor-glow {
-  position: fixed;
-  width: 300px;
-  height: 300px;
-  background: radial-gradient(circle, rgba(56,189,248,0.3), transparent);
-  pointer-events: none;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 0;
-}
-
-.hero h1 {
-  font-size: 34px;
-  line-height: 1.3;
-  animation: floatText 4s ease-in-out infinite;
-}
-
-@keyframes floatText {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-8px); }
-}
-
-body {
-  background: linear-gradient(270deg, #020617, #0f172a, #020617);
-  background-size: 400% 400%;
-  animation: gradientMove 15s ease infinite;
-}
-
+/* ===== BACKGROUND ANIMATION ===== */
 @keyframes gradientMove {
   0% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
