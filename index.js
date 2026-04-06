@@ -1006,3 +1006,23 @@ async function startServer() {
 }
 
 startServer();
+const fs = require("fs");
+const path = require("path");
+
+app.post("/api/tools/:id/like", (req, res) => {
+  const filePath = path.join(__dirname, "data", "tools.json");
+
+  const tools = JSON.parse(fs.readFileSync(filePath));
+
+  const tool = tools.find(t => t.id === req.params.id);
+
+  if (!tool) {
+    return res.send("Tool not found");
+  }
+
+  tool.likes += 1;
+
+  fs.writeFileSync(filePath, JSON.stringify(tools, null, 2));
+
+  res.json({ likes: tool.likes });
+});

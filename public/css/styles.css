@@ -4157,3 +4157,40 @@ input {
 .bot-message {
   font-size: 15px;
 }
+
+/* ===== FORCE TEXT VISIBILITY FIX ===== */
+
+/* USER MESSAGE (blue bubble) */
+.chat-container .message.user,
+.chat-container .user,
+.chat-container .user-message {
+  background: linear-gradient(135deg, #2563eb, #1e40af) !important;
+  color: #ffffff !important;
+  font-weight: 500;
+}
+
+/* BOT MESSAGE (dark bubble) */
+.chat-container .message.bot,
+.chat-container .bot,
+.chat-container .bot-message {
+  background: #111827 !important;
+  color: #e5e7eb !important;
+}
+
+/* ALL TEXT INSIDE MESSAGES */
+.chat-container .message *,
+.chat-container .bot *,
+.chat-container .user * {
+  color: inherit !important;
+}
+
+/* INPUT BOX */
+.chat-input input {
+  color: #ffffff !important;
+  background: #020617 !important;
+}
+
+/* PLACEHOLDER */
+.chat-input input::placeholder {
+  color: #6b7280 !important;
+}
