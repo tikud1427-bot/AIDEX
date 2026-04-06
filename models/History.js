@@ -6,21 +6,15 @@ const historySchema = new mongoose.Schema({
     ref: "User",
     required: true
   },
-  prompt: {
-    type: String,
-    required: true
+  title: {
+    type: String // first message as title
   },
-  response: {
-    type: String,
-    required: true
-  },
-  model: {
-    type: String
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
+  messages: [
+    {
+      role: String, // "user" or "assistant"
+      content: String
+    }
+  ]
+}, { timestamps: true });
 
 module.exports = mongoose.model("History", historySchema);

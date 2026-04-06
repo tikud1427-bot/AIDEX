@@ -604,19 +604,25 @@ app.get("/bundle/:id", async (req, res) => {
 });
 
 // ================= CHATBOT =================
-app.get("/chatbot", (req, res) => {
-  res.render("chatbot");
-});
-
 app.post("/chat", async (req, res) => {
-  const { message, history, mode } = req.body;
+  const { message, history, mode, chatId } = req.body;
 
   if (!message) {
     return res.json({ reply: "⚠️ Message required" });
   }
 
   try {
-    // 🌐 SMART WEB SEARCH (FALLBACK + AI SUMMARY)
+    let messages = history || [];
+
+    // 🧠 Add user message
+    messages.push({
+      role: "user",
+      content: message
+    });
+
+    let reply = "";
+
+    // 🌐 SEARCH MODE (keep your upgraded version)
     if (mode === "search") {
       try {
         const search = await axios.post(
@@ -626,25 +632,17 @@ app.post("/chat", async (req, res) => {
             headers: {
               "X-API-KEY": process.env.SERPER_API_KEY,
               "Content-Type": "application/json"
-            },
-            timeout: 5000
+            }
           }
         );
 
         const organic = search.data.organic;
 
-        // ❌ If no results (quota / error)
-        if (!organic || organic.length === 0) {
-          throw new Error("No results");
-        }
-
-        // 🧠 Prepare text for AI
         const resultsText = organic
           .slice(0, 5)
           .map(r => `${r.title}: ${r.snippet}`)
           .join("\n");
 
-        // 🤖 AI SUMMARY (GROQ)
         const ai = await axios.post(
           "https://api.groq.com/openai/v1/chat/completions",
           {
@@ -652,11 +650,11 @@ app.post("/chat", async (req, res) => {
             messages: [
               {
                 role: "system",
-                content: "Summarize search results clearly and helpfully."
+                content: "Summarize search results clearly."
               },
               {
                 role: "user",
-                content: `Query: ${message}\n\nResults:\n${resultsText}`
+                content: `Query: ${message}\n\n${resultsText}`
               }
             ]
           },
@@ -668,28 +666,17 @@ app.post("/chat", async (req, res) => {
           }
         );
 
-        const summary =
+        reply =
           ai?.data?.choices?.[0]?.message?.content ||
-          "⚠️ Could not summarize";
+          "⚠️ No summary";
 
-        return res.json({
-          reply: `🔎 ${message}\n\n${summary}`
-        });
-
-      } catch (err) {
-        console.error("SEARCH ERROR:", err.response?.data || err.message);
-
-        // 🔁 FALLBACK (never break)
-        return res.json({
-          reply:
-            `⚠️ Search limit reached.\n\n` +
-            `🔗 Try this:\nhttps://www.google.com/search?q=${encodeURIComponent(message)}`
-        });
+      } catch {
+        reply = `⚠️ Search failed\nhttps://www.google.com/search?q=${encodeURIComponent(message)}`;
       }
     }
 
-    // 🎨 IMAGE MODE (Pollinations)
-    if (mode === "image") {
+    // 🎨 IMAGE MODE
+    else if (mode === "image") {
       const imageUrl =
         "https://image.pollinations.ai/prompt/" +
         encodeURIComponent(message);
@@ -700,40 +687,67 @@ app.post("/chat", async (req, res) => {
       });
     }
 
-    // 🧠 DEFAULT CHAT (GROQ)
-    const response = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        model: "llama-3.1-8b-instant",
-        messages: [
-          {
-            role: "system",
-            content: "You are 🌊Aqua AI by Aquiplex — smart assistant."
-          },
-          ...(history || []),
-          {
-            role: "user",
-            content: message
+    // 🧠 NORMAL CHAT
+    else {
+      const response = await axios.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          model: "llama-3.1-8b-instant",
+          messages: [
+            {
+              role: "system",
+              content: "You are Aqua AI by Aquiplex."
+            },
+            ...messages
+          ]
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            "Content-Type": "application/json"
           }
-        ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json"
         }
-      }
-    );
+      );
 
-    const reply =
-      response?.data?.choices?.[0]?.message?.content ||
-      "⚠️ No reply";
+      reply =
+        response?.data?.choices?.[0]?.message?.content ||
+        "⚠️ No reply";
+    }
 
-    res.json({ reply });
+    // 🧠 Add AI reply
+    messages.push({
+      role: "assistant",
+      content: reply
+    });
+
+    let chat;
+
+    // 🔥 UPDATE EXISTING CHAT
+    if (chatId) {
+      chat = await History.findOneAndUpdate(
+        { _id: chatId, userId: req.session.userId },
+        { messages },
+        { new: true }
+      );
+    }
+
+    // 🆕 CREATE NEW CHAT
+    else {
+      chat = await History.create({
+        userId: req.session.userId,
+        title: message.slice(0, 30),
+        messages
+      });
+    }
+
+    res.json({
+      reply,
+      messages,
+      chatId: chat._id
+    });
 
   } catch (err) {
-    console.error("CHAT ERROR:", err.response?.data || err.message);
-
+    console.error("CHAT ERROR:", err.message);
     res.json({ reply: "⚠️ AI failed" });
   }
 });

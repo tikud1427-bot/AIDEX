@@ -150,7 +150,25 @@
 
 <p id="modeLabel">Mode: chat</p>
 
-<div id="chat"></div>
+    <div style="display:flex; gap:10px; width:95%; max-width:800px;">
+
+      <!-- 🧠 HISTORY SIDEBAR -->
+      <div id="historyList" style="
+        width:200px;
+        height:500px;
+        overflow-y:auto;
+        border:1px solid #1e293b;
+        border-radius:10px;
+        padding:10px;
+        background:#020617;
+      ">
+        <b>Chats</b>
+      </div>
+
+      <!-- 💬 CHAT AREA -->
+      <div id="chat" style="flex:1; max-width:unset;"></div>
+
+    </div>
 
 <div class="input-area">
   <input id="msg" placeholder="Ask something..." />
@@ -164,7 +182,8 @@
   </footer>
 
 <script>
-let history = [];
+  let messages = [];
+  let currentChatId = null;
 let mode = "chat";
 
   function setMode(m) {
@@ -198,7 +217,8 @@ async function send() {
       },
       body: JSON.stringify({
         message,
-        history,
+        history: messages,
+        chatId: currentChatId,
         mode
       })
     });
@@ -218,8 +238,8 @@ async function send() {
       chat.innerHTML += `<div class="msg bot">${data.reply}</div>`;
     }
 
-    history.push({ role: "user", content: message });
-    history.push({ role: "assistant", content: data.reply });
+    messages = data.messages;
+    currentChatId = data.chatId; // 🔥 VERY IMPORTANT
 
     chat.scrollTop = chat.scrollHeight;
 
@@ -232,6 +252,50 @@ async function send() {
 document.getElementById("msg").addEventListener("keypress", function(e) {
   if (e.key === "Enter") send();
 });
+
+  async function loadHistoryList() {
+    const res = await fetch("/history");
+    const chats = await res.json();
+
+    const list = document.getElementById("historyList");
+    list.innerHTML = "";
+
+    chats.forEach(chat => {
+      const div = document.createElement("div");
+      div.innerText = chat.title || "Chat";
+
+      div.style.cursor = "pointer";
+      div.style.padding = "8px";
+      div.style.borderBottom = "1px solid #1e293b";
+      div.style.marginBottom = "5px";
+
+      div.onmouseover = () => div.style.background = "#0f172a";
+      div.onmouseout = () => div.style.background = "transparent";
+
+      div.onclick = () => loadChat(chat._id); // 🔥 THIS CALLS IT
+
+      list.appendChild(div);
+    });
+  }
+
+  loadHistoryList();
+  async function loadChat(id) {
+    const res = await fetch("/history/" + id);
+    const data = await res.json();
+
+    currentChatId = id;
+    messages = data.messages;
+
+    const chat = document.getElementById("chat");
+    chat.innerHTML = "";
+
+    data.messages.forEach(m => {
+      chat.innerHTML += `
+        <div class="msg ${m.role === "user" ? "user" : "bot"}">
+          ${m.content}
+        </div>`;
+    });
+  }
 </script>
 
 </body>
