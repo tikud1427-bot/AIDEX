@@ -6,28 +6,35 @@
   <title>Aquiplex — AI Workflows Made Simple</title>
 
   <link rel="stylesheet" href="/css/landing.css">
+  <style>
+  html {
+    scroll-behavior: smooth;
+  }
+  </style>
 </head>
 
 <body>
 
-<!-- NAVBAR -->
-<header class="navbar">
-  <div class="logo">
-    🌊 Aquiplex
-  </div>
+  <!-- NAVBAR -->
+  <header class="navbar">
 
-  <div class="nav-buttons">
-    <a href="/login" class="btn-outline">Login</a>
-    <a href="/signup" class="btn-primary">Sign Up</a>
-  </div>
-</header>
+    <div class="logo">
+      <img src="/logo/logo.png" alt="Aquiplex Logo" style="height:30px;">
+    </div>
+
+    <div class="nav-buttons">
+      <a href="/login" class="btn-outline">Login</a>
+      <a href="/signup" class="btn-primary">Sign Up</a>
+    </div>
+
+  </header>
 
 <!-- HERO -->
 <section class="hero">
 
   <h1>
     Tell Us What You Want.<br>
-    <span>We Give You The Exact AI Tools ⚡</span>
+    <span class="typing">We Give You The Exact AI Tools ⚡</span>
   </h1>
 
   <p>
@@ -91,6 +98,24 @@ function setGoal(text) {
   document.getElementById("goalInput").value = text;
 }
 </script>
+  <script>
+  const input = document.getElementById("goalInput");
+
+  const suggestions = [
+    "Start a SaaS business",
+    "Grow Instagram fast",
+    "Make money online",
+    "Build a startup",
+    "Create YouTube content"
+  ];
+
+  let i = 0;
+
+  setInterval(() => {
+    input.placeholder = suggestions[i];
+    i = (i + 1) % suggestions.length;
+  }, 2000);
+  </script>
 
 </body>
 </html>
