@@ -4097,3 +4097,63 @@ input {
   border: 1px solid #1e293b !important;
   color: #e2e8f0 !important;
 }
+
+/* ===== CHAT TEXT FIX ===== */
+
+/* User message (blue box) */
+.user-message {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: #ffffff; /* pure white text */
+  font-weight: 500;
+}
+
+/* Bot message (dark card) */
+.bot-message {
+  background: #0f172a; /* darker for contrast */
+  color: #e2e8f0; /* light readable text */
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+/* Improve paragraph readability */
+.bot-message p {
+  color: #cbd5f5;
+  line-height: 1.6;
+}
+
+/* Highlight headings / bold */
+.bot-message strong {
+  color: #ffffff;
+}
+
+/* Fix input box */
+.chat-input input {
+  background: #020617;
+  color: #ffffff;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+/* Placeholder fix */
+.chat-input input::placeholder {
+  color: #64748b;
+}
+
+/* Send button (clean + visible) */
+.chat-input button {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: white;
+  font-weight: 600;
+  box-shadow: 0 0 10px rgba(59,130,246,0.4);
+}
+
+/* Add subtle glow for messages */
+.user-message, .bot-message {
+  box-shadow: 0 10px 25px rgba(0,0,0,0.4);
+}
+
+.user-message {
+  font-size: 16px;
+}
+
+.bot-message {
+  font-size: 15px;
+}
