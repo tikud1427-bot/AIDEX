@@ -147,23 +147,33 @@ app.get("/", (req, res) => {
 });
 //
 
-app.post("/api/tools/:id/like", (req, res) => {
-  const filePath = path.join(__dirname, "data", "tools.json");
-
-  const tools = JSON.parse(fs.readFileSync(filePath));
-
-  const tool = tools.find(t => t.id === req.params.id);
-
-  if (!tool) {
-    return res.send("Tool not found");
+app.post("/api/tools/:id/like", async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).json({ error: "Login required" });
   }
 
-  tool.likes += 1;
+  const tool = await Tool.findById(req.params.id);
 
-  fs.writeFileSync(filePath, JSON.stringify(tools, null, 2));
+  if (!tool) {
+    return res.json({ error: "Tool not found" });
+  }
+
+  // create likes array if not exists
+  if (!tool.likedBy) tool.likedBy = [];
+
+  // check if already liked
+  if (tool.likedBy.includes(req.session.userId)) {
+    return res.json({ message: "Already liked", likes: tool.likes });
+  }
+
+  tool.likes = (tool.likes || 0) + 1;
+  tool.likedBy.push(req.session.userId);
+
+  await tool.save();
 
   res.json({ likes: tool.likes });
 });
+//
 app.get("/landing", (req, res) => {
   if (req.session.userId) {
     return res.redirect("/home");
