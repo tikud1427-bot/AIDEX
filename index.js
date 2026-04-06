@@ -659,7 +659,7 @@ app.post("/chat", async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "You are Aquiplex AI — smart assistant."
+            content: "You are Aqua AI by Aquiplex — smart assistant."
           },
           ...(history || []),
           {
