@@ -609,13 +609,49 @@ app.get("/chatbot", (req, res) => {
 });
 
 app.post("/chat", async (req, res) => {
-  const { message, history } = req.body;
+  const { message, history, mode } = req.body;
 
   if (!message) {
     return res.json({ reply: "⚠️ Message required" });
   }
 
   try {
+    // 🌐 WEB SEARCH MODE
+    if (mode === "search") {
+      const search = await axios.post(
+        "https://google.serper.dev/search",
+        { q: message },
+        {
+          headers: {
+            "X-API-KEY": process.env.SERPER_API_KEY,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      const results = search.data.organic
+        ?.slice(0, 3)
+        .map(r => `${r.title}: ${r.snippet}`)
+        .join("\n");
+
+      return res.json({
+        reply: "🔎 Top results:\n\n" + results
+      });
+    }
+
+    // 🎨 IMAGE MODE (Pollinations)
+    if (mode === "image") {
+      const imageUrl =
+        "https://image.pollinations.ai/prompt/" +
+        encodeURIComponent(message);
+
+      return res.json({
+        reply: "🖼️ Here is your image:",
+        image: imageUrl
+      });
+    }
+
+    // 🧠 DEFAULT CHAT (GROQ)
     const response = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
       {
@@ -623,7 +659,7 @@ app.post("/chat", async (req, res) => {
         messages: [
           {
             role: "system",
-            content: "You are Aquiplex AI — helpful and smart assistant."
+            content: "You are Aquiplex AI — smart assistant."
           },
           ...(history || []),
           {
