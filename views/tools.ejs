@@ -97,7 +97,9 @@
         <a href="/visit/<%= tool._id %>" target="_blank" class="visit-btn">
           Visit
         </a>
-
+        <button onclick="likeTool('<%= tool.id %>')" class="like-btn">
+          👍 <span id="likes-<%= tool.id %>"><%= tool.likes || 0 %></span>
+        </button>
       </div>
 
     </div>
@@ -144,6 +146,16 @@ async function addToWorkspace(button, toolId){
   }
 }
 </script>
+  <script>
+  async function likeTool(id) {
+    const res = await fetch(`/api/tools/${id}/like`, {
+      method: "POST"
+    });
 
+    const data = await res.json();
+
+    document.getElementById(`likes-${id}`).innerText = data.likes;
+  }
+  </script>
 </body>
 </html>
