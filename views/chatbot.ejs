@@ -9,9 +9,6 @@
       background: #020617;
       color: #e2e8f0;
       font-family: 'Segoe UI', sans-serif;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
       margin: 0;
     }
 
@@ -120,13 +117,27 @@
       margin-top: 5px;
       max-width: 100%;
     }
+    .main {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding-top: 20px;
+    }
+    nav {
+      width: 100%;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+    
   </style>
 </head>
 
 <body>
   
-  <%- include('partials/nav') %>    
+  <%- include('partials/nav') %>
 
+  <div class="main">
 
 <h2> 🌊 AQUA by Aquiplex</h2>
 
@@ -143,24 +154,22 @@
 <div class="input-area">
   <input id="msg" placeholder="Ask something..." />
   <button class="send-btn" onclick="send()">Send</button>
-</div>
+  </div>
 
-   <!-- FOOTER -->    
+  </div> <!-- ✅ CLOSE IT HERE -->
 
-         <footer class="footer">    
-    <p>© <%= new Date().getFullYear() %> AQUIPLEX All rights reserved.</p>    
-
-    </footer> 
+  <footer class="footer">
+    <p>© <%= new Date().getFullYear() %> AQUIPLEX All rights reserved.</p>
+  </footer>
 
 <script>
 let history = [];
 let mode = "chat";
 
-function setMode(m) {
-  mode = m;
-  document.getElementById("modeLabel").innerText = "Mode: " + m;
-  alert("Mode: " + m);
-}
+  function setMode(m) {
+    mode = m;
+    document.getElementById("modeLabel").innerText = "Mode: " + m;
+  }
 
 async function send() {
   const input = document.getElementById("msg");
