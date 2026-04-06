@@ -4043,3 +4043,40 @@ input {
     width: 90%;
   }
 }
+
+.msg {
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.msg.bot {
+  color: #e2e8f0; /* FIX green → readable like ChatGPT */
+}
+
+.bot {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.msg {
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.bot {
+  background: #1e293b;
+  color: #e2e8f0;
+}
+
+.msg {
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.msg p {
+  margin: 6px 0;
+}
+
+.msg ul {
+  padding-left: 18px;
+}

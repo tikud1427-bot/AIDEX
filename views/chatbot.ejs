@@ -4,6 +4,7 @@
   <link rel="stylesheet" href="/css/styles.css">
   <title>🌊 Aqua AI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
   <style>
     body {
@@ -256,7 +257,7 @@ async function send() {
   const loading = document.createElement("div");
   loading.className = "msg bot";
   loading.id = "loading";
-  loading.innerText = "Typing...";
+  loading.innerHTML = "💬 Thinking...";
   chat.appendChild(loading);
 
   chat.scrollTop = chat.scrollHeight;
@@ -291,9 +292,9 @@ async function send() {
     } else {
       data.messages.forEach(m => {
         chat.innerHTML += `
-          <div class="msg ${m.role === "user" ? "user" : "bot"}">
-            ${m.content}
-          </div>`;
+        <div class="msg ${m.role === "user" ? "user" : "bot"}">
+          ${marked.parse(m.content)}
+        </div>`;
       });
     }
 
@@ -364,7 +365,7 @@ async function loadChat(id, event) {
   data.messages.forEach(m => {
     chat.innerHTML += `
       <div class="msg ${m.role === "user" ? "user" : "bot"}">
-        ${m.content}
+        ${marked.parse(m.content)}
       </div>`;
   });
 
