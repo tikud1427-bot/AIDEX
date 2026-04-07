@@ -26,7 +26,6 @@
       padding: 10px;
     }
 
-    /* 🔥 MODE BUTTONS */
     .modes {
       margin: 10px;
     }
@@ -51,7 +50,6 @@
       color: #94a3b8;
     }
 
-    /* 🔥 LAYOUT */
     .chat-container {
       display: flex;
       width: 95%;
@@ -59,14 +57,12 @@
       gap: 10px;
     }
 
-    /* 🔥 SIDEBAR */
     .sidebar {
       width: 230px;
       background: #020617;
       border: 1px solid #1e293b;
       border-radius: 12px;
       padding: 10px;
-      transition: 0.3s;
     }
 
     .new-chat-btn {
@@ -100,7 +96,6 @@
       cursor: pointer;
     }
 
-    /* 🔥 CHAT */
     #chat {
       flex: 1;
       height: 500px;
@@ -128,12 +123,12 @@
       color: #22c55e;
     }
 
-    /* 🔥 INPUT */
-    .input-area {
+    .input-area, .chat-input {
       display: flex;
       width: 95%;
       max-width: 1100px;
       margin-top: 10px;
+      gap: 8px;
     }
 
     input {
@@ -145,43 +140,16 @@
       color: white;
     }
 
-    .send-btn {
-      padding: 12px;
-      margin-left: 8px;
+    button {
+      padding: 10px;
       border-radius: 8px;
       border: none;
-      background: #22c55e;
       cursor: pointer;
+    }
+
+    .send-btn {
+      background: #22c55e;
       font-weight: bold;
-    }
-
-    /* 🔥 MOBILE */
-    .menu-btn {
-      display: none;
-      background: #38bdf8;
-      border: none;
-      padding: 8px;
-      border-radius: 6px;
-      margin-bottom: 5px;
-    }
-
-    @media (max-width: 768px) {
-      .menu-btn {
-        display: block;
-      }
-
-      .sidebar {
-        position: absolute;
-        left: -250px;
-        top: 60px;
-        height: 80%;
-        z-index: 999;
-        background: #020617;
-      }
-
-      .sidebar.active {
-        left: 10px;
-      }
     }
 
     img {
@@ -198,34 +166,37 @@
 
 <div class="main">
 
-<button class="menu-btn" onclick="toggleSidebar()">☰</button>
-
 <h2>🌊 AQUA by Aquiplex</h2>
 
-<!-- 🔥 MODES -->
 <div class="modes">
   <button onclick="setMode('chat')">💬 Chat</button>
   <button onclick="setMode('search')">🌐 Search</button>
   <button onclick="setMode('image')">🎨 Image</button>
 </div>
+
 <p id="modeLabel">Mode: chat</p>
 
 <div class="chat-container">
 
-  <!-- SIDEBAR -->
   <div class="sidebar">
     <button class="new-chat-btn" onclick="newChat()">➕ New Chat</button>
     <div id="historyList"></div>
   </div>
 
-  <!-- CHAT -->
   <div id="chat"></div>
 
 </div>
 
-<div class="input-area">
-  <input id="msg" placeholder="Ask something..." />
+<!-- ✅ INPUT AREA -->
+<div class="chat-input">
+
+  <input type="file" id="fileUpload" hidden />
+  <button onclick="document.getElementById('fileUpload').click()">➕</button>
+
+  <input type="text" id="messageInput" placeholder="Ask anything..." />
+
   <button class="send-btn" onclick="send()">Send</button>
+
 </div>
 
 </div>
@@ -235,21 +206,19 @@ let messages = [];
 let currentChatId = null;
 let mode = "chat";
 
-/* 🔥 MODE */
+/* MODE */
 function setMode(m) {
   mode = m;
   document.getElementById("modeLabel").innerText = "Mode: " + m;
 }
 
-/* 🔥 SEND */
+/* SEND MESSAGE */
 async function send() {
-  const input = document.getElementById("msg");
+  const input = document.getElementById("messageInput");
   const chat = document.getElementById("chat");
-
+  chat.innerHTML = "";
   const message = input.value.trim();
   if (!message) return;
-
-  if (!currentChatId) messages = [];
 
   chat.innerHTML += `<div class="msg user">${message}</div>`;
   input.value = "";
@@ -268,10 +237,7 @@ async function send() {
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({
         message,
-        history: messages.map(m => ({
-          role: m.role === "bot" ? "assistant" : m.role,
-          content: m.content
-        })),
+        history: messages,
         chatId: currentChatId,
         mode
       })
@@ -281,21 +247,39 @@ async function send() {
     document.getElementById("loading")?.remove();
 
     chat.innerHTML = "";
-
     if (data.image) {
       chat.innerHTML += `
         <div class="msg bot">
-          ${data.reply}
-          <br/>
+          <div class="bot-text">${data.reply}</div>
+
           <img src="${data.image}" />
+
+          <br/>
+
+          <a href="${data.image}" download>
+            <button>⬇️ Download</button>
+          </a>
+
+          <button onclick="copyText(this)">📋</button>
         </div>`;
-    } else {
-      data.messages.forEach(m => {
-        chat.innerHTML += `
-        <div class="msg ${m.role === "user" ? "user" : "bot"}">
-          ${marked.parse(m.content)}
-        </div>`;
-      });
+    }
+     else {
+       data.messages.forEach(m => {
+
+         if (m.role === "user") {
+           chat.innerHTML += `
+             <div class="msg user">
+               ${marked.parse(m.content)}
+             </div>`;
+         } else {
+           chat.innerHTML += `
+             <div class="msg bot">
+               <div class="bot-text">${marked.parse(m.content)}</div>
+               <button onclick="copyText(this)">📋</button>
+             </div>`;
+         }
+
+       });
     }
 
     messages = data.messages;
@@ -306,16 +290,34 @@ async function send() {
 
   } catch {
     document.getElementById("loading")?.remove();
-    chat.innerHTML += `<div class="msg bot">⚠️ Error connecting</div>`;
+    chat.innerHTML += `<div class="msg bot">⚠️ Error</div>`;
   }
 }
 
-/* ENTER */
-document.getElementById("msg").addEventListener("keypress", e => {
+/* ENTER KEY */
+document.getElementById("messageInput").addEventListener("keypress", e => {
   if (e.key === "Enter") send();
 });
 
-/* HISTORY LIST */
+/* FILE UPLOAD SHOW IN CHAT */
+const fileInput = document.getElementById("fileUpload");
+
+fileInput.addEventListener("change", () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  const chat = document.getElementById("chat");
+
+  chat.innerHTML += `
+    <div class="msg user">
+      📎 Uploaded: ${file.name}
+    </div>
+  `;
+
+  chat.scrollTop = chat.scrollHeight;
+});
+
+/* HISTORY */
 async function loadHistoryList() {
   const res = await fetch("/history");
   const chats = await res.json();
@@ -332,27 +334,17 @@ async function loadHistoryList() {
     `;
 
     div.onclick = (e) => loadChat(chat._id, e);
-
     list.appendChild(div);
   });
 }
 
-/* DELETE */
 async function deleteChat(id) {
   await fetch("/history/" + id, { method: "DELETE" });
   loadHistoryList();
   document.getElementById("chat").innerHTML = "";
 }
 
-/* LOAD CHAT */
 async function loadChat(id, event) {
-
-  document.querySelectorAll("#historyList div").forEach(d => {
-    d.style.background = "transparent";
-  });
-
-  if (event) event.currentTarget.style.background = "#1e293b";
-
   const res = await fetch("/history/" + id);
   const data = await res.json();
 
@@ -360,32 +352,43 @@ async function loadChat(id, event) {
   messages = data.messages;
 
   const chat = document.getElementById("chat");
-  chat.innerHTML = "";
 
   data.messages.forEach(m => {
-    chat.innerHTML += `
-      <div class="msg ${m.role === "user" ? "user" : "bot"}">
-        ${marked.parse(m.content)}
-      </div>`;
-  });
 
+    if (m.role === "user") {
+      chat.innerHTML += `
+        <div class="msg user">
+          ${marked.parse(m.content)}
+        </div>`;
+    } else {
+      chat.innerHTML += `
+        <div class="msg bot">
+          <div class="bot-text">${marked.parse(m.content)}</div>
+          <button onclick="copyText(this)">📋</button>
+        </div>`;
+    }
+
+  });
   chat.scrollTop = chat.scrollHeight;
 }
 
-/* NEW CHAT */
 function newChat() {
   currentChatId = null;
   messages = [];
   document.getElementById("chat").innerHTML = "";
 }
 
-/* SIDEBAR */
-function toggleSidebar() {
-  document.querySelector(".sidebar").classList.toggle("active");
-}
-
 /* INIT */
 loadHistoryList();
+  
+  function copyText(btn) {
+    const text = btn.parentElement.querySelector(".bot-text").innerText;
+
+    navigator.clipboard.writeText(text);
+
+    btn.innerText = "✅";
+    setTimeout(() => btn.innerText = "📋", 1500);
+  }
 </script>
 
 </body>
