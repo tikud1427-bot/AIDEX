@@ -184,6 +184,7 @@ app.get("/landing", (req, res) => {
 app.get("/home", async (req, res) => {
   try {
     const tools = await Tool.find().limit(12).lean();
+    console.log("LIKES DEBUG:", tools.map(t => t.likes));
     const allTools = await Tool.find().lean();
 
     const trendingTools = await getTrendingTools(10);
