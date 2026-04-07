@@ -146,7 +146,6 @@ app.get("/", (req, res) => {
   return res.redirect("/landing");
 });
 //
-
 app.post("/api/tools/:id/like", async (req, res) => {
   if (!req.session.userId) {
     return res.status(401).json({ error: "Login required" });
@@ -158,21 +157,31 @@ app.post("/api/tools/:id/like", async (req, res) => {
     return res.json({ error: "Tool not found" });
   }
 
-  // create likes array if not exists
+  // ✅ convert userId to string (VERY IMPORTANT)
+  const userId = req.session.userId.toString();
+
+  // make sure likedBy exists
   if (!tool.likedBy) tool.likedBy = [];
 
-  // check if already liked
-  if (tool.likedBy.includes(req.session.userId)) {
-    return res.json({ message: "Already liked", likes: tool.likes });
+  // ✅ prevent multiple likes
+  if (tool.likedBy.includes(userId)) {
+    return res.json({
+      message: "Already liked",
+      likes: tool.likes || 0
+    });
   }
 
+  // ✅ increase like
   tool.likes = (tool.likes || 0) + 1;
-  tool.likedBy.push(req.session.userId);
+
+  // ✅ save user
+  tool.likedBy.push(userId);
 
   await tool.save();
 
   res.json({ likes: tool.likes });
 });
+
 //
 app.get("/landing", (req, res) => {
   if (req.session.userId) {
@@ -187,8 +196,15 @@ app.get("/home", async (req, res) => {
       return res.redirect("/landing");
     }
 
-    const tools = await Tool.find().limit(12).sort({ likes: -1 });
+    const tools = await Tool.find()
+      .limit(12)
+      .sort({ likes: -1 })
+      .lean();
 
+    // ✅ ensure likes always exist
+    tools.forEach(t => {
+      if (t.likes === undefined) t.likes = 0;
+    });
     console.log("LIKES DEBUG:", tools.map(t => t.likes));
 
     const allTools = await Tool.find().sort({ likes: -1 });
@@ -1032,7 +1048,11 @@ async function startServer() {
   console.log("SESSION:", process.env.SESSION_SECRET ? "OK" : "MISSING");
 
   await connectDB();
-  await importTools();
+  const count = await Tool.countDocuments();
+
+  if (count === 0) {
+    await importTools();
+  }
 
   const PORT = process.env.PORT || 5000;
 
