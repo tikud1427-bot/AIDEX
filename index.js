@@ -317,34 +317,45 @@ Return ONLY JSON.
 
     const text = response.data.choices[0].message.content;
 
-    // ✅ CLEAN JSON EXTRACTION
+    // ✅ CLEAN TEXT
+    let cleanText = text
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
+
+    // ✅ PARSE JSON
     let parsed;
+
     try {
-      const match = text.match(/\{[\s\S]*\}/);
+      const match = cleanText.match(/\{[\s\S]*\}/);
 
       if (!match) {
         return res.json({
           error: "No JSON found",
-          raw: text
+          raw: cleanText
         });
       }
 
       parsed = JSON.parse(match[0]);
 
     } catch (err) {
+      console.log("RAW AI:", cleanText);
+
       return res.json({
         error: "Parse error",
-        raw: text
+        raw: cleanText
       });
     }
 
-    res.json(parsed);
+    // ✅ THIS WAS MISSING (IMPORTANT)
+    return res.json(parsed);
 
   } catch (err) {
     console.error("AI ERROR:", err.message);
-    res.json({ error: "AI failed" });
+    return res.json({ error: "AI failed" });
   }
 });
+    
 // TEST AI (DEBUG ROUTE)
 app.get("/test-ai", async (req, res) => {
   try {
