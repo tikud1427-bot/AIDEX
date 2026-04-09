@@ -228,14 +228,6 @@ app.post("/generate-bundle", async (req, res) => {
     prompt = `
 You are an AI that ONLY returns valid JSON.
 
-STRICT RULES:
-- Do NOT explain anything
-- Do NOT write steps
-- Do NOT add text before or after JSON
-- Output MUST start with { and end with }
-
-FORMAT:
-
 {
  "type":"youtube",
  "niche":"",
@@ -297,6 +289,21 @@ Return ONLY JSON.
 `;
   }
 
+  // ================= GENERAL =================
+  else {
+    prompt = `
+You are an AI that ONLY returns valid JSON.
+
+{
+ "type":"general",
+ "title":"",
+ "content":""
+}
+
+Return ONLY JSON.
+`;
+  }
+
   try {
     const response = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
@@ -347,7 +354,6 @@ Return ONLY JSON.
       });
     }
 
-    // ✅ THIS WAS MISSING (IMPORTANT)
     return res.json(parsed);
 
   } catch (err) {
@@ -355,7 +361,6 @@ Return ONLY JSON.
     return res.json({ error: "AI failed" });
   }
 });
-    
 // TEST AI (DEBUG ROUTE)
 app.get("/test-ai", async (req, res) => {
   try {

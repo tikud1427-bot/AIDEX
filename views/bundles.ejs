@@ -94,100 +94,77 @@ function quick(text) {
   document.getElementById("goalInput").value = text;
   generateBundle();
 }
+  function render(data) {
+    const result = document.getElementById("result");
 
-function render(data) {
-  if (!data.steps || !Array.isArray(data.steps)) {
-    document.getElementById("result").innerText = "❌ Invalid bundle format";
-    return;
-  }
-
-  let html = `
-    <div class="bundle-header">
-      <h2>${data.title || "AI Bundle"}</h2>
-
-      <button onclick='saveBundle(${JSON.stringify(data).replace(/"/g, '&quot;')})' class="save-btn">
-        💾 Save Bundle
-      </button>
-
-      <button onclick='shareBundle(${JSON.stringify(data).replace(/"/g, '&quot;')})' class="share-btn">
-        🔗 Share
-      </button>
-    </div>
-  `;
-
-  data.steps.forEach(step => {
-    html += `
-      <div class="step">
-        <h3>Step ${step.step || ""}: ${step.title || ""}</h3>
-        <p>${step.description || ""}</p>
-
-        <div class="tools">
-          ${(step.tools || []).map(t => {
-            let name, url;
-
-            if (typeof t === "object") {
-              name = t.name;
-              url = t.url;
-            } else {
-              name = t;
-              const links = {
-                "PyCharm": "https://www.jetbrains.com/pycharm/",
-                "VS Code": "https://code.visualstudio.com/",
-                "Spyder": "https://www.spyder-ide.org/",
-                "W3Schools": "https://www.w3schools.com/",
-                "Real Python": "https://realpython.com/"
-              };
-              url = links[name] || `https://www.google.com/search?q=${encodeURIComponent(name)}`;
-            }
-
-            return `
-              <div class="tool-card-mini recommended">
-                <img 
-                  src="https://www.google.com/s2/favicons?sz=64&domain_url=${url}" 
-                  onerror="this.src='/images/default-tool.png'"
-                />
-
-                <div class="tool-info">
-                  <span>${name}</span>
-                  <button class="use-btn" onclick="openTool('${url}')">Use</button>
-                </div>
-              </div>
-            `;
-          }).join("")}
-        </div>
-
-      </div>
-    `;
-  });
-  document.getElementById("result").innerHTML = html;
-}
-
-  async function saveBundle(data) {
-    try {
-      const res = await fetch("/bundle/save", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          title: data.title,
-          steps: data.steps
-        })
-      });
-
-      const result = await res.json();
-
-      if (result.success) {
-        alert("✅ Bundle saved to workspace!");
-      } else {
-        alert("❌ Failed to save bundle");
-      }
-
-    } catch (err) {
-      console.error(err);
-      alert("❌ Error saving bundle");
+    // ❌ ERROR HANDLING
+    if (data.error) {
+      result.innerHTML = `❌ ${data.error}<br><small>${data.raw || ""}</small>`;
+      return;
     }
+
+    let html = "";
+
+    // ================= YOUTUBE =================
+    if (data.type === "youtube") {
+      html = `
+        <h2>📺 ${data.channelName}</h2>
+        <p>${data.description}</p>
+
+        <h3>🎯 Niche</h3>
+        <p>${data.niche}</p>
+
+        <h3>🎬 Video Ideas</h3>
+        <ul>
+          ${data.videoIdeas.map(v => `<li>${v}</li>`).join("")}
+        </ul>
+      `;
+    }
+
+    // ================= INSTAGRAM =================
+    else if (data.type === "instagram") {
+      html = `
+        <h2>📸 ${data.username}</h2>
+        <p>${data.bio}</p>
+
+        <h3>📸 Content Ideas</h3>
+        ${data.ideas.map(i => `<li>${i}</li>`).join("")}
+      `;
+    }
+
+    // ================= WEBSITE =================
+    else if (data.type === "website") {
+      html = `
+        <h2>🌐 ${data.name}</h2>
+        <p>${data.tagline}</p>
+
+        <iframe style="width:100%;height:300px;background:#fff"
+          srcdoc='${data.html.replace(/'/g, "&apos;")}'></iframe>
+      `;
+    }
+
+    // ================= STARTUP =================
+    else if (data.type === "startup") {
+      html = `
+        <h2>🚀 ${data.name}</h2>
+        <p>${data.idea}</p>
+
+        <iframe style="width:100%;height:300px;background:#fff"
+          srcdoc='${data.html.replace(/'/g, "&apos;")}'></iframe>
+      `;
+    }
+
+    // ================= GENERAL =================
+    else if (data.type === "general") {
+      html = `
+        <h2>${data.title}</h2>
+        <p>${data.content}</p>
+      `;
+    }
+
+    result.innerHTML = html;
   }
+
 </script>
 
   
