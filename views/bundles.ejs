@@ -1,50 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- 🔥 THIS -->
-    <title>AI Bundles | Aquiplex</title>
-    <link rel="stylesheet" href="/css/styles.css">
-  </head>
-  <body class="bundle-page">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Builder | Aquiplex</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
 
-    <%- include('partials/nav') %>
+<body class="bundle-page">
 
+<%- include('partials/nav') %>
 
-<h1>✨ AI Bundles</h1>
+<h1>🚀 AI Project Builder</h1>
 
-  <div class="bundle-box">
+<div class="bundle-box">
 
-    <p style="font-size:13px; color:#94a3b8; text-align:center;">
-      Enter any goal — like "start freelancing", "grow Instagram", or "learn coding"
-    </p>
+  <p style="font-size:13px; color:#94a3b8; text-align:center;">
+    Build anything with AI — YouTube, apps, scripts, startups, websites...
+  </p>
 
-    <input id="goalInput" placeholder="e.g. Start a YouTube channel..." />
-    <button onclick="generateBundle()">Generate Bundle</button>
+  <input id="goalInput" placeholder="e.g. Build a YouTube channel..." />
+  <button onclick="generateBundle()">Build Project</button>
 
-    <div class="category-buttons">
-      <button onclick="quick('Start a YouTube channel')">🎥 YouTuber</button>
-      <button onclick="quick('Learn coding fast')">💻 Developer</button>
-      <button onclick="quick('Learn video editing')">🎨 Editor</button>
-    </div>
-
-    <!-- 🔥 MOVE THIS HERE -->
-    <p style="font-size:12px; color:#64748b; text-align:center; margin-top:10px;">
-      Aquiplex will generate a step-by-step AI tool bundle to help you achieve it faster 🚀
-    </p>
-    
+  <div class="category-buttons">
+    <button onclick="quick('Start a YouTube channel')">🎥 YouTuber</button>
+    <button onclick="quick('Write a movie script')">🎬 Movie</button>
+    <button onclick="quick('Build a website')">🌐 Website</button>
   </div>
+
+</div>
+
 <div id="result"></div>
 
-      <!-- FOOTER -->    
-
-           <footer class="footer">    
-      <p>© <%= new Date().getFullYear() %> AQUIPLEX All rights reserved.</p>    
-
-      </footer>    
-
+<footer class="footer">
+  <p>© <%= new Date().getFullYear() %> AQUIPLEX All rights reserved.</p>
+</footer>
 
 <script>
+let userAnswers = null;
+
+// ================= GENERATE =================
 async function generateBundle() {
   const goal = document.getElementById("goalInput").value.trim();
 
@@ -53,218 +48,167 @@ async function generateBundle() {
     return;
   }
 
-  console.log("Sending goal:", goal);
-
-  // 🔄 Loading UI
   document.getElementById("result").innerHTML = `
     <div style="text-align:center; padding:30px;">
-      <div class="spinner"></div>
-      <p style="margin-top:10px; color:#94a3b8;">Generating your AI bundle...</p>
+      <p>🧠 Thinking...</p>
     </div>
   `;
 
   try {
-    const res = await fetch(window.location.origin + "/generate-bundle", {
+    const res = await fetch("/generate-bundle", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ goal })
+      body: JSON.stringify({
+        goal,
+        answers: userAnswers
+      })
     });
 
     const data = await res.json();
-    console.log("Response:", data);
-
-    if (data.error) {
-      document.getElementById("result").innerHTML = `
-        ❌ ${data.error}
-        <br><br>
-        <small>${data.raw || ""}</small>
-      `;
-      return;
-    }
-
-    simulateBuild(data);
+    render(data);
 
   } catch (err) {
-    console.error(err);
-    document.getElementById("result").innerText = "❌ Failed to connect to server";
+    document.getElementById("result").innerText = "❌ Server error";
   }
 }
 
+// ================= QUICK =================
 function quick(text) {
+  userAnswers = null;
   document.getElementById("goalInput").value = text;
   generateBundle();
 }
-  function render(data) {
-    const result = document.getElementById("result");
 
-    // ❌ ERROR HANDLING
-    if (data.error) {
-      result.innerHTML = `❌ ${data.error}<br><small>${data.raw || ""}</small>`;
-      return;
-    }
+// ================= RENDER =================
+function render(data) {
+  const result = document.getElementById("result");
 
-    let html = "";
+  if (data.error) {
+    result.innerHTML = `❌ ${data.error}`;
+    return;
+  }
 
-    // ================= YOUTUBE =================
-    if (data.type === "youtube") {
-      html = `
-        <h2>📺 ${data.channelName}</h2>
-        <p>${data.description}</p>
+  // ================= QUESTIONS =================
+  if (data.type === "questions") {
+    let html = `<h3>🧠 Answer these to build your project:</h3>`;
 
-        <h3>🎯 Niche</h3>
-        <p>${data.niche}</p>
-
-        <h3>🎬 Video Ideas</h3>
-        <ul>
-          ${data.videoIdeas.map(v => `<li>${v}</li>`).join("")}
-        </ul>
+    data.questions.forEach((q, i) => {
+      html += `
+        <p>${q}</p>
+        <input id="q${i}" placeholder="Your answer..." /><br><br>
       `;
-    }
+    });
 
-    // ================= INSTAGRAM =================
-    else if (data.type === "instagram") {
-      html = `
-        <h2>📸 ${data.username}</h2>
-        <p>${data.bio}</p>
+    html += `<button onclick="submitAnswers()">🚀 Continue</button>`;
 
-        <h3>📸 Content Ideas</h3>
-        ${data.ideas.map(i => `<li>${i}</li>`).join("")}
-      `;
-    }
-      // ================= VIDEO EDITING =================
-      else if (data.type === "editing") {
-        html = `
-          <h2>🎬 ${data.title}</h2>
+    result.innerHTML = html;
+    return;
+  }
 
-          <h3>🛠 Tools</h3>
-          <ul>
-            ${data.tools.map(t => `<li>${t}</li>`).join("")}
-          </ul>
+  let html = "";
 
-          <h3>🚀 Steps</h3>
-          <ul>
-            ${data.steps.map(s => `<li>${s}</li>`).join("")}
-          </ul>
-        `;
-      }
+  // ================= YOUTUBE =================
+  if (data.type === "youtube") {
+    html = `
+      <h2>📺 ${data.channelName}</h2>
+      <p>${data.description}</p>
 
-    // ================= WEBSITE =================
-    else if (data.type === "website") {
-      html = `
-        <h2>🌐 ${data.name}</h2>
-        <p>${data.tagline}</p>
-
-        <iframe style="width:100%;height:300px;background:#fff"
-          srcdoc='${data.html.replace(/'/g, "&apos;")}'></iframe>
-      `;
-    }
-
-    // ================= STARTUP =================
-    else if (data.type === "startup") {
-      html = `
-        <h2>🚀 ${data.name}</h2>
-        <p>${data.idea}</p>
-
-        <iframe style="width:100%;height:300px;background:#fff"
-          srcdoc='${data.html.replace(/'/g, "&apos;")}'></iframe>
-      `;
-    }
-
-    // ================= GENERAL =================
-    else if (data.type === "general") {
-      html = `
-        <h2>${data.title}</h2>
-        <p>${data.content}</p>
-      `;
-    }
-
-    result.innerHTML = html + `
-      <br><br>
-      <button onclick="executeAction('${data.type}')">
-        🚀 Execute
-      </button>
+      <h3>🎬 Videos</h3>
+      ${(data.videos || []).map(v => `
+        <div style="margin-bottom:15px;">
+          <b>${v.title}</b><br>
+          <button onclick="copyText(\`${v.title}\`)">📋 Copy Title</button>
+          <button onclick="copyText(\`${v.script}\`)">📋 Copy Script</button>
+          <button onclick="copyText(\`${v.thumbnailText}\`)">📋 Thumbnail</button>
+        </div>
+      `).join("")}
     `;
   }
-  async function simulateBuild(data) {
-    const result = document.getElementById("result");
 
-    // Clear previous result
-    result.innerHTML = "";
+  // ================= INSTAGRAM =================
+  else if (data.type === "instagram") {
+    html = `
+      <h2>📸 ${data.username}</h2>
+      <p>${data.bio}</p>
 
-    function wait(ms) {
-      return new Promise(resolve => setTimeout(resolve, ms));
-    }
-
-    // Step 1
-    result.innerHTML = "🧠 Understanding your goal...";
-    await wait(1000);
-
-    // Step 2
-    result.innerHTML = "⚡ Building your project...";
-    await wait(1000);
-
-    // Step 3
-    result.innerHTML = "🚀 Finalizing...";
-    await wait(1000);
-
-    // Final result
-    render(data);
+      ${(data.posts || []).map(p => `
+        <div style="margin-bottom:15px;">
+          <b>${p.idea}</b><br>
+          <button onclick="copyText(\`${p.caption}\`)">📋 Copy Caption</button>
+        </div>
+      `).join("")}
+    `;
   }
-  function executeAction(type) {
-    if (type === "youtube") {
-      window.open("https://studio.youtube.com", "_blank");
-    }
 
-    else if (type === "instagram") {
-      window.open("https://instagram.com", "_blank");
-    }
+  // ================= EDITING =================
+  else if (data.type === "editing") {
+    html = `
+      <h2>🎬 ${data.title}</h2>
 
-    else if (type === "editing") {
-      window.open("https://www.capcut.com", "_blank");
-    }
+      <h3>🛠 Tools</h3>
+      <ul>${(data.tools || []).map(t => `<li>${t}</li>`).join("")}</ul>
 
-    else if (type === "website") {
-      alert("⚡ Website ready — download feature coming next!");
-    }
-
-    else {
-      alert("⚡ Action coming soon!");
-    }
+      <h3>🚀 Steps</h3>
+      <ul>${(data.steps || []).map(s => `<li>${s}</li>`).join("")}</ul>
+    `;
   }
+
+  // ================= WEBSITE =================
+  else if (data.type === "website") {
+    html = `
+      <h2>🌐 ${data.name}</h2>
+      <p>${data.tagline}</p>
+
+      <button onclick="copyText(\`${data.html}\`)">📋 Copy Code</button>
+
+      <iframe style="width:100%;height:300px;background:#fff"
+        srcdoc='${data.html.replace(/'/g, "&apos;")}'></iframe>
+    `;
+  }
+
+  // ================= GENERAL =================
+  else {
+    html = `
+      <h2>${data.title}</h2>
+      <p>${data.description || data.content}</p>
+    `;
+  }
+
+  result.innerHTML = html + `
+    <br><br>
+    <button onclick="executeAction('${data.type}')">🚀 Execute</button>
+  `;
+}
+
+// ================= SUBMIT ANSWERS =================
+function submitAnswers() {
+  const inputs = document.querySelectorAll("input[id^='q']");
+  userAnswers = [];
+
+  inputs.forEach(i => userAnswers.push(i.value));
+
+  generateBundle();
+}
+
+// ================= COPY =================
+function copyText(text) {
+  navigator.clipboard.writeText(text);
+  alert("📋 Copied!");
+}
+
+// ================= EXECUTE =================
+function executeAction(type) {
+  if (type === "youtube") {
+    window.open("https://studio.youtube.com", "_blank");
+  } else if (type === "instagram") {
+    window.open("https://instagram.com", "_blank");
+  } else if (type === "editing") {
+    window.open("https://www.capcut.com", "_blank");
+  } else {
+    alert("⚡ Action coming soon!");
+  }
+}
 </script>
 
-  
-    <script>
-    function openTool(url) {
-      window.open(url, "_blank");
-    }
-
-      async function shareBundle(data){
-        try {
-          const res = await fetch("/bundle/save", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify(data)
-          });
-
-          const result = await res.json();
-
-          if(result.success){
-            const url = window.location.origin + "/bundle/" + result.id;
-
-            navigator.clipboard.writeText(url);
-            alert("🔗 Link copied!");
-          }
-
-        } catch(err){
-          alert("Error sharing bundle");
-        }
-      }
-    </script>
-
-
-  
 </body>
 </html>
