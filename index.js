@@ -217,6 +217,7 @@ app.post("/generate-bundle", async (req, res) => {
   let type = "general";
 
   if (g.includes("youtube")) type = "youtube";
+    else if (g.includes("video") || g.includes("editing")) type = "editing";
   else if (g.includes("instagram")) type = "instagram";
   else if (g.includes("website")) type = "website";
   else if (g.includes("startup")) type = "startup";
@@ -239,6 +240,21 @@ You are an AI that ONLY returns valid JSON.
 Return ONLY JSON.
 `;
   }
+    // ================= VIDEO EDITING =================
+    else if (type === "editing") {
+      prompt = `
+    You are an AI that ONLY returns valid JSON.
+
+    {
+     "type":"editing",
+     "title":"Learn Video Editing",
+     "tools":["CapCut","Premiere Pro","DaVinci Resolve"],
+     "steps":["","","",""]
+    }
+
+    Return ONLY JSON.
+    `;
+    }
 
   // ================= INSTAGRAM =================
   else if (type === "instagram") {

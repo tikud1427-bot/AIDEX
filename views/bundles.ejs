@@ -82,7 +82,7 @@ async function generateBundle() {
       return;
     }
 
-    render(data);
+    simulateBuild(data);
 
   } catch (err) {
     console.error(err);
@@ -131,6 +131,22 @@ function quick(text) {
         ${data.ideas.map(i => `<li>${i}</li>`).join("")}
       `;
     }
+      // ================= VIDEO EDITING =================
+      else if (data.type === "editing") {
+        html = `
+          <h2>🎬 ${data.title}</h2>
+
+          <h3>🛠 Tools</h3>
+          <ul>
+            ${data.tools.map(t => `<li>${t}</li>`).join("")}
+          </ul>
+
+          <h3>🚀 Steps</h3>
+          <ul>
+            ${data.steps.map(s => `<li>${s}</li>`).join("")}
+          </ul>
+        `;
+      }
 
     // ================= WEBSITE =================
     else if (data.type === "website") {
@@ -162,9 +178,59 @@ function quick(text) {
       `;
     }
 
-    result.innerHTML = html;
+    result.innerHTML = html + `
+      <br><br>
+      <button onclick="executeAction('${data.type}')">
+        🚀 Execute
+      </button>
+    `;
   }
+  async function simulateBuild(data) {
+    const result = document.getElementById("result");
 
+    // Clear previous result
+    result.innerHTML = "";
+
+    function wait(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    // Step 1
+    result.innerHTML = "🧠 Understanding your goal...";
+    await wait(1000);
+
+    // Step 2
+    result.innerHTML = "⚡ Building your project...";
+    await wait(1000);
+
+    // Step 3
+    result.innerHTML = "🚀 Finalizing...";
+    await wait(1000);
+
+    // Final result
+    render(data);
+  }
+  function executeAction(type) {
+    if (type === "youtube") {
+      window.open("https://studio.youtube.com", "_blank");
+    }
+
+    else if (type === "instagram") {
+      window.open("https://instagram.com", "_blank");
+    }
+
+    else if (type === "editing") {
+      window.open("https://www.capcut.com", "_blank");
+    }
+
+    else if (type === "website") {
+      alert("⚡ Website ready — download feature coming next!");
+    }
+
+    else {
+      alert("⚡ Action coming soon!");
+    }
+  }
 </script>
 
   
