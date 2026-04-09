@@ -207,9 +207,9 @@ app.get("/bundles", (req, res) => {
 });
 //
 // ================= GENERATE AI BUILDER =================
-
 app.post("/generate-bundle", async (req, res) => {
   const { goal, answers } = req.body;
+
   if (!answers) {
     return res.json({
       type: "questions",
@@ -224,113 +224,47 @@ app.post("/generate-bundle", async (req, res) => {
 
   if (!goal) return res.json({ error: "No goal provided" });
 
-  const g = goal.toLowerCase();
+  // 🔥 NEW MASTER PROMPT
+  let prompt = `
+You are AQUIPLEX AI — an advanced AI project builder.
 
-  let type = "general";
+Your job is NOT to give steps.
+Your job is to CREATE a REAL project.
 
-  if (g.includes("youtube")) type = "youtube";
-    else if (g.includes("video") || g.includes("editing")) type = "editing";
-  else if (g.includes("instagram")) type = "instagram";
-  else if (g.includes("website")) type = "website";
-  else if (g.includes("startup")) type = "startup";
+Return ONLY valid JSON.
 
-  let prompt = "";
-
-  // ================= YOUTUBE =================
-  if (type === "youtube") {
-    prompt = `
-You are an AI that ONLY returns valid JSON.
+Structure:
 
 {
- "type":"youtube",
- "niche":"",
- "channelName":"",
- "description":"",
- "videoIdeas":["","",""]
+  "type": "website | youtube | app | startup | video",
+  "project": {
+    "name": "",
+    "description": "",
+    "progress": 10,
+    "status": "building"
+  },
+  "files": [
+    { "name": "", "content": "" }
+  ],
+  "preview": "",
+  "steps": [
+    { "title": "", "description": "", "status": "pending" }
+  ],
+  "actions": [
+    { "label": "", "type": "iframe | redirect | code", "url": "" }
+  ]
 }
+
+Rules:
+- If user asks for website → generate full HTML
+- If YouTube → generate scripts, titles, thumbnails
+- Always include preview (HTML if possible)
+- Always include at least 1 file
+- Always include actions
+- Make it realistic and useful
 
 Return ONLY JSON.
 `;
-  }
-    // ================= VIDEO EDITING =================
-    else if (type === "editing") {
-      prompt = `
-    You are an AI that ONLY returns valid JSON.
-
-    {
-     "type":"editing",
-     "title":"Learn Video Editing",
-     "tools":["CapCut","Premiere Pro","DaVinci Resolve"],
-     "steps":["","","",""]
-    }
-
-    Return ONLY JSON.
-    `;
-    }
-
-  // ================= INSTAGRAM =================
-  else if (type === "instagram") {
-    prompt = `
-You are an AI that ONLY returns valid JSON.
-
-{
- "type":"instagram",
- "username":"",
- "bio":"",
- "ideas":["","",""]
-}
-
-Return ONLY JSON.
-`;
-  }
-
-  // ================= WEBSITE =================
-  else if (type === "website") {
-    prompt = `
-You are an AI that ONLY returns valid JSON.
-
-{
- "type":"website",
- "name":"",
- "tagline":"",
- "html":"<html><body><h1>Hello</h1></body></html>"
-}
-
-Return ONLY JSON.
-`;
-  }
-
-  // ================= STARTUP =================
-  else if (type === "startup") {
-    prompt = `
-You are an AI that ONLY returns valid JSON.
-
-{
- "type":"startup",
- "name":"",
- "idea":"",
- "tagline":"",
- "html":"<html><body><h1>Startup</h1></body></html>"
-}
-
-Return ONLY JSON.
-`;
-  }
-
-  // ================= GENERAL =================
-  else {
-    prompt = `
-You are an AI that ONLY returns valid JSON.
-
-{
- "type":"general",
- "title":"",
- "content":""
-}
-
-Return ONLY JSON.
-`;
-  }
 
   try {
     const response = await axios.post(
@@ -339,7 +273,7 @@ Return ONLY JSON.
         model: "llama-3.1-8b-instant",
         messages: [
           { role: "system", content: prompt },
-          { role: "user", content: goal }
+          { role: "user", content: `Build this project: ${goal}` }
         ]
       },
       {
