@@ -285,7 +285,7 @@ Return ONLY JSON.
     );
 
     const text = response.data.choices[0].message.content;
-
+    console.log("AI RAW RESPONSE:\n", text); // 🔥 ADD THIS HERE
     // ✅ CLEAN TEXT
     let cleanText = text
       .replace(/```json/g, "")
@@ -296,11 +296,29 @@ Return ONLY JSON.
     let parsed;
 
     try {
-      const match = cleanText.match(/\{[\s\S]*\}/);
+      let parsed;
 
-      if (!match) {
+      try {
+        // 🔥 Remove anything before/after JSON
+        const firstBrace = cleanText.indexOf("{");
+        const lastBrace = cleanText.lastIndexOf("}");
+
+        if (firstBrace === -1 || lastBrace === -1) {
+          return res.json({
+            error: "No JSON found",
+            raw: cleanText
+          });
+        }
+
+        const jsonString = cleanText.substring(firstBrace, lastBrace + 1);
+
+        parsed = JSON.parse(jsonString);
+
+      } catch (err) {
+        console.log("RAW AI:", cleanText);
+
         return res.json({
-          error: "No JSON found",
+          error: "Parse error",
           raw: cleanText
         });
       }
