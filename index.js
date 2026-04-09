@@ -270,7 +270,7 @@ Return ONLY JSON.
     const response = await axios.post(
       "https://api.groq.com/openai/v1/chat/completions",
       {
-        model: "llama-3.1-70b-versatile",
+        model: "llama3-70b-8192",
         messages: [
           { role: "system", content: prompt },
           { role: "user", content: `Build this project: ${goal}` }
@@ -280,7 +280,8 @@ Return ONLY JSON.
         headers: {
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
           "Content-Type": "application/json"
-        }
+        },
+        timeout: 20000
       }
     );
 
@@ -343,7 +344,7 @@ Return ONLY JSON.
     return res.json(parsed);
 
     } catch (err) {
-      console.error("AI ERROR:", err.message);
+      console.error("AI FULL ERROR:", err.response?.data || err.message);
       return res.json({ error: "AI failed" });
     }
 
