@@ -291,39 +291,24 @@ Return ONLY JSON.
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
-
+    //
     // ✅ PARSE JSON
     let parsed;
 
     try {
-      let parsed;
+      const firstBrace = cleanText.indexOf("{");
+      const lastBrace = cleanText.lastIndexOf("}");
 
-      try {
-        // 🔥 Remove anything before/after JSON
-        const firstBrace = cleanText.indexOf("{");
-        const lastBrace = cleanText.lastIndexOf("}");
-
-        if (firstBrace === -1 || lastBrace === -1) {
-          return res.json({
-            error: "No JSON found",
-            raw: cleanText
-          });
-        }
-
-        const jsonString = cleanText.substring(firstBrace, lastBrace + 1);
-
-        parsed = JSON.parse(jsonString);
-
-      } catch (err) {
-        console.log("RAW AI:", cleanText);
-
+      if (firstBrace === -1 || lastBrace === -1) {
         return res.json({
-          error: "Parse error",
+          error: "No JSON found",
           raw: cleanText
         });
       }
 
-      parsed = JSON.parse(match[0]);
+      const jsonString = cleanText.substring(firstBrace, lastBrace + 1);
+
+      parsed = JSON.parse(jsonString);
 
     } catch (err) {
       console.log("RAW AI:", cleanText);
@@ -334,13 +319,16 @@ Return ONLY JSON.
       });
     }
 
+    // ✅ FINAL RESPONSE
     return res.json(parsed);
 
-  } catch (err) {
-    console.error("AI ERROR:", err.message);
-    return res.json({ error: "AI failed" });
-  }
-});
+    } catch (err) {
+      console.error("AI ERROR:", err.message);
+      return res.json({ error: "AI failed" });
+    }
+
+    }); // ✅ VERY IMPORTANT — closes /generate-bundle route
+  
 // TEST AI (DEBUG ROUTE)
 app.get("/test-ai", async (req, res) => {
   try {
