@@ -207,8 +207,20 @@ app.get("/bundles", (req, res) => {
 });
 //
 // ================= GENERATE AI BUILDER =================
+
 app.post("/generate-bundle", async (req, res) => {
-  const { goal } = req.body;
+  const { goal, answers } = req.body;
+  if (!answers) {
+    return res.json({
+      type: "questions",
+      questions: [
+        "What type of project do you want?",
+        "Describe your idea",
+        "Any specific style or tone?",
+        "How detailed should it be?"
+      ]
+    });
+  }
 
   if (!goal) return res.json({ error: "No goal provided" });
 
