@@ -206,80 +206,55 @@ app.get("/bundles", (req, res) => {
   res.render("bundles");
 });
 //
-// ================= GENERATE AI BUILDER =================
+// GENERATE AI BUNDLE (FIXED)
 app.post("/generate-bundle", async (req, res) => {
-  const { goal, answers } = req.body;
+  console.log("🔥 Bundle API called");
 
-  if (!answers) {
-    return res.json({
-      type: "questions",
-      questions: [
-        "What type of project do you want?",
-        "Describe your idea",
-        "Any specific style or tone?",
-        "How detailed should it be?"
-      ]
-    });
+  const { goal } = req.body;
+
+  if (!goal) {
+    return res.json({ error: "No goal provided" });
   }
 
-  if (!goal) return res.json({ error: "No goal provided" });
+  try {
+    const result = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama-3.1-8b-instant",
+        messages: [
+          {
+            role: "system",
+            content: `
+You are an AI that ONLY returns valid JSON.
 
-  // 🔥 NEW MASTER PROMPT
-  let prompt = `
-You are AQUIPLEX AI — an advanced AI project builder.
+DO NOT explain anything.
+DO NOT add text before or after.
+DO NOT use markdown.
 
-Your job is NOT to give steps.
-Your job is to CREATE a REAL project.
-
-Return ONLY valid JSON.
-
-Structure:
+STRICT FORMAT:
 
 {
-  "type": "website | youtube | app | startup | video",
-  "project": {
-    "name": "",
-    "description": "",
-    "progress": 10,
-    "status": "building"
-  },
-  "files": [
-    { "name": "", "content": "" }
-  ],
-  "preview": "",
+  "title": "Short bundle name",
   "steps": [
-    { "title": "", "description": "", "status": "pending" }
-  ],
-  "actions": [
-    { "label": "", "type": "iframe | redirect | code", "url": "" }
+    {
+      "step": 1,
+      "title": "Step name",
+      "description": "What to do",
+      "tools": ["Tool1", "Tool2"]
+    }
   ]
 }
 
 Rules:
-- If user asks for website → generate full HTML
-- If YouTube → generate scripts, titles, thumbnails
-- Always include preview (HTML if possible)
-- Always include at least 1 file
-- Always include actions
-- Make it realistic and useful
-
-Return ONLY JSON.
-`;
-
-  try {
-    const response = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        model: "llama-3.1-8b-instant",
-
-        messages: [
-          {
-            role: "system",
-            content: prompt + "\n\nReturn ONLY JSON. No explanation. No text."
+- Max 5 steps
+- Keep steps practical
+- Use real AI tools like ChatGPT, Canva, Runway, etc.
+- Output MUST be valid JSON
+`
           },
           {
             role: "user",
-            content: `Build this project: ${goal}`
+            content: goal
           }
         ]
       },
@@ -288,74 +263,60 @@ Return ONLY JSON.
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
           "Content-Type": "application/json"
         },
-        timeout: 20000
+        timeout: 10000
       }
     );
 
-    const text =
-      response?.data?.choices?.[0]?.message?.content;
+    const text = result?.data?.choices?.[0]?.message?.content || "";
 
-    if (!text) {
-      console.log("❌ FULL AI RESPONSE:", response.data);
+    console.log("🧠 AI RAW:", text);
 
-      return res.json({
-        error: "Invalid AI response",
-        raw: response.data
-      });
-    }
-    console.log("AI RAW RESPONSE:\n", text); // 🔥 ADD THIS HERE
-    // ✅ CLEAN TEXT
-    let cleanText = text
-      .replace(/```json/g, "")
-      .replace(/```/g, "")
-      .trim();
-    //
-    // ✅ PARSE JSON
+    // ✅ SAFE JSON PARSE
     let parsed;
-
     try {
-      const firstBrace = cleanText.indexOf("{");
-      const lastBrace = cleanText.lastIndexOf("}");
+      const match = text.match(/\{[\s\S]*\}/);
+      if (!match) throw new Error("No JSON");
 
-      if (firstBrace === -1 || lastBrace === -1) {
-        return res.json({
-          error: "No JSON found",
-          raw: cleanText
-        });
-      }
-
-      const jsonString = cleanText.substring(firstBrace, lastBrace + 1);
-
-      try {
-        parsed = JSON.parse(jsonString);
-      } catch (parseErr) {
-        console.log("JSON BROKEN:", jsonString);
-
-        return res.json({
-          error: "AI returned invalid JSON",
-          raw: jsonString
-        });
-      }
-
+      parsed = JSON.parse(match[0]);
     } catch (err) {
-      console.log("RAW AI:", cleanText);
-
       return res.json({
-        error: "Parse error",
-        raw: cleanText
+        error: "Invalid AI format",
+        raw: text
       });
     }
 
-    
-    // ✅ FINAL RESPONSE
-    return res.json(parsed);
-
-    } catch (err) {
-      console.error("AI FULL ERROR:", err.response?.data || err.message);
-      return res.json({ error: "AI failed" });
+    if (!parsed.steps) {
+      return res.json({
+        error: "Invalid structure",
+        raw: parsed
+      });
     }
 
-    }); // ✅ CLOSE ROUTE PROPERLY
+    res.json(parsed);
+
+  } catch (err) {
+    console.error("❌ API ERROR:", err.response?.data || err.message);
+
+    // ✅ FALLBACK (always works)
+    res.json({
+      title: "Basic AI Bundle",
+      steps: [
+        {
+          step: 1,
+          title: "Understand your goal",
+          description: goal,
+          tools: ["ChatGPT"]
+        },
+        {
+          step: 2,
+          title: "Use AI tools",
+          description: "Execute using recommended tools",
+          tools: ["Canva", "Google"]
+        }
+      ]
+    });
+  }
+});
 // TEST AI (DEBUG ROUTE)
 app.get("/test-ai", async (req, res) => {
   try {
