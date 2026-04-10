@@ -1,45 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>AI Builder | Aquiplex</title>
-  <link rel="stylesheet" href="/css/styles.css">
-</head>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"> <!-- 🔥 THIS -->
+    <title>AI Bundles | Aquiplex</title>
+    <link rel="stylesheet" href="/css/styles.css">
+  </head>
+  <body class="bundle-page">
 
-<body class="bundle-page">
+    <%- include('partials/nav') %>
 
-<%- include('partials/nav') %>
 
-<h1>🚀 AI Project Builder</h1>
+<h1>✨ AI Bundles</h1>
 
-<div class="bundle-box">
+  <div class="bundle-box">
 
-  <p style="font-size:13px; color:#94a3b8; text-align:center;">
-    Build anything with AI — YouTube, apps, scripts, startups, websites...
-  </p>
+    <p style="font-size:13px; color:#94a3b8; text-align:center;">
+      Enter any goal — like "start freelancing", "grow Instagram", or "learn coding"
+    </p>
 
-  <input id="goalInput" placeholder="e.g. Build a YouTube channel..." />
-  <button onclick="generateBundle()">Build Project</button>
+    <input id="goalInput" placeholder="e.g. Start a YouTube channel..." />
+    <button onclick="generateBundle()">Generate Bundle</button>
 
-  <div class="category-buttons">
-    <button onclick="quick('Start a YouTube channel')">🎥 YouTuber</button>
-    <button onclick="quick('Write a movie script')">🎬 Movie</button>
-    <button onclick="quick('Build a website')">🌐 Website</button>
+    <div class="category-buttons">
+      <button onclick="quick('Start a YouTube channel')">🎥 YouTuber</button>
+      <button onclick="quick('Learn coding fast')">💻 Developer</button>
+      <button onclick="quick('Learn video editing')">🎨 Editor</button>
+    </div>
+
+    <!-- 🔥 MOVE THIS HERE -->
+    <p style="font-size:12px; color:#64748b; text-align:center; margin-top:10px;">
+      Aquiplex will generate a step-by-step AI tool bundle to help you achieve it faster 🚀
+    </p>
+
   </div>
-
-</div>
-
 <div id="result"></div>
 
-<footer class="footer">
-  <p>© <%= new Date().getFullYear() %> AQUIPLEX All rights reserved.</p>
-</footer>
+      <!-- FOOTER -->    
+
+           <footer class="footer">    
+      <p>© <%= new Date().getFullYear() %> AQUIPLEX All rights reserved.</p>    
+
+      </footer>    
+
 
 <script>
-let userAnswers = null;
-
-// ================= GENERATE =================
 async function generateBundle() {
   const goal = document.getElementById("goalInput").value.trim();
 
@@ -48,167 +53,175 @@ async function generateBundle() {
     return;
   }
 
+  console.log("Sending goal:", goal);
+
+  // 🔄 Loading UI
   document.getElementById("result").innerHTML = `
     <div style="text-align:center; padding:30px;">
-      <p>🧠 Thinking...</p>
+      <div class="spinner"></div>
+      <p style="margin-top:10px; color:#94a3b8;">Generating your AI bundle...</p>
     </div>
   `;
 
   try {
-    const res = await fetch("/generate-bundle", {
+    const res = await fetch(window.location.origin + "/generate-bundle", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        goal,
-        answers: userAnswers
-      })
+      body: JSON.stringify({ goal })
     });
 
     const data = await res.json();
+    console.log("Response:", data);
+
+    if (data.error) {
+      document.getElementById("result").innerHTML = `
+        ❌ ${data.error}
+        <br><br>
+        <small>${data.raw || ""}</small>
+      `;
+      return;
+    }
+
     render(data);
 
   } catch (err) {
-    document.getElementById("result").innerText = "❌ Server error";
+    console.error(err);
+    document.getElementById("result").innerText = "❌ Failed to connect to server";
   }
 }
 
-// ================= QUICK =================
 function quick(text) {
-  userAnswers = null;
   document.getElementById("goalInput").value = text;
   generateBundle();
 }
 
-// ================= RENDER =================
 function render(data) {
-  const result = document.getElementById("result");
-
-  if (data.error) {
-    result.innerHTML = `❌ ${data.error}`;
+  if (!data.steps || !Array.isArray(data.steps)) {
+    document.getElementById("result").innerText = "❌ Invalid bundle format";
     return;
   }
 
-  // ================= QUESTIONS =================
-  if (data.type === "questions") {
-    let html = `<h3>🧠 Answer these to build your project:</h3>`;
+  let html = `
+    <div class="bundle-header">
+      <h2>${data.title || "AI Bundle"}</h2>
 
-    data.questions.forEach((q, i) => {
-      html += `
-        <p>${q}</p>
-        <input id="q${i}" placeholder="Your answer..." /><br><br>
-      `;
-    });
+      <button onclick='saveBundle(${JSON.stringify(data).replace(/"/g, '&quot;')})' class="save-btn">
+        💾 Save Bundle
+      </button>
 
-    html += `<button onclick="submitAnswers()">🚀 Continue</button>`;
-
-    result.innerHTML = html;
-    return;
-  }
-
-  let html = "";
-
-  // ================= YOUTUBE =================
-  if (data.type === "youtube") {
-    html = `
-      <h2>📺 ${data.channelName}</h2>
-      <p>${data.description}</p>
-
-      <h3>🎬 Videos</h3>
-      ${(data.videos || []).map(v => `
-        <div style="margin-bottom:15px;">
-          <b>${v.title}</b><br>
-          <button onclick="copyText(\`${v.title}\`)">📋 Copy Title</button>
-          <button onclick="copyText(\`${v.script}\`)">📋 Copy Script</button>
-          <button onclick="copyText(\`${v.thumbnailText}\`)">📋 Thumbnail</button>
-        </div>
-      `).join("")}
-    `;
-  }
-
-  // ================= INSTAGRAM =================
-  else if (data.type === "instagram") {
-    html = `
-      <h2>📸 ${data.username}</h2>
-      <p>${data.bio}</p>
-
-      ${(data.posts || []).map(p => `
-        <div style="margin-bottom:15px;">
-          <b>${p.idea}</b><br>
-          <button onclick="copyText(\`${p.caption}\`)">📋 Copy Caption</button>
-        </div>
-      `).join("")}
-    `;
-  }
-
-  // ================= EDITING =================
-  else if (data.type === "editing") {
-    html = `
-      <h2>🎬 ${data.title}</h2>
-
-      <h3>🛠 Tools</h3>
-      <ul>${(data.tools || []).map(t => `<li>${t}</li>`).join("")}</ul>
-
-      <h3>🚀 Steps</h3>
-      <ul>${(data.steps || []).map(s => `<li>${s}</li>`).join("")}</ul>
-    `;
-  }
-
-  // ================= WEBSITE =================
-  else if (data.type === "website") {
-    html = `
-      <h2>🌐 ${data.name}</h2>
-      <p>${data.tagline}</p>
-
-      <button onclick="copyText(\`${data.html}\`)">📋 Copy Code</button>
-
-      <iframe style="width:100%;height:300px;background:#fff"
-        srcdoc='${data.html.replace(/'/g, "&apos;")}'></iframe>
-    `;
-  }
-
-  // ================= GENERAL =================
-  else {
-    html = `
-      <h2>${data.title}</h2>
-      <p>${data.description || data.content}</p>
-    `;
-  }
-
-  result.innerHTML = html + `
-    <br><br>
-    <button onclick="executeAction('${data.type}')">🚀 Execute</button>
+      <button onclick='shareBundle(${JSON.stringify(data).replace(/"/g, '&quot;')})' class="share-btn">
+        🔗 Share
+      </button>
+    </div>
   `;
+
+  data.steps.forEach(step => {
+    html += `
+      <div class="step">
+        <h3>Step ${step.step || ""}: ${step.title || ""}</h3>
+        <p>${step.description || ""}</p>
+
+        <div class="tools">
+          ${(step.tools || []).map(t => {
+            let name, url;
+
+            if (typeof t === "object") {
+              name = t.name;
+              url = t.url;
+            } else {
+              name = t;
+              const links = {
+                "PyCharm": "https://www.jetbrains.com/pycharm/",
+                "VS Code": "https://code.visualstudio.com/",
+                "Spyder": "https://www.spyder-ide.org/",
+                "W3Schools": "https://www.w3schools.com/",
+                "Real Python": "https://realpython.com/"
+              };
+              url = links[name] || `https://www.google.com/search?q=${encodeURIComponent(name)}`;
+            }
+
+            return `
+              <div class="tool-card-mini recommended">
+                <img 
+                  src="https://www.google.com/s2/favicons?sz=64&domain_url=${url}" 
+                  onerror="this.src='/images/default-tool.png'"
+                />
+
+                <div class="tool-info">
+                  <span>${name}</span>
+                  <button class="use-btn" onclick="openTool('${url}')">Use</button>
+                </div>
+              </div>
+            `;
+          }).join("")}
+        </div>
+
+      </div>
+    `;
+  });
+  document.getElementById("result").innerHTML = html;
 }
 
-// ================= SUBMIT ANSWERS =================
-function submitAnswers() {
-  const inputs = document.querySelectorAll("input[id^='q']");
-  userAnswers = [];
+  async function saveBundle(data) {
+    try {
+      const res = await fetch("/bundle/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          title: data.title,
+          steps: data.steps
+        })
+      });
 
-  inputs.forEach(i => userAnswers.push(i.value));
+      const result = await res.json();
 
-  generateBundle();
-}
+      if (result.success) {
+        alert("✅ Bundle saved to workspace!");
+      } else {
+        alert("❌ Failed to save bundle");
+      }
 
-// ================= COPY =================
-function copyText(text) {
-  navigator.clipboard.writeText(text);
-  alert("📋 Copied!");
-}
-
-// ================= EXECUTE =================
-function executeAction(type) {
-  if (type === "youtube") {
-    window.open("https://studio.youtube.com", "_blank");
-  } else if (type === "instagram") {
-    window.open("https://instagram.com", "_blank");
-  } else if (type === "editing") {
-    window.open("https://www.capcut.com", "_blank");
-  } else {
-    alert("⚡ Action coming soon!");
+    } catch (err) {
+      console.error(err);
+      alert("❌ Error saving bundle");
+    }
   }
-}
 </script>
+
+
+    <script>
+    function openTool(url) {
+      window.open(url, "_blank");
+    }
+
+      async function shareBundle(data){
+        try {
+          const res = await fetch("/bundle/save", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(data)
+          });
+
+          const result = await res.json();
+
+          if(result.success){
+            const url = window.location.origin + "/bundle/" + result.id;
+
+            navigator.clipboard.writeText(url);
+            alert("🔗 Link copied!");
+          }
+
+        } catch(err){
+          alert("Error sharing bundle");
+        }
+      }
+    </script>
+
+
 
 </body>
 </html>
