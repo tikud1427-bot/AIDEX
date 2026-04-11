@@ -200,6 +200,17 @@ app.get("/home", async (req, res) => {
     res.send("Error loading home");
   }
 });
+//Tool page
+app.get("/tools", async (req, res) => {
+  try {
+    const tools = await Tool.find().lean();
+    res.render("tools", { tools });
+  } catch (err) {
+    console.error(err);
+    res.send("Error loading tools");
+  }
+});
+
 
 // AI BUNDLES PAGE
 app.get("/bundles", (req, res) => {
@@ -290,11 +301,7 @@ Rules:
       });
     }
 
-    res.json(parsed);
-
-  
-
-    res.json(parsed);
+    return res.json(parsed);
 
     } catch (err) {
       console.error("❌ API ERROR:", err.message);
@@ -590,7 +597,7 @@ app.post("/chat", async (req, res) => {
     }
 
     // 🎨 IMAGE MODE
-    if (mode === "image") {
+    else if (mode === "image") {
       const imageUrl =
         "https://image.pollinations.ai/prompt/" +
         encodeURIComponent(message);
@@ -670,35 +677,7 @@ app.post("/chat", async (req, res) => {
     res.json({ reply: "⚠️ AI failed" });
   }
 });
-app.post("/bundle/save", requireLogin, async (req, res) => {
-  try {
-    const { title, steps } = req.body;
 
-    if (!title || !steps) {
-      return res.status(400).json({ error: "Invalid bundle" });
-    }
-
-    // 🔥 CREATE PROGRESS ARRAY (ONLY ONCE)
-    const progress = steps.map(s => ({
-      step: s.step,
-      status: "pending"
-    }));
-
-    // 🔥 SAVE WITH PROGRESS
-    const saved = await new Bundle({
-      userId: req.session.userId,
-      title,
-      steps,
-      progress
-    }).save();
-
-    res.json({ success: true, id: saved._id });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to save bundle" });
-  }
-}); //
 app.post("/bundle/progress/:id", requireLogin, async (req, res) => {
   try {
     const { step, status } = req.body;
