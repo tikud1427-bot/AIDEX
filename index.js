@@ -84,6 +84,7 @@ console.log("✅ Tools synced");
 // ================= MIDDLEWARE =================
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
@@ -529,14 +530,22 @@ app.get("/chatbot", requireLogin, (req, res) => {
 });
 // ===============catch (err) {BOT =================
 app.post("/chat", async (req, res) => {
-  const { message, history, mode, chatId } = req.body;
+  console.log("📩 BODY:", req.body); // ✅ ADD THIS LINE HERE
+  let { message, history, mode, chatId } = req.body;
+
+  // ✅ FIX HISTORY PARSE
+  try {
+    history = JSON.parse(history || "[]");
+  } catch {
+    history = [];
+  }
 
   if (!message) {
     return res.json({ reply: "⚠️ Message required" });
   }
 
   try {
-    let messages = (history || []).map(m => ({
+    let messages = history.map(m => ({
       role: m.role === "bot" ? "assistant" : m.role,
       content: m.content
     }));

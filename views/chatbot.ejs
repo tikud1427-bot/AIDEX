@@ -233,26 +233,18 @@ async function send() {
   chat.scrollTop = chat.scrollHeight;
 
   try {
-    const formData = new FormData();
-
-    formData.append("message", message);
-    formData.append("chatId", currentChatId);
-    formData.append("mode", mode);
-
-    // send history (IMPORTANT)
-    formData.append("history", JSON.stringify(messages));
-
-    // get file
-    const fileInput = document.getElementById("fileUpload");
-    if (fileInput.files[0]) {
-      formData.append("file", fileInput.files[0]);
-    }
-
     const res = await fetch("/chat", {
       method: "POST",
-      body: formData
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        message,
+        chatId: currentChatId,
+        mode,
+        history: messages
+      })
     });
-
 
     const data = await res.json();
     document.getElementById("loading")?.remove();
