@@ -33,9 +33,22 @@
           <div class="bundle-card" id="bundle-<%= bundle._id %>">
             <h3><%= bundle.title %></h3>
 
+            <%
+              const completed = bundle.progress.filter(p => p.status === "completed").length;
+              const total = bundle.steps.length;
+            %>
+
             <p class="bundle-preview">
-              <%= bundle.steps.length %> steps • AI workflow
+              <%= completed %>/<%= total %> steps completed
             </p>
+                <div style="background:#1e293b; height:6px; border-radius:5px; margin-top:6px;">
+                  <div style="
+                    width:<%= total > 0 ? (completed / total) * 100 : 0 %>%;
+                    height:100%;
+                    background:limegreen;
+                    border-radius:5px;
+                  "></div>
+                </div>
 
             <div class="bundle-actions">
               <button onclick='viewBundle(<%- JSON.stringify(bundle).replace(/"/g, "&quot;") %>)'>
@@ -47,9 +60,11 @@
               </button>
             </div>
           </div>
-        <% }) %> <!-- ✅ THIS WAS MISSING -->
-          <p class="muted">No bundles saved yet</p>
-          <% } %>
+                <% }) %>
+                  </div>
+                <% } else { %>
+                  <p class="muted">No bundles saved yet</p>
+                <% } %>
       
   </section>
 
@@ -269,24 +284,9 @@
         }
       }
 
-        function viewBundle(bundle){
-          let html = `<h2>${bundle.title}</h2>`;
+        
 
-          bundle.steps.forEach(step => {
-            html += `
-              <div class="step">
-                <h3>${step.title}</h3>
-                <p>${step.description}</p>
-              </div>
-            `;
-          });
-
-          document.body.innerHTML += `
-            <div class="modal">
-              ${html}
-            </div>
-          `;// later upgrade to modal UI
-        }
+        
 
         async function removeBundle(id){
           if(!confirm("Remove this bundle?")) return;
@@ -312,6 +312,67 @@
             console.error(err);
             alert("Error removing bundle");
           }
+        }
+        function viewBundle(bundle){
+          let html = `<h2>${bundle.title}</h2>`;
+
+          bundle.steps.forEach(step => {
+
+            const progress = bundle.progress.find(p => p.step === step.step);
+            const status = progress ? progress.status : "pending";
+
+            let style = "";
+
+            if(status === "in-progress"){
+              style = "border:2px solid orange;";
+            }
+
+            if(status === "completed"){
+              style = "border:2px solid green; opacity:0.6;";
+            }
+
+            html += `
+              <div class="step" id="modal-step-${step.step}" style="${style}">
+                <h3>Step ${step.step}: ${step.title}</h3>
+                <p>${step.description}</p>
+
+                <button onclick="updateStep('${bundle._id}', ${step.step}, 'in-progress')">▶ Start</button>
+                <button onclick="updateStep('${bundle._id}', ${step.step}, 'completed')">✅ Done</button>
+              </div>
+            `;
+          });
+
+          html += `<br><button onclick="closeModal()">❌ Close</button>`;
+
+          document.body.innerHTML += `
+            <div class="modal" id="bundle-modal">
+              ${html}
+            </div>
+          `;
+        }
+
+        async function updateStep(bundleId, step, status){
+          const el = document.getElementById("modal-step-" + step);
+
+          if(status === "in-progress"){
+            el.style.border = "2px solid orange";
+          }
+
+          if(status === "completed"){
+            el.style.border = "2px solid green";
+            el.style.opacity = "0.6";
+          }
+
+          await fetch("/bundle/progress/" + bundleId, {
+            method:"POST",
+            headers: {"Content-Type":"application/json"},
+            body: JSON.stringify({ step, status })
+          });
+        }
+
+        function closeModal(){
+          const modal = document.getElementById("bundle-modal");
+          if(modal) modal.remove();
         }
 
       </script>

@@ -65,7 +65,7 @@ return { ...tool, trendingScore: score };
 let jsonTools = [];
 try {
 jsonTools = JSON.parse(fs.readFileSync("./data/tools.json", "utf8"));
-} catch {}
+} catch (err) {}
 
 async function importTools() {
 if (jsonTools.length === 0) return;
@@ -174,7 +174,7 @@ app.post("/api/tools/:id/like", async (req, res) => {
   res.json({ likes: tool.likes });
 });
 //
-app.get("/landing", (req, res) => {
+app.get("/landing",async (req, res) => {
   if (req.session.userId) {
     return res.redirect("/home");
   }
@@ -206,10 +206,8 @@ app.get("/bundles", (req, res) => {
   res.render("bundles");
 });
 //
-// GENERATE AI BUNDLE (FIXED)
+// ================= GENERATE AI WORKFLOW =================
 app.post("/generate-bundle", async (req, res) => {
-  console.log("🔥 Bundle API called");
-
   const { goal } = req.body;
 
   if (!goal) {
@@ -234,7 +232,7 @@ DO NOT use markdown.
 STRICT FORMAT:
 
 {
-  "title": "Short bundle name",
+  "title": "Short workflow name",
   "steps": [
     {
       "step": 1,
@@ -248,7 +246,7 @@ STRICT FORMAT:
 Rules:
 - Max 5 steps
 - Keep steps practical
-- Use real AI tools like ChatGPT, Canva, Runway, etc.
+- Use real tools like ChatGPT, Canva, etc.
 - Output MUST be valid JSON
 `
           },
@@ -271,7 +269,7 @@ Rules:
 
     console.log("🧠 AI RAW:", text);
 
-    // ✅ SAFE JSON PARSE
+    // ✅ SAFE PARSE
     let parsed;
     try {
       const match = text.match(/\{[\s\S]*\}/);
@@ -294,125 +292,33 @@ Rules:
 
     res.json(parsed);
 
-  } catch (err) {
-    console.error("❌ API ERROR:", err.response?.data || err.message);
+  
 
-    // ✅ FALLBACK (always works)
-    res.json({
-      title: "Basic AI Bundle",
-      steps: [
-        {
-          step: 1,
-          title: "Understand your goal",
-          description: goal,
-          tools: ["ChatGPT"]
-        },
-        {
-          step: 2,
-          title: "Use AI tools",
-          description: "Execute using recommended tools",
-          tools: ["Canva", "Google"]
-        }
-      ]
-    });
-  }
-});
-// TEST AI (DEBUG ROUTE)
-app.get("/test-ai", async (req, res) => {
-  try {
-    const r = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        model: "llama-3.1-8b-instant",
-        messages: [
-          { role: "user", content: "hello" }
+    res.json(parsed);
+
+    } catch (err) {
+      console.error("❌ API ERROR:", err.message);
+
+      res.json({
+        title: "Basic Workflow",
+        steps: [
+          {
+            step: 1,
+            title: "Understand your goal",
+            description: goal,
+            tools: ["ChatGPT"]
+          },
+          {
+            step: 2,
+            title: "Execute using tools",
+            description: "Use recommended tools",
+            tools: ["Google", "Canva"]
+          }
         ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json"
-        }
-      }
-    );
-
-    res.json(r.data);
-
-  } catch (e) {
-    console.error("TEST AI ERROR:", e.response?.data || e.message);
-    res.json({
-      error: e.response?.data || e.message
+      });
+    }
     });
-  }
-});
-// Download APK
-app.get("/download", (req, res) => {
-  console.log("APK downloaded");
-
-  const filePath = path.join(__dirname, "public/uploads/Aquiplex.apk");
-  res.download(filePath);
-});
-
-// TOOLS
-app.get("/tools", async (req, res) => {
-const query = req.query.q;
-
-let tools;
-
-if (query) {
-tools = await Tool.find({
-$or: [
-{ name: { $regex: query, $options: "i" } },
-{ description: { $regex: query, $options: "i" } },
-],
-}).lean();
-} else {
-tools = await Tool.find().lean();
-}
-
-const allTools = await Tool.find().lean();
-const categories = [...new Set(allTools.map(t => t.category))];
-
-const trendingTools = await getTrendingTools(10);
-const trendingIds = trendingTools.map(t => t._id.toString());
-
-res.render("tools", { tools, categories, trendingIds });
-});
-
-// TOOL DETAILS
-app.get("/tool/:id", async (req, res) => {
-try {
-const tool = await Tool.findById(req.params.id).lean();
-if (!tool) return res.redirect("/tools");
-
-res.render("tool", { tool });
-
-} catch {
-res.redirect("/tools");
-}
-});
-
-// VISIT TOOL
-app.get("/visit/:id", async (req, res) => {
-try {
-const tool = await Tool.findById(req.params.id);
-if (!tool) return res.redirect("/tools");
-
-tool.clicks = (tool.clicks || 0) + 1;  
-tool.clickHistory = tool.clickHistory || [];  
-tool.clickHistory.push({ date: new Date() });  
-
-await tool.save();  
-
-let url = tool.url;  
-if (!url.startsWith("http")) url = "https://" + url;  
-
-res.redirect(url);
-
-} catch {
-res.redirect("/tools");
-}
-});
+ 
 
 // TRENDING PAGE
 app.get("/trending", async (req, res) => {
@@ -430,7 +336,7 @@ app.get("/submit", (req, res) => {
 res.render("submit");
 });
 
-// SUBMIT TOOL
+// SUBMIT TOO L
 app.post("/submit", upload.single("logo"), async (req, res) => {
 try {
 const { name, category, url, description } = req.body;
@@ -468,46 +374,7 @@ res.render("about");
 });
 
 // CATEGORY FILTER
-app.get("/tools/category/:category", async (req, res) => {
-try {
-const category = decodeURIComponent(req.params.category);
 
-const tools = await Tool.find({
-category: { $regex: new RegExp("^" + category + "$", "i") }
-}).lean();
-const allTools = await Tool.find().lean();
-const categories = [...new Set(allTools.map(t => t.category))];
-
-const trendingTools = await getTrendingTools(10);  
-const trendingIds = trendingTools.map(t => t._id.toString());  
-
-res.render("tools", { tools, categories, trendingIds });
-
-} catch (err) {
-console.error(err);
-res.redirect("/tools");
-}
-});
-app.get("/lab", (req, res) => {
-res.render("lab");
-});
-
-
-// MULTI AI GENERATION
-const models = [
-  {
-    name: "🧠 Smart AI",
-    system: "You are a highly intelligent AI. Give deep, clear, and well-structured answers."
-  },
-  {
-    name: "🎨 Creative AI",
-    system: "You are a creative and imaginative AI. Make answers engaging, unique, and expressive."
-  },
-  {
-    name: "⚡ Fast AI",
-    system: "You are a concise AI. Give short, direct, and fast answers."
-  }
-];
 //
 app.post("/multi-generate", async (req, res) => {
   const { prompt, messages, aiType } = req.body;
@@ -648,7 +515,7 @@ app.get("/bundle/:id", async (req, res) => {
 app.get("/chatbot", requireLogin, (req, res) => {
   res.render("chatbot");
 });
-// ================= CHATBOT =================
+// ===============catch (err) {BOT =================
 app.post("/chat", async (req, res) => {
   const { message, history, mode, chatId } = req.body;
 
@@ -670,7 +537,7 @@ app.post("/chat", async (req, res) => {
 
     let reply = "";
 
-    // 🌐 SEARCH MODE (keep your upgraded version)
+    // 🌐 SEARCH MODE
     if (mode === "search") {
       try {
         const search = await axios.post(
@@ -684,9 +551,8 @@ app.post("/chat", async (req, res) => {
           }
         );
 
-        const organic = search.data.organic;
-
-        const resultsText = organic
+        const results = search.data?.organic || [];
+        const resultsText = results
           .slice(0, 5)
           .map(r => `${r.title}: ${r.snippet}`)
           .join("\n");
@@ -698,7 +564,7 @@ app.post("/chat", async (req, res) => {
             messages: [
               {
                 role: "system",
-                content: "Summarize search results clearly."
+                content: "Summarize search results clearly"
               },
               {
                 role: "user",
@@ -718,13 +584,13 @@ app.post("/chat", async (req, res) => {
           ai?.data?.choices?.[0]?.message?.content ||
           "⚠️ No summary";
 
-      } catch {
+      } catch (err) {
         reply = `⚠️ Search failed\nhttps://www.google.com/search?q=${encodeURIComponent(message)}`;
       }
     }
 
     // 🎨 IMAGE MODE
-    else if (mode === "image") {
+    if (mode === "image") {
       const imageUrl =
         "https://image.pollinations.ai/prompt/" +
         encodeURIComponent(message);
@@ -737,48 +603,34 @@ app.post("/chat", async (req, res) => {
 
     // 🧠 NORMAL CHAT
     else {
-      const response = await axios.post(
-        "https://api.groq.com/openai/v1/chat/completions",
-        {
-          model: "llama-3.1-8b-instant",
-          messages: [
-            {
-              role: "system",
-              content: `
-            You are Aqua AI by Aquiplex, a smart and friendly assistant.
-
-            Rules:
-            - Talk like a human, not a textbook
-            - Keep responses clean and well formatted
-            - Use short paragraphs (2-4 lines max)
-            - Use bullet points when helpful
-            - Add spacing between sections
-            - Avoid long essays unless user asks
-            - Be clear, modern, and conversational
-            - Do NOT write like school answers (no "Similarities / Differences" unless asked)
-
-            Formatting style:
-            - Use simple headings when useful
-            - Keep mobile readability in mind
-            - Break content into sections
-
-            Your goal: respond like ChatGPT (clean, structured, easy to read).
-            `
-            },
-            ...messages.slice(-10) // ✅ limit memory = better responses
+      try {
+        const response = await axios.post(
+          "https://api.groq.com/openai/v1/chat/completions",
+          {
+            model: "llama-3.1-8b-instant",
+            messages: [
+              {
+                role: "system",
+                content: "You are a helpful AI assistant."
+              },
+              ...messages.slice(-10)
             ]
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-            "Content-Type": "application/json"
+          },
+          {
+            headers: {
+              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+              "Content-Type": "application/json"
+            }
           }
-        }
-      );
+        );
 
-      reply =
-        response?.data?.choices?.[0]?.message?.content ||
-        "⚠️ No reply";
+        reply =
+          response?.data?.choices?.[0]?.message?.content ||
+          "⚠️ No reply";
+
+      } catch (err) {
+        reply = "⚠️ AI failed";
+      }
     }
 
     // 🧠 Add AI reply
@@ -818,7 +670,63 @@ app.post("/chat", async (req, res) => {
     res.json({ reply: "⚠️ AI failed" });
   }
 });
+app.post("/bundle/save", requireLogin, async (req, res) => {
+  try {
+    const { title, steps } = req.body;
 
+    if (!title || !steps) {
+      return res.status(400).json({ error: "Invalid bundle" });
+    }
+
+    // 🔥 CREATE PROGRESS ARRAY (ONLY ONCE)
+    const progress = steps.map(s => ({
+      step: s.step,
+      status: "pending"
+    }));
+
+    // 🔥 SAVE WITH PROGRESS
+    const saved = await new Bundle({
+      userId: req.session.userId,
+      title,
+      steps,
+      progress
+    }).save();
+
+    res.json({ success: true, id: saved._id });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to save bundle" });
+  }
+}); //
+app.post("/bundle/progress/:id", requireLogin, async (req, res) => {
+  try {
+    const { step, status } = req.body;
+
+    const bundle = await Bundle.findOne({
+      _id: req.params.id,
+      userId: req.session.userId
+    });
+
+    if (!bundle) return res.status(404).send("Bundle not found");
+
+    const item = bundle.progress.find(p => p.step === step);
+
+    if (item) {
+      item.status = status;
+    }
+
+    await bundle.save();
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Error");
+  }
+});
+
+    
 //history id
 app.get("/history/:id", requireLogin, async (req, res) => {
   try {
