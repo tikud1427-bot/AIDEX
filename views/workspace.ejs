@@ -30,6 +30,16 @@
 .workspace-tabs button:hover {
   background: #1e293b;
 }
+  .tool-chip {
+    display: inline-block;
+    background: #1e293b;
+    padding: 5px 10px;
+    border-radius: 6px;
+    margin: 4px;
+    font-size: 12px;
+    color: white;
+    text-decoration: none;
+  }
 </style>
 
 </head>
@@ -133,7 +143,19 @@
             const total = bundle.steps ? bundle.steps.length : 0;
           %>
 
-          <p><%= completed %>/<%= total %> steps completed</p>
+            <p><%= completed %>/<%= total %> steps completed</p>
+
+            <div class="bundle-tools">
+              <% bundle.steps.forEach(step => { %>
+                <% if(step.tools && step.tools.length > 0){ %>
+                  <% step.tools.forEach(tool => { %>
+                    <a href="<%= tool.url %>" target="_blank" class="tool-chip">
+                      🔗 <%= tool.name %>
+                    </a>
+                  <% }) %>
+                <% } %>
+              <% }) %>
+            </div>
 
           <div style="background:#1e293b;height:6px;border-radius:5px;">
             <div style="
@@ -280,43 +302,76 @@ async function removeBundle(id){
 }
 
 // VIEW BUNDLE
-function viewBundle(bundle){
+  
+  function viewBundle(bundle){
 
-  const progressList = bundle.progress || [];
+    const progressList = bundle.progress || [];
 
-  let html = `<h2>${bundle.title}</h2>`;
+    let html = `<h2>${bundle.title}</h2>`;
 
-  bundle.steps.forEach(step => {
+    bundle.steps.forEach(step => {
 
-    const progress = progressList.find(p => p.step === step.step);
-    const status = progress ? progress.status : "pending";
+      const progress = progressList.find(p => p.step === step.step);
+      const status = progress ? progress.status : "pending";
 
-    html += `
-      <div style="margin:10px 0;">
-        <h3>Step ${step.step}: ${step.title}</h3>
-        <p>${step.description}</p>
-        <button onclick="updateStep('${bundle._id}', ${step.step}, 'completed')">✅ Done</button>
+      let toolsHTML = "";
+
+      if(step.tools && step.tools.length > 0){
+        toolsHTML = step.tools.map(t => `
+          <a href="${t.url}" target="_blank" style="
+            display:inline-block;
+            background:#1e293b;
+            padding:5px 10px;
+            margin:5px;
+            border-radius:6px;
+            color:white;
+            text-decoration:none;
+          ">
+            🔗 ${t.name}
+          </a>
+        `).join("");
+      }
+
+      html += `
+        <div style="margin:10px 0;">
+          <h3>Step ${step.step}: ${step.title}</h3>
+          <p>${step.description}</p>
+
+          ${toolsHTML}
+
+          <button onclick="updateStep('${bundle._id}', ${step.step}, 'completed')">
+            ✅ Done
+          </button>
+        </div>
+      `;
+    });
+
+    html += `<br><button onclick="closeModal()">Close</button>`;
+
+    // remove old modal if exists
+    const old = document.getElementById("bundle-modal");
+    if(old) old.remove();
+
+    document.body.innerHTML += `
+      <div class="modal" id="bundle-modal">
+        ${html}
       </div>
     `;
-  });
+  }
+  function closeModal(){
+    document.getElementById("bundle-modal")?.remove();
+  }
 
-  html += `<button onclick="closeModal()">Close</button>`;
+  async function updateStep(id, step, status){
+    await fetch("/bundle/progress/" + id, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ step, status })
+    });
 
-  document.body.innerHTML += `<div id="bundle-modal">${html}</div>`;
-}
-
-function closeModal(){
-  document.getElementById("bundle-modal")?.remove();
-}
-
-async function updateStep(id, step, status){
-  await fetch("/bundle/progress/" + id, {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body: JSON.stringify({ step, status })
-  });
-}
-
+    // 🔥 RELOAD UI
+    location.reload();
+  }
 </script>
 
 </body>

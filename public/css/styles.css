@@ -4194,3 +4194,14 @@ input {
 .chat-input input::placeholder {
   color: #6b7280 !important;
 }
+
+.tool-chip {
+  display: inline-block;
+  background: #1e293b;
+  padding: 5px 10px;
+  border-radius: 6px;
+  margin: 4px;
+  font-size: 12px;
+  color: white;
+  text-decoration: none;
+}
