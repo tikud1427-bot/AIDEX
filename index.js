@@ -312,6 +312,24 @@ app.post("/generate-bundle", async (req, res) => {
 
     const parsed = JSON.parse(match[0]);
 
+    // ✅ NOW FIX TOOLS (AFTER parsed exists)
+    parsed.steps.forEach(step => {
+      step.tools = (step.tools || []).map(t => {
+        if (typeof t === "object" && t.name && t.url) return t;
+
+        const found = tools.find(tool =>
+          tool.name.toLowerCase().includes((t.name || t).toLowerCase())
+        );
+
+        return found
+          ? { name: found.name, url: found.url }
+          : {
+              name: t.name || t,
+              url: "https://www.google.com/search?q=" + encodeURIComponent(t.name || t)
+            };
+      });
+    });
+
     res.json(parsed);
 
   } catch (err) {
