@@ -240,18 +240,18 @@ loadHistoryList();
     const toggle = document.getElementById("menuToggle");
 
     if (
-      sidebar.classList.contains("open") &&
+      sidebar.classList.contains("active") &&
       !sidebar.contains(e.target) &&
       !toggle.contains(e.target)
     ) {
-      sidebar.classList.remove("open");
+      sidebar.classList.remove("active");
     }
   });
   const menuBtn = document.getElementById("menuToggle");
   const sidebar = document.getElementById("sidebar");
 
   menuBtn.addEventListener("click", () => {
-    sidebar.classList.toggle("open");
+    sidebar.classList.toggle("active");
     document.body.classList.toggle("sidebar-open");
   });
 </script>
