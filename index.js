@@ -225,112 +225,36 @@ app.get("/bundles", (req, res) => {
 //
 // ================= GENERATE AI WORKFLOW =================
 app.post("/generate-bundle", async (req, res) => {
-  const { goal } = req.body;
+  const { goal, step } = req.body;
 
-  if (!goal) {
-    return res.json({ error: "No goal provided" });
+  // 👉 STEP 1: Send questions FIRST
+  if (!step || step === 1) {
+    return res.json({
+      type: "questions",
+      step: 2,
+      questions: [
+        "What type of project do you want?",
+        "Who is your target users?",
+        "What is your main goal?",
+        "Do you want simple or advanced?",
+        "Any tech preference?"
+      ]
+    });
   }
 
-  try {
-    const result = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
+  // 👉 STEP 2: (TEMP TEST)
+  return res.json({
+    title: "Test Bundle",
+    steps: [
       {
-        model: "llama-3.1-8b-instant",
-        messages: [
-          {
-            role: "system",
-            content: `
-You are an AI that ONLY returns valid JSON.
-
-DO NOT explain anything.
-DO NOT add text before or after.
-DO NOT use markdown.
-
-STRICT FORMAT:
-
-{
-  "title": "Short workflow name",
-  "steps": [
-    {
-      "step": 1,
-      "title": "Step name",
-      "description": "What to do",
-      "tools": ["Tool1", "Tool2"]
-    }
-  ]
-}
-
-Rules:
-- Max 5 steps
-- Keep steps practical
-- Use real tools like ChatGPT, Canva, etc.
-- Output MUST be valid JSON
-`
-          },
-          {
-            role: "user",
-            content: goal
-          }
-        ]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        timeout: 10000
+        step: 1,
+        title: "Test Step",
+        description: "This is working 🎉",
+        tools: ["VS Code"]
       }
-    );
-
-    const text = result?.data?.choices?.[0]?.message?.content || "";
-
-    console.log("🧠 AI RAW:", text);
-
-    // ✅ SAFE PARSE
-    let parsed;
-    try {
-      const match = text.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error("No JSON");
-
-      parsed = JSON.parse(match[0]);
-    } catch (err) {
-      return res.json({
-        error: "Invalid AI format",
-        raw: text
-      });
-    }
-
-    if (!parsed.steps) {
-      return res.json({
-        error: "Invalid structure",
-        raw: parsed
-      });
-    }
-
-    return res.json(parsed);
-
-    } catch (err) {
-      console.error("❌ API ERROR:", err.message);
-
-      res.json({
-        title: "Basic Workflow",
-        steps: [
-          {
-            step: 1,
-            title: "Understand your goal",
-            description: goal,
-            tools: ["ChatGPT"]
-          },
-          {
-            step: 2,
-            title: "Execute using tools",
-            description: "Use recommended tools",
-            tools: ["Google", "Canva"]
-          }
-        ]
-      });
-    }
-    });
+    ]
+  });
+});
  
 
 // TRENDING PAGE
