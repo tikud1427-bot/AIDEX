@@ -526,7 +526,7 @@ app.get("/chatbot", requireLogin, (req, res) => {
   res.render("chatbot");
 });
 // ===============catch (err) {BOT =================
-app.post("/chat", async (req, res) => {
+app.post("/chat", upload.single("file"), async (req, res) => {
   console.log("📩 BODY:", req.body); // ✅ ADD THIS LINE HERE
   let { message, history, mode, chatId } = req.body;
 
@@ -543,14 +543,26 @@ app.post("/chat", async (req, res) => {
 
   try {
     let messages = history.map(m => ({
-      role: m.role === "bot" ? "assistant" : m.role,
+      role: m.role === "assistant" ? "assistant" : "user",
       content: m.content
     }));
+
+    let fileText = "";
+
+    if (req.file) {
+      const filePath = req.file.path;
+
+      try {
+        fileText = fs.readFileSync(filePath, "utf8");
+      } catch {
+        fileText = "Uploaded file (binary or unsupported)";
+      }
+    }
 
     // 🧠 Add user message
     messages.push({
       role: "user",
-      content: message
+      content: message + (fileText ? `\n\n📎 File Content:\n${fileText}` : "")
     });
 
     let reply = "";
@@ -629,7 +641,23 @@ app.post("/chat", async (req, res) => {
             messages: [
               {
                 role: "system",
-                content: "You are a helpful AI assistant."
+                content: `
+              You are Aqua AI by Aquiplex.
+
+              You were developed by CHHANDA PRABAL DAS and Ananya Prabal Das.
+
+              You are an advanced AI assistant that helps with:
+              - coding
+              - startups
+              - AI tools
+              - projects
+              - problem solving
+
+              If user asks "who are you", "who made you", "what is Aquiplex":
+              → Always proudly introduce yourself with creators.
+
+              Be friendly, smart, and futuristic.
+              `
               },
               ...messages.slice(-10)
             ]

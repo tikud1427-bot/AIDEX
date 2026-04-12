@@ -213,91 +213,67 @@ function setMode(m) {
 }
 
 /* SEND MESSAGE */
-async function send() {
-  const input = document.getElementById("messageInput");
-  const chat = document.getElementById("chat");
-  const message = input.value.trim();
-  const fileInput = document.getElementById("fileUpload");
+  async function send() {
+    const input = document.getElementById("messageInput");
+    const chat = document.getElementById("chat");
+    const fileInput = document.getElementById("fileUpload");
 
-  if (!message && !fileInput.files[0]) return;
+    const message = input.value.trim();
+    const file = fileInput.files[0];
 
-  
-  input.value = "";
+    if (!message && !file) return;
 
-  const loading = document.createElement("div");
-  loading.className = "msg bot";
-  loading.id = "loading";
-  loading.innerHTML = "💬 Thinking...";
-  chat.appendChild(loading);
+    input.value = "";
 
-  chat.scrollTop = chat.scrollHeight;
+    const formData = new FormData();
+    formData.append("message", message);
+    formData.append("mode", mode);
+    formData.append("chatId", currentChatId || "");
+    formData.append("history", JSON.stringify(messages));
 
-  try {
-    const res = await fetch("/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        message,
-        chatId: currentChatId,
-        mode,
-        history: messages
-      })
-    });
-
-    const data = await res.json();
-    document.getElementById("loading")?.remove();
-    // ✅ CLEAR FIRST
-    chat.innerHTML = "";
-    
-    if (data.image) {
-      chat.innerHTML += `
-        <div class="msg bot">
-          <div class="bot-text">${data.reply}</div>
-
-          <img src="${data.image}" />
-
-          <br/>
-
-          <a href="${data.image}" download>
-            <button>⬇️ Download</button>
-          </a>
-
-          <button onclick="copyText(this)">📋</button>
-        </div>`;
-    }
-     else {
-       data.messages.forEach(m => {
-
-         if (m.role === "user") {
-           chat.innerHTML += `
-             <div class="msg user">
-               ${marked.parse(m.content)}
-             </div>`;
-         } else {
-           chat.innerHTML += `
-             <div class="msg bot">
-               <div class="bot-text">${marked.parse(m.content)}</div>
-               <button onclick="copyText(this)">📋</button>
-             </div>`;
-         }
-
-       });
+    if (file) {
+      formData.append("file", file);
     }
 
-    messages = data.messages;
-    currentChatId = data.chatId;
+    const loading = document.createElement("div");
+    loading.className = "msg bot";
+    loading.id = "loading";
+    loading.innerHTML = "💬 Thinking...";
+    chat.appendChild(loading);
 
-    chat.scrollTop = chat.scrollHeight;
-    loadHistoryList();
+    try {
+      const res = await fetch("/chat", {
+        method: "POST",
+        body: formData   // ❗ NO JSON HEADERS
+      });
 
-  } catch {
-    document.getElementById("loading")?.remove();
-    chat.innerHTML += `<div class="msg bot">⚠️ Error</div>`;
+      const data = await res.json();
+      document.getElementById("loading")?.remove();
+
+      
+
+      data.messages.forEach(m => {
+        if (m.role === "user") {
+          chat.innerHTML += `<div class="msg user">${marked.parse(m.content)}</div>`;
+        } else {
+          chat.innerHTML += `
+            <div class="msg bot">
+              <div class="bot-text">${marked.parse(m.content)}</div>
+              <button onclick="copyText(this)">📋</button>
+            </div>`;
+        }
+      });
+
+      messages = data.messages;
+      currentChatId = data.chatId;
+
+      fileInput.value = ""; // 🔥 clear file
+
+    } catch {
+      document.getElementById("loading")?.remove();
+      chat.innerHTML += `<div class="msg bot">⚠️ Error</div>`;
+    }
   }
-}
-
 /* ENTER KEY */
 document.getElementById("messageInput").addEventListener("keypress", e => {
   if (e.key === "Enter") send();
