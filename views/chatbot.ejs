@@ -26,7 +26,7 @@
 <p id="modeLabel">Mode: chat</p>
 
   <!-- ☰ MENU BUTTON -->
-  <button id="menuToggle" onclick="toggleSidebar()">☰</button>
+  <button id="menuToggle">☰</button>
 
   <div class="chat-container">
 
@@ -239,9 +239,20 @@ loadHistoryList();
     const sidebar = document.getElementById("sidebar");
     const toggle = document.getElementById("menuToggle");
 
-    if (!sidebar.contains(e.target) && !toggle.contains(e.target)) {
+    if (
+      sidebar.classList.contains("open") &&
+      !sidebar.contains(e.target) &&
+      !toggle.contains(e.target)
+    ) {
       sidebar.classList.remove("open");
     }
+  });
+  const menuBtn = document.getElementById("menuToggle");
+  const sidebar = document.getElementById("sidebar");
+
+  menuBtn.addEventListener("click", () => {
+    sidebar.classList.toggle("open");
+    document.body.classList.toggle("sidebar-open");
   });
 </script>
   

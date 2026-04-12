@@ -200,3 +200,9 @@ img {
     height: 65vh;
   }
 }
+body.sidebar-open::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+}
