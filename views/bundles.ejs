@@ -100,73 +100,80 @@ function quick(text) {
   document.getElementById("goalInput").value = text;
   generateBundle();
 }
+  function render(data) {
+    if (!data.steps || !Array.isArray(data.steps)) {
+      document.getElementById("result").innerText = "❌ Invalid bundle format";
+      return;
+    }
 
-function render(data) {
-  if (!data.steps || !Array.isArray(data.steps)) {
-    document.getElementById("result").innerText = "❌ Invalid bundle format";
-    return;
-  }
+    let html = `
+      <div class="bundle-header">
+        <h2>${data.title || "AI Bundle"}</h2>
 
-  let html = `
-    <div class="bundle-header">
-      <h2>${data.title || "AI Bundle"}</h2>
-
-      <button onclick='saveBundle(${JSON.stringify(data).replace(/"/g, '&quot;')})' class="save-btn">
-        💾 Save Bundle
-      </button>
-
-      <button onclick='shareBundle(${JSON.stringify(data).replace(/"/g, '&quot;')})' class="share-btn">
-        🔗 Share
-      </button>
-    </div>
-  `;
-
-  data.steps.forEach(step => {
-    html += `
-      <div class="step">
-        <h3>Step ${step.step || ""}: ${step.title || ""}</h3>
-        <p>${step.description || ""}</p>
-
-        <div class="tools">
-          ${(step.tools || []).map(t => {
-            let name, url;
-
-            if (typeof t === "object") {
-              name = t.name;
-              url = t.url;
-            } else {
-              name = t;
-              const links = {
-                "PyCharm": "https://www.jetbrains.com/pycharm/",
-                "VS Code": "https://code.visualstudio.com/",
-                "Spyder": "https://www.spyder-ide.org/",
-                "W3Schools": "https://www.w3schools.com/",
-                "Real Python": "https://realpython.com/"
-              };
-              url = links[name] || `https://www.google.com/search?q=${encodeURIComponent(name)}`;
-            }
-
-            return `
-              <div class="tool-card-mini recommended">
-                <img 
-                  src="https://www.google.com/s2/favicons?sz=64&domain_url=${url}" 
-                  onerror="this.src='/images/default-tool.png'"
-                />
-
-                <div class="tool-info">
-                  <span>${name}</span>
-                  <button class="use-btn" onclick="openTool('${url}')">Use</button>
-                </div>
-              </div>
-            `;
-          }).join("")}
+        <div style="background:#1e293b; border-radius:10px; height:10px; margin:10px 0;">
+          <div id="progressFill" style="height:10px; width:0%; background:#22c55e; border-radius:10px;"></div>
         </div>
 
+        <button onclick='saveBundle(${JSON.stringify(data).replace(/"/g, '&quot;')})' class="save-btn">
+          💾 Save Bundle
+        </button>
+
+        <button onclick='shareBundle(${JSON.stringify(data).replace(/"/g, '&quot;')})' class="share-btn">
+          🔗 Share
+        </button>
       </div>
     `;
-  });
-  document.getElementById("result").innerHTML = html;
-}
+
+    data.steps.forEach(step => {
+      html += `
+        <div class="step">
+          <h3>Step ${step.step || ""}: ${step.title || ""}</h3>
+          <p>${step.description || ""}</p>
+
+          <button onclick="completeStep(${step.step})">
+            ✅ Mark as Done
+          </button>
+
+          <div class="tools">
+            ${(step.tools || []).map(t => {
+              let name, url;
+
+              if (typeof t === "object") {
+                name = t.name;
+                url = t.url;
+              } else {
+                name = t;
+                const links = {
+                  "PyCharm": "https://www.jetbrains.com/pycharm/",
+                  "VS Code": "https://code.visualstudio.com/",
+                  "Spyder": "https://www.spyder-ide.org/",
+                  "W3Schools": "https://www.w3schools.com/",
+                  "Real Python": "https://realpython.com/"
+                };
+                url = links[name] || `https://www.google.com/search?q=${encodeURIComponent(name)}`;
+              }
+
+              return `
+                <div class="tool-card-mini recommended">
+                  <img 
+                    src="https://www.google.com/s2/favicons?sz=64&domain_url=${url}" 
+                    onerror="this.src='/images/default-tool.png'"
+                  />
+
+                  <div class="tool-info">
+                    <span>${name}</span>
+                    <button class="use-btn" onclick="openTool('${url}')">Use</button>
+                  </div>
+                </div>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `;
+    });
+
+    document.getElementById("result").innerHTML = html;
+  }
 
   async function saveBundle(data) {
     try {
@@ -261,8 +268,22 @@ function render(data) {
           alert("Error sharing bundle");
         }
       }
-    </script>
 
+      let completedSteps = [];
+
+      function completeStep(step){
+        if(!completedSteps.includes(step)){
+          completedSteps.push(step);
+        }
+
+        const total = document.querySelectorAll(".step").length;
+        const progress = (completedSteps.length / total) * 100;
+
+        document.getElementById("progressFill").style.width = progress + "%";
+      }
+
+    </script>
+      
 
 
 </body>

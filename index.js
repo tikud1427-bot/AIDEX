@@ -223,11 +223,12 @@ app.get("/bundles", (req, res) => {
   res.render("bundles");
 });
 //
-// ================= GENERATE AI WORKFLOW =================
 app.post("/generate-bundle", async (req, res) => {
-  const { goal, step } = req.body;
+  const { goal, step, answers } = req.body;
+  const tools = await Tool.find().limit(20).lean();
+  const toolList = tools.map(t => `Name: ${t.name}, URL: ${t.url}`).join("\n");
 
-  // 👉 STEP 1: Send questions FIRST
+  // STEP 1: ask questions
   if (!step || step === 1) {
     return res.json({
       type: "questions",
@@ -242,21 +243,85 @@ app.post("/generate-bundle", async (req, res) => {
     });
   }
 
-  // 👉 STEP 2: (TEMP TEST)
-  return res.json({
-    title: "Test Bundle",
-    steps: [
-      {
-        step: 1,
-        title: "Test Step",
-        description: "This is working 🎉",
-        tools: ["VS Code"]
-      }
-    ]
-  });
-});
- 
+  try {
+    const prompt = `
+    User goal: ${goal}
 
+    Answers:
+    ${answers?.join("\n")}
+
+    Use ONLY tools from this list (copy exact name and url):
+    ${toolList}
+    Create a structured AI workflow bundle.
+
+    Return ONLY JSON:
+    {
+      "title": "",
+      "steps": [
+        {
+          "step": 1,
+          "title": "",
+          "description": "",
+          "tools": [
+            { "name": "", "url": "" }
+          ]
+        }
+      ]
+    }
+    `;
+
+    parsed.steps.forEach(step => {
+      step.tools = (step.tools || []).map(t => {
+        if (typeof t === "object" && t.name && t.url) return t;
+
+        // fallback: match from DB
+        const found = tools.find(tool =>
+          tool.name.toLowerCase().includes((t.name || t).toLowerCase())
+        );
+
+        return found
+          ? { name: found.name, url: found.url }
+          : { name: t.name || t, url: "https://www.google.com/search?q=" + encodeURIComponent(t.name || t) };
+      });
+    });
+    
+    const ai = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama-3.1-8b-instant",
+        messages: [
+          { role: "system", content: "You are an expert startup mentor." },
+          { role: "user", content: prompt }
+        ]
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
+
+    let text = ai.data.choices[0].message.content;
+
+    // 🔥 CLEAN JSON
+    text = text.replace(/```json/g, "").replace(/```/g, "").trim();
+
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) throw new Error("No JSON");
+
+    const parsed = JSON.parse(match[0]);
+
+    res.json(parsed);
+
+  } catch (err) {
+    console.error(err);
+    res.json({
+      error: "AI failed",
+      raw: err.message
+    });
+  }
+});
 // TRENDING PAGE
 app.get("/trending", async (req, res) => {
 try {
