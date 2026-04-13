@@ -4391,3 +4391,317 @@ input {
   text-decoration: none;
   color: black;
 }
+
+
+
+/* ===== RESET ===== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ===== BODY ===== */
+body {
+  font-family: "Poppins", sans-serif;
+  background: #020617;
+  color: #e2e8f0;
+}
+
+/* ===== CONTAINER ===== */
+.container {
+  max-width: 1200px;
+  margin: auto;
+  padding: 15px;
+}
+
+/* ===== HERO ===== */
+.tools-hero {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.tools-hero h1 {
+  font-size: 26px;
+}
+
+.tools-hero p {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+/* ===== SEARCH BAR ===== */
+.search-bar {
+  margin-bottom: 20px;
+}
+
+.search-wrapper {
+  display: flex;
+  align-items: center;
+  background: #0f172a;
+  border-radius: 12px;
+  padding: 10px;
+  border: 1px solid #1e293b;
+}
+
+.search-wrapper input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: white;
+  outline: none;
+  font-size: 14px;
+}
+
+.search-btn {
+  background: #38bdf8;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+/* ===== CATEGORY FILTER ===== */
+.category-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.category-btn {
+  background: #0f172a;
+  padding: 6px 10px;
+  border-radius: 8px;
+  text-decoration: none;
+  color: white;
+  font-size: 12px;
+  border: 1px solid #1e293b;
+}
+
+.category-btn:hover {
+  background: #38bdf8;
+  color: black;
+}
+
+/* ===== AI RECOMMEND BOX ===== */
+.ai-recommend-box {
+  background: linear-gradient(135deg, #020617, #0f172a);
+  padding: 15px;
+  border-radius: 16px;
+  margin-bottom: 20px;
+  border: 1px solid #1e293b;
+}
+
+.ai-recommend-box h2 {
+  font-size: 18px;
+  color: #38bdf8;
+}
+
+.ai-recommend-box p {
+  font-size: 13px;
+  color: #94a3b8;
+}
+
+/* ===== AI GRID ===== */
+.ai-recommend-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* ===== AI TOOL CARD ===== */
+.ai-tool {
+  background: #020617;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-tool img {
+  width: 35px;
+  height: 35px;
+  border-radius: 6px;
+}
+
+.ai-tool h4 {
+  font-size: 13px;
+}
+
+.ai-tool p {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.ai-tool a {
+  margin-left: auto;
+  background: #38bdf8;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  text-decoration: none;
+  color: black;
+}
+
+/* ===== TOOLS GRID ===== */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 15px;
+}
+
+/* ===== TOOL CARD ===== */
+.tool-card {
+  background: #020617;
+  border: 1px solid #1e293b;
+  border-radius: 14px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  transition: 0.2s;
+}
+
+.tool-card:hover {
+  transform: translateY(-3px);
+  border-color: #38bdf8;
+}
+
+/* ===== TOOL TOP ===== */
+.tool-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.tool-logo {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+}
+
+/* ===== CONTENT ===== */
+.tool-content h3 {
+  font-size: 15px;
+  margin-top: 10px;
+}
+
+.tool-category {
+  font-size: 11px;
+  color: #38bdf8;
+}
+
+.tool-description {
+  font-size: 12px;
+  color: #94a3b8;
+  margin-top: 5px;
+}
+
+/* ===== FOOTER ===== */
+.tool-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.details-btn,
+.visit-btn {
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  text-decoration: none;
+}
+
+.details-btn {
+  background: #1e293b;
+  color: white;
+}
+
+.visit-btn {
+  background: #38bdf8;
+  color: black;
+}
+
+/* ===== LIKE BUTTON ===== */
+.like-btn {
+  background: transparent;
+  border: none;
+  color: #38bdf8;
+  cursor: pointer;
+}
+
+/* ===== NO TOOLS ===== */
+.no-tools {
+  text-align: center;
+  margin-top: 30px;
+}
+
+/* ================= MOBILE FIX ================= */
+@media (max-width: 768px) {
+
+  .tools-hero h1 {
+    font-size: 20px;
+  }
+
+  .search-wrapper {
+    flex-direction: row;
+    padding: 8px;
+  }
+
+  .search-btn {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
+
+  .ai-tool {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .ai-tool a {
+    margin-left: 0;
+    margin-top: 5px;
+  }
+
+  .tool-footer {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .details-btn,
+  .visit-btn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===== EXTRA SMALL (PHONES) ===== */
+@media (max-width: 480px) {
+
+  .container {
+    padding: 10px;
+  }
+
+  .tool-card {
+    padding: 10px;
+  }
+
+  .tool-content h3 {
+    font-size: 14px;
+  }
+
+  .tool-description {
+    font-size: 11px;
+  }
+
+  .ai-recommend-box h2 {
+    font-size: 16px;
+  }
+}
