@@ -83,12 +83,7 @@ async function generateAI(messages) {
 
 async function generateImage(prompt) {
 
-  try {
-    return {
-      url: "https://image.pollinations.ai/prompt/" + encodeURIComponent(prompt)
-    };
-  } catch {}
-
+  // 🥇 HuggingFace (PRIMARY)
   try {
     const res = await axios.post(
       "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
@@ -108,15 +103,15 @@ async function generateImage(prompt) {
       url: `data:image/png;base64,${base64}`
     };
 
-  } catch {
-    console.log("HF failed");
+  } catch (err) {
+    console.log("❌ HF ERROR:", err.response?.data || err.message);
   }
 
+  // 🥈 fallback placeholder
   return {
     url: "https://via.placeholder.com/512?text=Image+Failed"
   };
 }
-
 const app = express();
 
 // ✅ TRUST PROXY (IMPORTANT for Render/Replit)
@@ -1236,6 +1231,7 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log("🚀 Server running on port " + PORT);
+    console.log("HF:", process.env.HF_API_KEY ? "OK" : "MISSING");
   });
 }
 

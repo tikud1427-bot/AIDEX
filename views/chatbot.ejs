@@ -103,7 +103,9 @@ function setMode(m) {
     const loading = document.createElement("div");
     loading.className = "msg bot";
     loading.id = "loading";
-    loading.innerHTML = "💬 Thinking...";
+    loading.innerHTML = mode === "image"
+    ? "🎨 Generating image..."
+    : "💬 Thinking...";
     chat.appendChild(loading);
     
     try {
@@ -117,14 +119,39 @@ function setMode(m) {
 
       
 
-      const lastMsg = data.messages[data.messages.length - 1];
-
-      if (lastMsg.role === "assistant") {
+      // 🧠 IMAGE MODE HANDLING
+      if (mode === "image" && data.image) {
         chat.innerHTML += `
           <div class="msg bot">
-            <div class="bot-text">${marked.parse(lastMsg.content)}</div>
-            <button onclick="copyText(this)">📋</button>
-          </div>`;
+            <div class="bot-text">${data.reply}</div>
+            <img src="${data.image}" style="max-width:100%; border-radius:10px; margin-top:10px;" />
+          </div>
+        `;
+      }
+
+      // 💬 NORMAL CHAT
+      else if (data.messages) {
+        const lastMsg = data.messages[data.messages.length - 1];
+
+        if (lastMsg.role === "assistant") {
+          chat.innerHTML += `
+            <div class="msg bot">
+              <div class="bot-text">${marked.parse(lastMsg.content)}</div>
+              <button onclick="copyText(this)">📋</button>
+            </div>`;
+        }
+
+        messages = data.messages;
+        currentChatId = data.chatId;
+      }
+
+      // ⚠️ FALLBACK
+      else {
+        chat.innerHTML += `
+          <div class="msg bot">
+            <div class="bot-text">${data.reply || "⚠️ Failed"}</div>
+          </div>
+        `;
       }
 
 
