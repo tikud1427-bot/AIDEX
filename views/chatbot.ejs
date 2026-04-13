@@ -89,12 +89,23 @@ function setMode(m) {
       formData.append("file", file);
     }
 
+    // show user message instantly (ONLY text)
+    if (message) {
+      chat.innerHTML += `
+        <div class="msg user">
+          ${marked.parse(message)}
+        </div>
+      `;
+    }
+
+    chat.scrollTop = chat.scrollHeight;
+
     const loading = document.createElement("div");
     loading.className = "msg bot";
     loading.id = "loading";
     loading.innerHTML = "💬 Thinking...";
     chat.appendChild(loading);
-
+    
     try {
       const res = await fetch("/chat", {
         method: "POST",
@@ -106,32 +117,45 @@ function setMode(m) {
 
       
 
-      data.messages.forEach(m => {
-        if (m.role === "user") {
-          chat.innerHTML += `<div class="msg user">${marked.parse(m.content)}</div>`;
-        } else {
-          chat.innerHTML += `
-            <div class="msg bot">
-              <div class="bot-text">${marked.parse(m.content)}</div>
-              <button onclick="copyText(this)">📋</button>
-            </div>`;
-        }
-      });
+      const lastMsg = data.messages[data.messages.length - 1];
 
+      if (lastMsg.role === "assistant") {
+        chat.innerHTML += `
+          <div class="msg bot">
+            <div class="bot-text">${marked.parse(lastMsg.content)}</div>
+            <button onclick="copyText(this)">📋</button>
+          </div>`;
+      }
+
+
+      chat.scrollTo({
+        top: chat.scrollHeight,
+        behavior: "smooth"
+      });
+      
       messages = data.messages;
       currentChatId = data.chatId;
 
-      fileInput.value = ""; // 🔥 clear file
+      } catch {
+        document.getElementById("loading")?.remove();
+        chat.innerHTML += `
+          <div class="msg bot">
+            <div class="bot-text">⚠️ Something went wrong</div>
+          </div>
+        `;
+      }
 
-    } catch {
-      document.getElementById("loading")?.remove();
-      chat.innerHTML += `<div class="msg bot">⚠️ Error</div>`;
-    }
+      fileInput.value = "";
+      input.focus();
   }
+    
 /* ENTER KEY */
-document.getElementById("messageInput").addEventListener("keypress", e => {
-  if (e.key === "Enter") send();
-});
+  document.getElementById("messageInput").addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault(); // 🔥 prevents newline
+      send();
+    }
+  });
 
 /* FILE UPLOAD SHOW IN CHAT */
 const fileInput = document.getElementById("fileUpload");
@@ -162,6 +186,8 @@ async function loadHistoryList() {
   chats.forEach(chat => {
     const div = document.createElement("div");
 
+    div.setAttribute("data-id", chat._id);
+
     div.innerHTML = `
       <span>${chat.title || "Chat"}</span>
       <button onclick="event.stopPropagation(); deleteChat('${chat._id}')">🗑️</button>
@@ -171,18 +197,19 @@ async function loadHistoryList() {
     list.appendChild(div);
   });
 }
-
   async function deleteChat(id) {
+    if (!confirm("Delete this chat?")) return;
+
     await fetch("/history/" + id, { method: "DELETE" });
 
-    // ✅ if currently open chat is deleted → reset everything
+    // remove from UI instantly
+    document.querySelector(`[data-id='${id}']`)?.remove();
+
     if (currentChatId === id) {
       currentChatId = null;
       messages = [];
       document.getElementById("chat").innerHTML = "";
     }
-
-    loadHistoryList();
   }
 
   async function loadChat(id, event) {

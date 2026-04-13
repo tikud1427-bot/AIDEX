@@ -9,6 +9,113 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
+// ================= AI ENGINE (FALLBACK SYSTEM) =================
+
+async function generateAI(messages) {
+
+  // 🥇 1. GROQ (fastest)
+  try {
+    const res = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama-3.1-8b-instant",
+        messages
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 10000
+      }
+    );
+
+    return res.data.choices[0].message.content;
+
+  } catch (err) {
+    console.log("❌ Groq failed");
+  }
+
+  // 🥈 2. OPENROUTER (many free models)
+  try {
+    const res = await axios.post(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        model: "mistralai/mistral-7b-instruct",
+        messages
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 15000
+      }
+    );
+
+    return res.data.choices[0].message.content;
+
+  } catch (err) {
+    console.log("❌ OpenRouter failed");
+  }
+
+  // 🥉 3. GEMINI (backup)
+  try {
+    const res = await axios.post(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${process.env.Gemini_API_Key}`,
+      {
+        contents: [
+          {
+            parts: [{ text: messages.map(m => m.content).join("\n") }]
+          }
+        ]
+      }
+    );
+
+    return res.data.candidates[0].content.parts[0].text;
+
+  } catch (err) {
+    console.log("❌ Gemini failed");
+  }
+
+  return "⚠️ All AI services are busy. Try again later.";
+}
+
+async function generateImage(prompt) {
+
+  try {
+    return {
+      url: "https://image.pollinations.ai/prompt/" + encodeURIComponent(prompt)
+    };
+  } catch {}
+
+  try {
+    const res = await axios.post(
+      "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
+      { inputs: prompt },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.HF_API_KEY}`,
+        },
+        responseType: "arraybuffer",
+        timeout: 60000
+      }
+    );
+
+    const base64 = Buffer.from(res.data).toString("base64");
+
+    return {
+      url: `data:image/png;base64,${base64}`
+    };
+
+  } catch {
+    console.log("HF failed");
+  }
+
+  return {
+    url: "https://via.placeholder.com/512?text=Image+Failed"
+  };
+}
 
 const app = express();
 
@@ -762,10 +869,10 @@ app.get("/chatbot", requireLogin, (req, res) => {
 });
 // ===============catch (err) {BOT =================
 app.post("/chat", upload.single("file"), async (req, res) => {
-  console.log("📩 BODY:", req.body); // ✅ ADD THIS LINE HERE
+  console.log("📩 BODY:", req.body);
+
   let { message, history, mode, chatId } = req.body;
 
-  // ✅ FIX HISTORY PARSE
   try {
     history = JSON.parse(history || "[]");
   } catch {
@@ -785,24 +892,22 @@ app.post("/chat", upload.single("file"), async (req, res) => {
     let fileText = "";
 
     if (req.file) {
-      const filePath = req.file.path;
-
       try {
-        fileText = fs.readFileSync(filePath, "utf8");
+        fileText = fs.readFileSync(req.file.path, "utf8");
       } catch {
-        fileText = "Uploaded file (binary or unsupported)";
+        fileText = "Uploaded file (unsupported)";
       }
     }
 
-    // 🧠 Add user message
+    // 👤 user message
     messages.push({
       role: "user",
-      content: message + (fileText ? `\n\n📎 File Content:\n${fileText}` : "")
+      content: message + (fileText ? `\n\n📎 File:\n${fileText}` : "")
     });
 
     let reply = "";
 
-    // 🌐 SEARCH MODE
+    // 🌐 SEARCH
     if (mode === "search") {
       try {
         const search = await axios.post(
@@ -817,108 +922,48 @@ app.post("/chat", upload.single("file"), async (req, res) => {
         );
 
         const results = search.data?.organic || [];
+
         const resultsText = results
           .slice(0, 5)
           .map(r => `${r.title}: ${r.snippet}`)
           .join("\n");
 
-        const ai = await axios.post(
-          "https://api.groq.com/openai/v1/chat/completions",
-          {
-            model: "llama-3.1-8b-instant",
-            messages: [
-              {
-                role: "system",
-                content: "Summarize search results clearly"
-              },
-              {
-                role: "user",
-                content: `Query: ${message}\n\n${resultsText}`
-              }
-            ]
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-              "Content-Type": "application/json"
-            }
-          }
-        );
+        reply = await generateAI([
+          { role: "system", content: "Summarize clearly" },
+          { role: "user", content: resultsText }
+        ]);
 
-        reply =
-          ai?.data?.choices?.[0]?.message?.content ||
-          "⚠️ No summary";
-
-      } catch (err) {
-        reply = `⚠️ Search failed\nhttps://www.google.com/search?q=${encodeURIComponent(message)}`;
+      } catch {
+        reply = `🔎 https://www.google.com/search?q=${encodeURIComponent(message)}`;
       }
     }
 
-    // 🎨 IMAGE MODE
+    // 🎨 IMAGE
     else if (mode === "image") {
-      const imageUrl =
-        "https://image.pollinations.ai/prompt/" +
-        encodeURIComponent(message);
+      const result = await generateImage(message);
 
       return res.json({
         reply: "🖼️ Here is your image:",
-        image: imageUrl
+        image: result.url
       });
     }
 
-    // 🧠 NORMAL CHAT
+    // 💬 NORMAL CHAT
     else {
-      try {
-        const response = await axios.post(
-          "https://api.groq.com/openai/v1/chat/completions",
-          {
-            model: "llama-3.1-8b-instant",
-            messages: [
-              {
-                role: "system",
-                content: `
-              You are Aqua AI, an advanced AI assistant developed by Aquiplex.
-
-              Aqua AI was created by Chhanda Prabal Das and Ananya Prabal Das.
-
-              You are designed to assist users with:
-              - software development and coding
-              - startup ideas and strategy
-              - AI tools and technologies
-              - project building and problem solving
-
-              Your communication style is:
-              - clear, professional, and concise
-              - helpful and solution-oriented
-              - intelligent, calm, and modern
-
-              When users ask about your identity (e.g., "who are you", "who made you", "what is Aquiplex"):
-              Provide a confident and concise introduction, mentioning Aquiplex and your creators.
-
-              Avoid unnecessary hype or exaggerated claims. Focus on clarity, usefulness, and accuracy.
-              `
-              },
-              ...messages.slice(-10)
-            ]
-          },
-          {
-            headers: {
-              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-              "Content-Type": "application/json"
-            }
-          }
-        );
-
-        reply =
-          response?.data?.choices?.[0]?.message?.content ||
-          "⚠️ No reply";
-
-      } catch (err) {
-        reply = "⚠️ AI failed";
-      }
+      reply = await generateAI([
+        {
+          role: "system",
+          content: `
+You are Aqua AI by Aquiplex.
+Help with coding, startups, AI tools, and problem solving.
+Be clear, smart, and helpful.
+          `
+        },
+        ...messages.slice(-10)
+      ]);
     }
 
-    // 🧠 Add AI reply
+    // ✅ SAVE RESPONSE (THIS IS THE PART YOU ASKED ABOUT)
     messages.push({
       role: "assistant",
       content: reply
@@ -926,17 +971,13 @@ app.post("/chat", upload.single("file"), async (req, res) => {
 
     let chat;
 
-    // 🔥 UPDATE EXISTING CHAT
     if (chatId) {
       chat = await History.findOneAndUpdate(
         { _id: chatId, userId: req.session.userId },
         { messages },
         { new: true }
       );
-    }
-
-    // 🆕 CREATE NEW CHAT
-    else {
+    } else {
       chat = await History.create({
         userId: req.session.userId,
         title: message.slice(0, 30),
