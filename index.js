@@ -302,7 +302,8 @@ Return ONLY JSON.
     res.render("tools", {
       tools,
       categories,
-      searchQuery: searchQuery || ""
+      searchQuery: searchQuery || "",
+      recommended   // 🔥 ADD THIS LINE
     });
 
   } catch (err) {
