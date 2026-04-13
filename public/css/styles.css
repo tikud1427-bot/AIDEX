@@ -4363,9 +4363,9 @@ input {
 }
 
 .ai-recommend-grid {
-  display: flex;
-  gap: 15px;
-  margin-top: 15px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
 }
 
 .ai-tool {
@@ -4393,4 +4393,19 @@ input {
 }
 
 
+.ai-tool {
+  width: 100%;
+  min-width: 0;
+}
 
+@media (max-width: 768px) {
+  .ai-recommend-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .ai-recommend-grid {
+    grid-template-columns: 1fr;
+  }
+}
