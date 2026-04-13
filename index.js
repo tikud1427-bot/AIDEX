@@ -216,7 +216,28 @@ app.get("/tools", async (req, res) => {
     res.send("Error loading tools");
   }
 });
+//
+app.get("/tools/category/:category", async (req, res) => {
+  try {
+    const category = decodeURIComponent(req.params.category);
 
+    const tools = await Tool.find({ category }).lean();
+
+    // get all categories again (for sidebar/menu)
+    const allTools = await Tool.find().lean();
+    const categories = [...new Set(allTools.map(t => t.category))];
+
+    res.render("tools", {
+      tools,
+      categories,
+      selectedCategory: category
+    });
+
+  } catch (err) {
+    console.error(err);
+    res.send("Error loading category");
+  }
+});
 
 // AI BUNDLES PAGE
 app.get("/bundles", (req, res) => {

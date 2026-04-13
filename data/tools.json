@@ -883,4 +883,293 @@
     "comments": [],
     "clicks": 0
   }
+  
+]
+
+
+[
+  {
+    "id": "writesonic",
+    "name": "Writesonic",
+    "category": "Writing AI",
+    "url": "https://writesonic.com",
+    "description": "AI writer for blogs, ads, and SEO content.",
+    "trending": true,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTHMCh5NF0sJYmWm3EKZ60dIPCgzQNB_hZZAg&s",
+    "clicks": 180
+  },
+  {
+    "id": "simplified",
+    "name": "Simplified",
+    "category": "Writing AI",
+    "url": "https://simplified.com",
+    "description": "AI content creation and design platform.",
+    "trending": true,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRHsLuEiyNk6Pkhahl4SeTM4kKLTXf7c08IcA&s",
+    "clicks": 160
+  },
+  {
+    "id": "hypotenuseai",
+    "name": "Hypotenuse AI",
+    "category": "Writing AI",
+    "url": "https://hypotenuse.ai",
+    "description": "AI content generator for ecommerce.",
+    "trending": false,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQRoIN4Qq_Hwc9G2LKVbLWy1SfArbBhWqwM4w&s",
+    "clicks": 90
+  },
+  {
+    "id": "longshotai",
+    "name": "LongShot AI",
+    "category": "Writing AI",
+    "url": "https://longshot.ai",
+    "description": "Fact-based AI writing tool.",
+    "trending": false,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQMLlqQYPDGm-65F4iCqVDEGHonAnr2_TOTbw&s",
+    "clicks": 70
+  },
+  
+  {
+    "id": "phind",
+    "name": "Phind",
+    "category": "Coding AI",
+    "url": "https://phind.com",
+    "description": "AI search engine for developers.",
+    "trending": true,
+    "logo": "https://i1.wp.com/ph-files.imgix.net/8c1aaefe-2ff2-4dad-ac9f-22c7c1fa6992.png?w=439&q=75",
+    "clicks": 190
+  },
+  
+  {
+    "id": "sourcegraphcody",
+    "name": "Cody",
+    "category": "Coding AI",
+    "url": "https://sourcegraph.com/cody",
+    "description": "AI coding assistant by Sourcegraph.",
+    "trending": false,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRYrGEhdg7MIv1R1O8ubDZQBJzXr5fAgXycFg&s",
+    "clicks": 95
+  },
+  {
+    "id": "askcodi",
+    "name": "AskCodi",
+    "category": "Coding AI",
+    "url": "https://askcodi.com",
+    "description": "AI coding assistant and generator.",
+    "trending": false,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSK5JVDupf1TJgh-n7iZhg_XhTjRXt6ToLXbw&s",
+    "clicks": 85
+  },
+
+  {
+    "id": "assemblyai",
+    "name": "AssemblyAI",
+    "category": "Voice AI",
+    "url": "https://assemblyai.com",
+    "description": "Speech-to-text AI API.",
+    "trending": false,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSzT4AiJLybaEUFHVHPYvlP4o0ztnE8BOAlHQ&s",
+    "clicks": 100
+  },
+  {
+    "id": "speechify",
+    "name": "Speechify",
+    "category": "Voice AI",
+    "url": "https://speechify.com",
+    "description": "Text-to-speech AI reader.",
+    "trending": true,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSBJet1j5xzjLcH-s9ALHAvj8ZDp-Yuzw7VIQ&s",
+    "clicks": 180
+  },
+
+  
+  {
+    "id": "boomy",
+    "name": "Boomy",
+    "category": "Music AI",
+    "url": "https://boomy.com",
+    "description": "Create songs with AI instantly.",
+    "trending": true,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRWCjq63GAm0TopNNOwzWlRy4-0xxl2Nn1bfw&s",
+    "clicks": 160
+  },
+  
+
+  {
+    "id": "cleanupai",
+    "name": "Cleanup.pictures",
+    "category": "Image AI",
+    "url": "https://cleanup.pictures",
+    "description": "Remove objects from images.",
+    "trending": false,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR24GgRn7DZ2XXwomKGF6LAQuw4C1FKyA0Q6g&s",
+    "clicks": 120
+  },
+  {
+    "id": "palettefm",
+    "name": "Palette.fm",
+    "category": "Image AI",
+    "url": "https://palette.fm",
+    "description": "AI colorize black & white photos.",
+    "trending": false,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcS4_dNumSGa-5iqD6eIbBnVRjwzoVyhhRy2Fg&s",
+    "clicks": 110
+  },
+  {
+    "id": "topazlabs",
+    "name": "Topaz Labs",
+    "category": "Image AI",
+    "url": "https://topazlabs.com",
+    "description": "AI image enhancement tools.",
+    "trending": false,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcT36fOvMSWpjc7bjyHWk5GVGS46cBAjiMgYqA&s",
+    "clicks": 100
+  },
+
+  {
+    "id": "gptzero",
+    "name": "GPTZero",
+    "category": "Detection AI",
+    "url": "https://gptzero.me",
+    "description": "Detect AI-generated text.",
+    "trending": true,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSrwY2KU5oDbPQYFsQ2nJwJDgCLeXkzC-G1Jg&s",
+    "clicks": 200
+  },
+  {
+    "id": "originalityai",
+    "name": "Originality.ai",
+    "category": "Detection AI",
+    "url": "https://originality.ai",
+    "description": "AI plagiarism and detection tool.",
+    "trending": false,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSyDE2e22njUt6Y6ekm3Qna4uQJk-0pBtaxpQ&s",
+    "clicks": 140
+  },
+
+  {
+    "id": "taskade",
+    "name": "Taskade",
+    "category": "Productivity AI",
+    "url": "https://taskade.com",
+    "description": "AI productivity and collaboration tool.",
+    "trending": true,
+    "logo": "https://www.taskade.com/images/logo.svg",
+    "clicks": 170
+  },
+  {
+    "id": "motion",
+    "name": "Motion",
+    "category": "Productivity AI",
+    "url": "https://usemotion.com",
+    "description": "AI task and calendar manager.",
+    "trending": true,
+    "logo": "https://gptbot.b-cdn.net/favicons/motion_ai_favicon.png",
+    "clicks": 190
+  },
+ 
+  {
+    "id": "browseai",
+    "name": "Browse AI",
+    "category": "Automation AI",
+    "url": "https://browse.ai",
+    "description": "Extract data from websites using AI.",
+    "trending": false,
+    "logo": "https://avatars.githubusercontent.com/u/61889315?s=200&v=4",
+    "clicks": 130
+  },
+  {
+    "id": "bardeen",
+    "name": "Bardeen",
+    "category": "Automation AI",
+    "url": "https://bardeen.ai",
+    "description": "AI workflow automation tool.",
+    "trending": true,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQIekyHPTxZ5psylYiKAk619LD_Rj5UE22c0Q&s",
+    "clicks": 160
+  },
+
+  {
+    "id": "harveyai",
+    "name": "Harvey AI",
+    "category": "Legal AI",
+    "url": "https://harvey.ai",
+    "description": "AI for legal professionals.",
+    "trending": true,
+    "logo": "https://media.licdn.com/dms/image/v2/D4E0BAQEkyRHeFI9sdA/company-logo_200_200/company-logo_200_200/0/1727880962073/harvey_ai_logo?e=2147483647&v=beta&t=zCj_QXCemsEw4QnVaDPtoWAUF4H9vAgaxHjP5PSVNKw",
+    "clicks": 150
+  },
+  {
+    "id": "casetext",
+    "name": "Casetext",
+    "category": "Legal AI",
+    "url": "https://casetext.com",
+    "description": "AI legal research assistant.",
+    "trending": false,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR4fjyr0F_CmFv8b_5Z7yhifBOfCLKjngrgzg&s",
+    "clicks": 100
+  },
+
+  {
+    "id": "krea",
+    "name": "Krea AI",
+    "category": "Image AI",
+    "url": "https://krea.ai",
+    "description": "Real-time AI image generator.",
+    "trending": true,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSZVthmbg9dBT6_RUeoubrz4TOk8W9ALDHZRQ&s",
+    "clicks": 200
+  },
+  {
+    "id": "scenario",
+    "name": "Scenario",
+    "category": "Image AI",
+    "url": "https://scenario.gg",
+    "description": "AI game asset generator.",
+    "trending": false,
+    "logo": "https://www.scenario.com/logos/scenario-full-black.svg?dpl=dpl_34byngV863aHJMxtAuNXwzRbvGZm",
+    "clicks": 90
+  },
+
+  {
+    "id": "flowgpt",
+    "name": "FlowGPT",
+    "category": "Prompt AI",
+    "url": "https://flowgpt.com",
+    "description": "Prompt sharing community.",
+    "trending": true,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR4BevLzow8ibVzx2YBVLlEsoBkpfPVVm5TfA&s",
+    "clicks": 170
+  },
+  {
+    "id": "promptbase",
+    "name": "PromptBase",
+    "category": "Prompt AI",
+    "url": "https://promptbase.com",
+    "description": "Marketplace for AI prompts.",
+    "trending": true,
+    "logo": "https://res.cloudinary.com/apideck/image/upload/v1670797880/marketplaces/ckhg56iu1mkpc0b66vj7fsj3o/listings/MNIbX9hf_400x400_bl7zdo.jpg",
+    "clicks": 180
+  },
+
+  {
+    "id": "kaiber",
+    "name": "Kaiber",
+    "category": "Video AI",
+    "url": "https://kaiber.ai",
+    "description": "AI video and animation generator.",
+    "trending": true,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSt_nwIjmlrVzGRqTr1NiirkJAZ8ATkDBKnCw&s",
+    "clicks": 200
+  },
+  {
+    "id": "animotoai",
+    "name": "Animoto AI",
+    "category": "Video AI",
+    "url": "https://animoto.com",
+    "description": "AI video maker for marketing.",
+    "trending": false,
+    "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcThiEJOmPB-jvQlteqUTx4tWHPOjfTh2HmnQA&s",
+    "clicks": 100
+  }
 ]
