@@ -82,8 +82,6 @@ async function generateAI(messages) {
 }
 
 async function generateImage(prompt) {
-
-  // 🥇 HuggingFace (PRIMARY)
   try {
     const res = await axios.post(
       "https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0",
@@ -97,6 +95,18 @@ async function generateImage(prompt) {
       }
     );
 
+    // ✅ CHECK: if response is NOT image
+    const contentType = res.headers["content-type"];
+
+    if (!contentType.includes("image")) {
+      const errorText = Buffer.from(res.data).toString();
+      console.log("❌ HF NOT IMAGE:", errorText);
+
+      return {
+        url: "https://via.placeholder.com/512?text=HF+Model+Loading"
+      };
+    }
+
     const base64 = Buffer.from(res.data).toString("base64");
 
     return {
@@ -105,12 +115,11 @@ async function generateImage(prompt) {
 
   } catch (err) {
     console.log("❌ HF ERROR:", err.response?.data || err.message);
-  }
 
-  // 🥈 fallback placeholder
-  return {
-    url: "https://via.placeholder.com/512?text=Image+Failed"
-  };
+    return {
+      url: "https://via.placeholder.com/512?text=Image+Failed"
+    };
+  }
 }
 const app = express();
 
