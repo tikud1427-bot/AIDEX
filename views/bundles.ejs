@@ -103,14 +103,21 @@ function quick(text) {
   generateBundle();
 }
   function render(data) {
-    if (!data.steps || !Array.isArray(data.steps)) {
-      document.getElementById("result").innerText = "❌ Invalid bundle format";
-      return;
-    }
+  if (!data.steps || !Array.isArray(data.steps)) {
+    document.getElementById("result").innerText = "❌ Invalid bundle format";
+    return;
+  }
 
+  // ✅ SAVE FULL BUNDLE (FIXED)
+  localStorage.setItem("aqua_bundle_full", JSON.stringify(data));
     let html = `
       <div class="bundle-header">
         <h2>${data.title || "Project Plan"}</h2>
+
+        <div class="xp-box">
+          ⚡ XP: <span id="xpValue">0</span> | 
+          🏆 Level: <span id="levelValue">1</span>
+        </div>
 
         <div style="background:#1e293b; border-radius:10px; height:10px; margin:10px 0;">
           <div id="progressFill" style="height:10px; width:0%; background:#22c55e; border-radius:10px;"></div>
@@ -132,7 +139,7 @@ function quick(text) {
           <h3>Step ${step.step || ""}: ${step.title || ""}</h3>
           <p>${step.description || ""}</p>
 
-          <button onclick="completeStep(${step.step})">
+          <button onclick="completeStep(${step.step}, this)">
             ✅ Mark as Done
           </button>
 
@@ -272,18 +279,294 @@ function quick(text) {
       }
 
       let completedSteps = [];
+      let xp = 0;
+      let level = 1;
 
-      function completeStep(step){
+      function completeStep(step, btn){
         if(!completedSteps.includes(step)){
           completedSteps.push(step);
+
+          // ❌ disable button after click
+          if(btn){
+            btn.disabled = true;
+            btn.innerText = "✅ Completed";
+          }
+
+          xp += 10;
+          level = Math.floor(xp / 50) + 1;
+
+          showReward("+10 XP 🚀");
+          updateXPUI();
         }
+
+        localStorage.setItem("aqua_bundle_progress", JSON.stringify({
+          title: document.querySelector(".bundle-header h2")?.innerText,
+          completedSteps,
+          xp,
+          level,
+          totalSteps: document.querySelectorAll(".step").length
+        }));
 
         const total = document.querySelectorAll(".step").length;
         const progress = (completedSteps.length / total) * 100;
 
-        document.getElementById("progressFill").style.width = progress + "%";
-      }
+        const bar = document.getElementById("progressFill");
+        bar.style.transition = "width 0.4s ease";
+        bar.style.width = progress + "%";
 
+        if(progress === 100){
+          showReward("🎉 Project Completed!");
+        }
+      }
+      function showResumeBox(data){
+        // ❌ remove old if exists
+        const old = document.getElementById("resume-box");
+        if(old) old.remove();
+
+        const div = document.createElement("div");
+        div.id = "resume-box";
+
+        div.innerHTML = `
+          <div style="
+            background:#0f172a;
+            border:1px solid #1e293b;
+            padding:15px;
+            border-radius:10px;
+            margin:20px;
+            text-align:center;
+          ">
+            <h3>🔥 Continue your project</h3>
+            <p>${data.title}</p>
+            <p>${data.completedSteps.length}/${data.totalSteps} steps completed</p>
+
+            <button onclick="resumeBundle()">
+              ▶ Resume
+            </button>
+          </div>
+        `;
+
+        document.querySelector(".bundle-box").appendChild(div);
+      }
+      function resumeBundle(){
+        const savedBundle = localStorage.getItem("aqua_bundle_full");
+        const savedProgress = localStorage.getItem("aqua_bundle_progress");
+        const resumeBox = document.getElementById("resume-box");
+        if(resumeBox) resumeBox.remove();
+
+        if(!savedBundle || !savedProgress){
+          alert("No saved project found");
+          return;
+        }
+
+        const bundleData = JSON.parse(savedBundle);
+        const progressData = JSON.parse(savedProgress);
+
+        // 🔥 Re-render bundle
+        render(bundleData);
+
+        // 🔥 Restore state AFTER render
+        setTimeout(() => {
+          restoreProgress(progressData);
+        }, 100);
+      }
+      function updateXPUI(){
+        const xpEl = document.getElementById("xpValue");
+        const lvlEl = document.getElementById("levelValue");
+
+        xpEl.innerText = xp;
+        lvlEl.innerText = level;
+
+        // 🔥 pulse effect
+        xpEl.style.transform = "scale(1.2)";
+        setTimeout(() => {
+          xpEl.style.transform = "scale(1)";
+        }, 200);
+      }
+      function restoreProgress(data){
+        completedSteps = data.completedSteps || [];
+        xp = data.xp || 0;
+        level = data.level || 1;
+
+        updateXPUI();
+
+        const total = data.totalSteps || 1;
+        const progress = (completedSteps.length / total) * 100;
+
+        const bar = document.getElementById("progressFill");
+        bar.style.transition = "width 0.4s ease";
+        bar.style.width = progress + "%";
+
+        // 🔥 Disable completed buttons
+        document.querySelectorAll(".step button").forEach((btn, index) => {
+          const stepNumber = index + 1;
+
+          if(completedSteps.includes(stepNumber)){
+            btn.disabled = true;
+            btn.innerText = "✅ Completed";
+          }
+        });
+      }
+      function showReward(text){
+        const div = document.createElement("div");
+        div.innerText = text;
+
+        div.style.position = "fixed";
+        div.style.top = "20px";
+        div.style.right = "20px";
+        div.style.background = "#22c55e";
+        div.style.color = "white";
+        div.style.padding = "10px 15px";
+        div.style.borderRadius = "8px";
+        div.style.zIndex = "9999";
+
+        document.body.appendChild(div);
+
+        setTimeout(() => div.remove(), 2000);
+      }
+      window.addEventListener("load", () => {
+        const saved = localStorage.getItem("aqua_bundle_progress");
+
+        if(saved){
+          const data = JSON.parse(saved);
+          showResumeBox(data);
+        }
+
+        const task = setDailyTask();
+        if(task){
+          showDailyTask();
+        }
+
+        // 🔥 STREAK
+        showStreak();
+      });
+        function generateDailyTask(bundle){
+          if(!bundle || !bundle.steps) return null;
+
+          const randomStep = bundle.steps[Math.floor(Math.random() * bundle.steps.length)];
+
+          return `👉 Complete: ${randomStep.title}`;
+        }
+      function setDailyTask(){
+        const today = new Date().toDateString();
+
+        const existing = localStorage.getItem("aqua_daily_task"); // ✅ FIX
+
+        if(existing){
+          const parsed = JSON.parse(existing);
+          if(parsed.date === today){
+            return parsed.task;
+          }
+        }
+
+        const bundleRaw = localStorage.getItem("aqua_bundle_full");
+        if(!bundleRaw) return null;
+
+        const bundle = JSON.parse(bundleRaw);
+        const task = generateDailyTask(bundle);
+
+        if(task){
+          localStorage.setItem("aqua_daily_task", JSON.stringify({
+            date: today,
+            task
+          }));
+        }
+
+        return task;
+      }
+      function showDailyTask(){
+        const old = document.getElementById("daily-task");
+        if(old) old.remove();
+
+        const data = JSON.parse(localStorage.getItem("aqua_daily_task"));
+        if(!data || !data.task) return;
+
+        const doneDate = localStorage.getItem("aqua_daily_task_done");
+        const today = new Date().toDateString();
+        const isDone = doneDate === today;
+
+        const div = document.createElement("div");
+        div.id = "daily-task";
+
+        div.innerHTML = `
+          <div style="
+            background:#020617;
+            border:1px solid #1e293b;
+            padding:15px;
+            border-radius:10px;
+            margin:20px;
+            text-align:center;
+          ">
+            <h3>🧠 Today’s Task</h3>
+            <p>${data.task}</p>
+
+            <button onclick="completeDailyTask(this)" ${isDone ? "disabled" : ""}>
+              ${isDone ? "🎉 Done!" : "✅ Mark as Done"}
+            </button>
+          </div>
+        `;
+
+        document.querySelector(".bundle-box").appendChild(div);
+      }
+        function completeDailyTask(btn){
+          btn.innerText = "🎉 Done!";
+          btn.disabled = true;
+
+          xp += 20;
+          updateXPUI();
+          updateStreak();
+          showStreak();
+
+          // ✅ SAVE COMPLETION
+          localStorage.setItem("aqua_daily_task_done", new Date().toDateString());
+
+          showReward("🔥 Daily task completed +20 XP");
+        }
+      function updateStreak(){
+        const today = new Date().toDateString();
+        const last = localStorage.getItem("aqua_last_active");
+        let streak = parseInt(localStorage.getItem("aqua_streak") || "0");
+
+        if(last === today){
+          return streak; // already counted today
+        }
+
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        if(last === yesterday.toDateString()){
+          streak += 1; // continue streak
+        } else {
+          streak = 1; // reset streak
+        }
+
+        localStorage.setItem("aqua_streak", streak);
+        localStorage.setItem("aqua_last_active", today);
+
+        return streak;
+      }
+      function showStreak(){
+        const streak = localStorage.getItem("aqua_streak") || 0;
+
+        const div = document.createElement("div");
+
+        div.innerHTML = `
+          <div style="
+            background:#020617;
+            border:1px solid #1e293b;
+            padding:10px;
+            border-radius:10px;
+            margin:10px 20px;
+            text-align:center;
+            color:#facc15;
+            font-weight:bold;
+          ">
+            🔥 Streak: ${streak} day${streak == 1 ? "" : "s"}
+          </div>
+        `;
+
+        document.querySelector(".bundle-box").appendChild(div);
+      }
+      
     </script>
       
 
