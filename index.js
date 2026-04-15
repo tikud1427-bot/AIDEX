@@ -1044,7 +1044,12 @@ app.post("/chat", upload.single("file"), async (req, res) => {
           { role: "user", content: resultsText }
         ]);
 
-        return res.json({ reply });
+        return res.json({
+          reply,
+          messages: [
+            { role: "assistant", content: reply }
+          ]
+        });
       } catch {
         return res.json({
           reply: `🔎 https://www.google.com/search?q=${encodeURIComponent(message)}`
@@ -1055,6 +1060,9 @@ app.post("/chat", upload.single("file"), async (req, res) => {
     // ================= STREAM MODE =================
     if (stream) {
       res.setHeader("Content-Type", "text/event-stream");
+      if (req.body.refiner === "true") {
+        res.write(`data: ${JSON.stringify({ refined: refinedMessage })}\n\n`);
+      }
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
@@ -1180,7 +1188,8 @@ app.post("/chat", upload.single("file"), async (req, res) => {
         return res.json({
           reply,
           messages,
-          chatId: chat._id
+          chatId: chat._id,
+          refined: refinedMessage // ✅ ADD THIS
         });
       }
 

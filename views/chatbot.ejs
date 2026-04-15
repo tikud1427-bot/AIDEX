@@ -105,7 +105,7 @@ async function send() {
   formData.append("chatId", currentChatId || "");
   formData.append("history", JSON.stringify(messages.slice(-10)));
   formData.append("refiner", useRefiner ? "true" : "false");
-  formData.append("stream", "true");
+  formData.append("stream", mode === "chat" ? "true" : "false");
   if (file) formData.append("file", file);
 
   // Show user message bubble
@@ -151,6 +151,25 @@ async function send() {
             ${marked.parse(data.reply)}
           </div>
           <img src="${data.image}" style="max-width:100%; border-radius:10px; margin-top:10px;" />
+
+          <a href="${data.image}" download="aqua-image.png" class="download-btn">
+            ⬇ Download
+          </a>
+        </div>
+      `;
+
+      chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
+      return;
+    }
+
+    if (mode !== "chat") {
+      const data = await res.json();
+
+      chat.innerHTML += `
+        <div class="msg bot">
+          <div class="bot-text markdown-body">
+            ${marked.parse(data.reply)}
+          </div>
         </div>
       `;
 
@@ -194,19 +213,81 @@ async function send() {
         // partial event. Process it now so no tokens are lost.
         if (buffer.trim()) {
           const lines = buffer.split("\n");
+
           for (const line of lines) {
             const trimmed = line.trim();
             if (!trimmed.startsWith("data:")) continue;
+
             const payload = trimmed.slice(5).trim();
             if (!payload || payload === "[DONE]") continue;
+
+            let parsed;
+
             try {
-              // FIX: JSON.parse the payload — the backend now sends
-              // JSON.stringify(token) so \n and special chars are preserved.
-              const token = JSON.parse(payload);
-              fullText += token;
+              parsed = JSON.parse(payload);
             } catch {
-              // Ignore unparseable leftovers
+              continue;
             }
+
+            // ✅ refined
+            if (parsed && parsed.refined) {
+              let refBox = document.getElementById("refinedBox");
+
+              if (!refBox) {
+                refBox = document.createElement("div");
+                refBox.id = "refinedBox";
+                refBox.className = "msg bot";
+                chat.appendChild(refBox);
+              }
+
+              refBox.innerHTML = `
+                <div class="bot-text markdown-body">
+                  ✨ <b>Refined Prompt:</b><br>
+                  ${marked.parse(parsed.refined)}
+                </div>
+              `;
+
+              continue;
+            }
+
+            // ✅ token
+            if (typeof parsed === "string") {
+              fullText += parsed;
+            }
+          }
+        }
+            } catch {
+              continue;
+            }
+
+            // ✅ HANDLE REFINED PROMPT
+            if (parsed && parsed.refined) {
+              // Create or update UI
+              let refBox = document.getElementById("refinedBox");
+
+              if (!refBox) {
+                refBox = document.createElement("div");
+                refBox.id = "refinedBox";
+                refBox.className = "msg bot";
+                chat.appendChild(refBox);
+              }
+
+              refBox.innerHTML = `
+                <div class="bot-text markdown-body">
+                  ✨ <b>Refined Prompt:</b><br>
+                  ${marked.parse(parsed.refined)}
+                </div>
+              `;
+
+              continue;
+            }
+
+            // ✅ HANDLE TOKEN
+            if (typeof parsed === "string") {
+              fullText += parsed;
+            }
+            if (!payload || payload === "[DONE]") continue;
+            
           }
         }
         streamDone = true;
@@ -235,6 +316,42 @@ async function send() {
           // FIX: Use slice(5) instead of replace("data: ", "") to safely
           // strip the "data:" prefix regardless of spacing variations.
           const payload = trimmed.slice(5).trim();
+          if (!payload) continue;
+
+          let parsed;
+
+          try {
+            parsed = JSON.parse(payload);
+          } catch {
+            continue;
+          }
+
+          // ✅ HANDLE REFINED PROMPT
+          if (parsed && parsed.refined) {
+            // Create or update UI
+            let refBox = document.getElementById("refinedBox");
+
+            if (!refBox) {
+              refBox = document.createElement("div");
+              refBox.id = "refinedBox";
+              refBox.className = "msg bot";
+              chat.appendChild(refBox);
+            }
+
+            refBox.innerHTML = `
+              <div class="bot-text markdown-body">
+                ✨ <b>Refined Prompt:</b><br>
+                ${marked.parse(parsed.refined)}
+              </div>
+            `;
+
+            continue;
+          }
+
+          // ✅ HANDLE TOKEN
+          if (typeof parsed === "string") {
+            fullText += parsed;
+          }
 
           if (!payload) continue;
 
@@ -243,17 +360,7 @@ async function send() {
             break;
           }
 
-          try {
-            // FIX: JSON.parse instead of using the raw string.
-            // The backend sends JSON.stringify(token), so:
-            //   - "\n" in the token is encoded as \\n in the SSE line
-            //   - parsing restores it to a real newline
-            //   - NO spurious spaces are added
-            const token = JSON.parse(payload);
-            fullText += token;
-          } catch {
-            // Malformed JSON — skip silently (e.g. error frames from Groq)
-          }
+          
         }
 
         if (streamDone) break;
@@ -270,6 +377,16 @@ async function send() {
 
     // ── Final render (no cursor) ─────────────────
     botText.innerHTML = marked.parse(fullText);
+
+    const copyBtn = document.createElement("button");
+    copyBtn.innerText = "📋";
+    copyBtn.onclick = () => {
+      navigator.clipboard.writeText(fullText);
+      copyBtn.innerText = "✅";
+      setTimeout(() => copyBtn.innerText = "📋", 1500);
+    };
+
+    botMsg.appendChild(copyBtn);
 
     // Save assistant reply to local history
     messages.push({ role: "assistant", content: fullText });
