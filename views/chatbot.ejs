@@ -166,33 +166,35 @@ function setMode(m) {
 
       let fullText = "";
 
+      let buffer = "";
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value);
-        const lines = chunk.split("\n");
+        buffer += decoder.decode(value);
 
-        for (let line of lines) {
-          if (!line.startsWith("data: ")) continue;
+        const parts = buffer.split("\n\n");
 
-          const data = line.replace("data: ", "").trim();
+        buffer = parts.pop(); // keep incomplete chunk
 
-          if (data === "[DONE]") {
-            break;
-          }
+        for (let part of parts) {
+          if (!part.startsWith("data: ")) continue;
 
-          fullText += data;
+          const data = part.replace("data: ", "").trim();
 
-          // ✨ typing effect
-          botText.innerHTML = marked.parse(fullText) + "<span class='cursor'>▌</span>";
+          if (data === "[DONE]") break;
+
+          fullText += data + " ";
+
+          botText.innerHTML =
+            marked.parse(fullText) + "<span class='cursor'>▌</span>";
+
           chat.scrollTo({
             top: chat.scrollHeight,
             behavior: "smooth"
           });
         }
-
-        if (chunk.includes("[DONE]")) break;
       }
 
       // remove cursor after done
