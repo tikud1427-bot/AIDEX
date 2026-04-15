@@ -1091,38 +1091,76 @@ app.post("/chat", upload.single("file"), async (req, res) => {
           }
         });
 
+        // FIX: Maintain a line buffer across chunks.
+        // Groq sends SSE over TCP; a single "data" event from Node's stream
+        // may contain multiple SSE lines, or may end mid-line. Without
+        // buffering, the partial last line is silently dropped every chunk.
+        let lineBuffer = "";
+
         response.data.on("data", chunk => {
-          const lines = chunk.toString().split("\n");
+          lineBuffer += chunk.toString();
+
+          // Process all complete lines (terminated by \n).
+          // The last segment may be incomplete — keep it in lineBuffer.
+          const lines = lineBuffer.split("\n");
+          lineBuffer = lines.pop(); // incomplete tail, held for next chunk
 
           for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const data = line.replace("data: ", "");
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
 
-              if (data === "[DONE]") {
-                // ✅ SAVE CHAT AFTER STREAM
-                messages.push({
-                  role: "assistant",
-                  content: fullReply
-                });
+            // Safely strip "data:" prefix regardless of spacing
+            const payload = trimmed.slice(5).trim();
 
-                (async () => {
-                  await saveChat(messages, chatId, req.session.userId, message);
-                })();
+            if (!payload) continue;
 
-                res.write("data: [DONE]\n\n");
-                res.end();
-                return;
+            if (payload === "[DONE]") {
+              // Flush any remaining lineBuffer content before closing
+              if (lineBuffer.trim().startsWith("data:")) {
+                const last = lineBuffer.trim().slice(5).trim();
+                if (last && last !== "[DONE]") {
+                  try {
+                    const parsed = JSON.parse(last);
+                    const token = parsed.choices[0]?.delta?.content;
+                    if (token) {
+                      fullReply += token;
+                      // FIX: JSON.stringify the token before writing.
+                      // Raw token may contain \n, \n\n, or markdown chars.
+                      // Writing them raw breaks SSE framing — a token of
+                      // "\n\n## Title" would look like two separate events.
+                      // JSON.stringify encodes them as \\n so the SSE line
+                      // stays on one line, and the frontend JSON.parses it back.
+                      res.write(`data: ${JSON.stringify(token)}\n\n`);
+                    }
+                  } catch {}
+                }
               }
 
-              try {
-                const parsed = JSON.parse(data);
-                const token = parsed.choices[0]?.delta?.content;
+              messages.push({
+                role: "assistant",
+                content: fullReply
+              });
 
-                if (token) {
-                  fullReply += token;
-                  res.write(`data: ${token}\n\n`);
-                }
-              } catch {}
+              (async () => {
+                await saveChat(messages, chatId, req.session.userId, message);
+              })();
+
+              res.write("data: [DONE]\n\n");
+              res.end();
+              return;
+            }
+
+            try {
+              const parsed = JSON.parse(payload);
+              const token = parsed.choices[0]?.delta?.content;
+
+              if (token) {
+                fullReply += token;
+                // FIX: JSON.stringify preserves \n and all whitespace in token.
+                res.write(`data: ${JSON.stringify(token)}\n\n`);
+              }
+            } catch {
+              // Skip malformed JSON lines (e.g. Groq error frames)
             }
           }
         });

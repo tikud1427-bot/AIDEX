@@ -2,11 +2,10 @@
 <html>
 <head>
   <link rel="stylesheet" href="/css/styles.css">
-  <link rel="stylesheet" href="/css/aqua.css"> <!-- 🔥 NEW -->
+  <link rel="stylesheet" href="/css/aqua.css">
   <title>🌊 Aqua AI</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
 </head>
 
 <body>
@@ -57,9 +56,21 @@
 </div>
 
 <script>
+// ─────────────────────────────────────────────
+// MARKED CONFIGURATION
+// Must be done before any marked.parse() calls.
+// - gfm: GitHub Flavored Markdown (tables, fenced code, strikethrough)
+// - breaks: converts single \n in source to <br> (like ChatGPT)
+// ─────────────────────────────────────────────
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+});
+
 let messages = [];
 let currentChatId = null;
 let mode = "chat";
+let useRefiner = false;
 
 /* MODE */
 function setMode(m) {
@@ -68,170 +79,231 @@ function setMode(m) {
 }
 
 /* SEND MESSAGE */
-  async function send() {
-    const input = document.getElementById("messageInput");
-    const chat = document.getElementById("chat");
-    const fileInput = document.getElementById("fileUpload");
+async function send() {
+  const input = document.getElementById("messageInput");
+  const chat = document.getElementById("chat");
+  const fileInput = document.getElementById("fileUpload");
 
-    const message = input.value.trim();
-    const file = fileInput.files[0];
+  const message = input.value.trim();
+  const file = fileInput.files[0];
 
-    if (!message && !file) return;
+  if (!message && !file) return;
 
-    input.value = "";
-    
-  
+  input.value = "";
 
-    const formData = new FormData();
+  // ─────────────────────────────────────────────
+  // FIX: Push user message to local history BEFORE sending.
+  // Previously this was never done, so multi-turn context was broken.
+  // ─────────────────────────────────────────────
+  if (message) {
+    messages.push({ role: "user", content: message });
+  }
 
-    formData.append("message", message);
-    formData.append("mode", mode);
-    formData.append("chatId", currentChatId || "");
+  const formData = new FormData();
+  formData.append("message", message);
+  formData.append("mode", mode);
+  formData.append("chatId", currentChatId || "");
+  formData.append("history", JSON.stringify(messages.slice(-10)));
+  formData.append("refiner", useRefiner ? "true" : "false");
+  formData.append("stream", "true");
+  if (file) formData.append("file", file);
 
-    // ✅ ONLY THIS (clean history control)
-    formData.append("history", JSON.stringify(messages.slice(-10)));
-
-    formData.append("refiner", useRefiner ? "true" : "false");
-    formData.append("stream", "true");
-
-    if (file) formData.append("file", file);
-    // show user message
-    if (message) {
-      chat.innerHTML += `
-        <div class="msg user">
-          ${marked.parse(message)}
-        </div>
-      `;
-    }
-
-    chat.scrollTo({
-      top: chat.scrollHeight,
-      behavior: "smooth"
-    });
-
-    // loading
-    const loading = document.createElement("div");
-    loading.className = "msg bot";
-    loading.id = "loading";
-    loading.innerHTML = `
-      <div class="typing">
-        <span></span>
-        <span></span>
-        <span></span>
-        <span class="typing-text">Thinking...</span>
+  // Show user message bubble
+  if (message) {
+    chat.innerHTML += `
+      <div class="msg user">
+        ${marked.parse(message)}
       </div>
     `;
-    chat.appendChild(loading);
+  }
 
-    try {
-      const res = await fetch("/chat", {
-        method: "POST",
-        body: formData
-      });
+  chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
 
-      document.getElementById("loading")?.remove();
+  // Loading indicator
+  const loading = document.createElement("div");
+  loading.className = "msg bot";
+  loading.id = "loading";
+  loading.innerHTML = `
+    <div class="typing">
+      <span></span>
+      <span></span>
+      <span></span>
+      <span class="typing-text">Thinking...</span>
+    </div>
+  `;
+  chat.appendChild(loading);
 
-      // 🎨 IMAGE MODE
-      if (mode === "image") {
-        const data = await res.json();
+  try {
+    const res = await fetch("/chat", {
+      method: "POST",
+      body: formData
+    });
 
-        chat.innerHTML += `
-          <div class="msg bot">
-            <div class="bot-text markdown-body">
-              ${marked.parse(data.reply)}
-            </div>
-            <img src="${data.image}" style="max-width:100%; border-radius:10px; margin-top:10px;" />
+    document.getElementById("loading")?.remove();
+
+    // ── IMAGE MODE ──────────────────────────────
+    if (mode === "image") {
+      const data = await res.json();
+
+      chat.innerHTML += `
+        <div class="msg bot">
+          <div class="bot-text markdown-body">
+            ${marked.parse(data.reply)}
           </div>
-        `;
+          <img src="${data.image}" style="max-width:100%; border-radius:10px; margin-top:10px;" />
+        </div>
+      `;
 
-        chat.scrollTo({
-          top: chat.scrollHeight,
-          behavior: "smooth"
-        });
-        return;
+      chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
+      return;
+    }
+
+    // ── STREAM MODE ─────────────────────────────
+    const reader = res.body.getReader();
+
+    // FIX: Pass {stream: true} so the decoder correctly handles
+    // multi-byte UTF-8 characters that are split across network chunks.
+    const decoder = new TextDecoder("utf-8", { fatal: false });
+
+    // Build the bot message bubble
+    const botMsg = document.createElement("div");
+    botMsg.className = "msg bot";
+
+    const botText = document.createElement("div");
+    botText.className = "bot-text markdown-body";
+
+    botMsg.appendChild(botText);
+    chat.appendChild(botMsg);
+
+    let fullText = "";
+
+    // SSE line buffer — holds incomplete lines between network chunks.
+    // Network chunks do NOT align with SSE event boundaries, so we must
+    // accumulate text and split on the SSE double-newline delimiter.
+    let buffer = "";
+
+    // FIX: Track whether stream has finished for the final flush.
+    let streamDone = false;
+
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        // ── End of stream flush ──────────────────
+        // Anything left in the buffer after the last \n\n is a final
+        // partial event. Process it now so no tokens are lost.
+        if (buffer.trim()) {
+          const lines = buffer.split("\n");
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (!trimmed.startsWith("data:")) continue;
+            const payload = trimmed.slice(5).trim();
+            if (!payload || payload === "[DONE]") continue;
+            try {
+              // FIX: JSON.parse the payload — the backend now sends
+              // JSON.stringify(token) so \n and special chars are preserved.
+              const token = JSON.parse(payload);
+              fullText += token;
+            } catch {
+              // Ignore unparseable leftovers
+            }
+          }
+        }
+        streamDone = true;
+        break;
       }
 
-      // 💬 STREAM MODE
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
+      // FIX: {stream: true} tells the decoder this is an ongoing stream.
+      // Without it, a multi-byte char split across chunks becomes U+FFFD.
+      buffer += decoder.decode(value, { stream: true });
 
-      let botMsg = document.createElement("div");
-      botMsg.className = "msg bot";
+      // SSE events are delimited by \n\n.
+      // parts = all complete events; the last element is an incomplete tail.
+      const parts = buffer.split("\n\n");
+      buffer = parts.pop(); // keep the incomplete tail for the next chunk
 
-      let botText = document.createElement("div");
-      botText.className = "bot-text markdown-body";
+      for (const part of parts) {
+        // An SSE event may have multiple lines (e.g. "event:\ndata:\n").
+        // We only care about data lines.
+        const lines = part.split("\n");
 
-      botMsg.appendChild(botText);
-      chat.appendChild(botMsg);
+        for (const line of lines) {
+          const trimmed = line.trim();
 
-      let fullText = "";
+          if (!trimmed.startsWith("data:")) continue;
 
-      let buffer = "";
+          // FIX: Use slice(5) instead of replace("data: ", "") to safely
+          // strip the "data:" prefix regardless of spacing variations.
+          const payload = trimmed.slice(5).trim();
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+          if (!payload) continue;
 
-        buffer += decoder.decode(value);
+          if (payload === "[DONE]") {
+            streamDone = true;
+            break;
+          }
 
-        const parts = buffer.split("\n\n");
+          try {
+            // FIX: JSON.parse instead of using the raw string.
+            // The backend sends JSON.stringify(token), so:
+            //   - "\n" in the token is encoded as \\n in the SSE line
+            //   - parsing restores it to a real newline
+            //   - NO spurious spaces are added
+            const token = JSON.parse(payload);
+            fullText += token;
+          } catch {
+            // Malformed JSON — skip silently (e.g. error frames from Groq)
+          }
+        }
 
-        buffer = parts.pop(); // keep incomplete chunk
+        if (streamDone) break;
 
-        for (let part of parts) {
-          if (!part.startsWith("data: ")) continue;
-
-          const data = part.replace("data: ", "").trim();
-
-          if (data === "[DONE]") break;
-
-          fullText += data + " ";
-
-          botText.innerHTML =
-            marked.parse(fullText) + "<span class='cursor'>▌</span>";
-
-          chat.scrollTo({
-            top: chat.scrollHeight,
-            behavior: "smooth"
-          });
+        // Re-render with cursor only if we got new content
+        if (fullText) {
+          botText.innerHTML = marked.parse(fullText) + "<span class='cursor'>▌</span>";
+          chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
         }
       }
 
-      // remove cursor after done
-      botText.innerHTML = marked.parse(fullText);
-
-      // ✅ SAVE ONCE (IMPORTANT)
-      
-      messages.push({
-        role: "assistant",
-        content: fullText
-      });
-
-      // optional temp id
-
-      } catch (err) {
-        console.error(err);
-
-        document.getElementById("loading")?.remove();
-
-        chat.innerHTML += `
-          <div class="msg bot">
-          <div class="bot-text markdown-body">⚠️ Something went wrong</div>
-          </div>
-        `;
-      }
-
-      fileInput.value = "";
-      input.focus();
-      }
-  
-/* ENTER KEY */
-  document.getElementById("messageInput").addEventListener("keydown", e => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault(); // 🔥 prevents newline
-      send();
+      if (streamDone) break;
     }
-  });
+
+    // ── Final render (no cursor) ─────────────────
+    botText.innerHTML = marked.parse(fullText);
+
+    // Save assistant reply to local history
+    messages.push({ role: "assistant", content: fullText });
+
+    chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
+
+  } catch (err) {
+    console.error("Stream error:", err);
+
+    document.getElementById("loading")?.remove();
+
+    chat.innerHTML += `
+      <div class="msg bot">
+        <div class="bot-text markdown-body">⚠️ Something went wrong</div>
+      </div>
+    `;
+
+    // Roll back the user message we optimistically pushed
+    if (messages.length && messages[messages.length - 1].role === "user") {
+      messages.pop();
+    }
+  }
+
+  fileInput.value = "";
+  input.focus();
+}
+
+/* ENTER KEY */
+document.getElementById("messageInput").addEventListener("keydown", e => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    send();
+  }
+});
 
 /* FILE UPLOAD SHOW IN CHAT */
 const fileInput = document.getElementById("fileUpload");
@@ -248,10 +320,7 @@ fileInput.addEventListener("change", () => {
     </div>
   `;
 
-  chat.scrollTo({
-    top: chat.scrollHeight,
-    behavior: "smooth"
-  });
+  chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
 });
 
 /* HISTORY */
@@ -276,54 +345,49 @@ async function loadHistoryList() {
     list.appendChild(div);
   });
 }
-  async function deleteChat(id) {
-    if (!confirm("Delete this chat?")) return;
 
-    await fetch("/history/" + id, { method: "DELETE" });
+async function deleteChat(id) {
+  if (!confirm("Delete this chat?")) return;
 
-    // remove from UI instantly
-    document.querySelector(`[data-id='${id}']`)?.remove();
+  await fetch("/history/" + id, { method: "DELETE" });
 
-    if (currentChatId === id) {
-      currentChatId = null;
-      messages = [];
-      document.getElementById("chat").innerHTML = "";
+  document.querySelector(`[data-id='${id}']`)?.remove();
+
+  if (currentChatId === id) {
+    currentChatId = null;
+    messages = [];
+    document.getElementById("chat").innerHTML = "";
+  }
+}
+
+async function loadChat(id, event) {
+  const res = await fetch("/history/" + id);
+  const data = await res.json();
+
+  currentChatId = id;
+  messages = data.messages;
+
+  const chat = document.getElementById("chat");
+  chat.innerHTML = "";
+
+  data.messages.forEach(m => {
+    if (m.role === "user") {
+      chat.innerHTML += `<div class="msg user">${marked.parse(m.content)}</div>`;
+    } else {
+      chat.innerHTML += `
+      <div class="msg bot">
+        <div class="bot-text markdown-body">
+          ${marked.parse(m.content)}
+        </div>
+        <button onclick="copyText(this)">📋</button>
+      </div>`;
     }
-  }
+  });
 
-  async function loadChat(id, event) {
-    const res = await fetch("/history/" + id);
-    const data = await res.json();
+  chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
 
-    currentChatId = id;
-    messages = data.messages;
-
-    const chat = document.getElementById("chat");
-    chat.innerHTML = "";
-
-    data.messages.forEach(m => {
-      if (m.role === "user") {
-        chat.innerHTML += `<div class="msg user">${marked.parse(m.content)}</div>`;
-      } else {
-        chat.innerHTML += `
-        <div class="msg bot">
-          <div class="bot-text markdown-body">
-            ${marked.parse(m.content)}
-          </div>
-          <button onclick="copyText(this)">📋</button>
-        </div>`;
-      }
-    });
-
-    chat.scrollTo({
-      top: chat.scrollHeight,
-      behavior: "smooth"
-    });
-
-    // 🔥 CLOSE SIDEBAR ON MOBILE
-    document.getElementById("sidebar").classList.remove("open");
-  }
-  
+  document.getElementById("sidebar").classList.remove("open");
+}
 
 function newChat() {
   currentChatId = null;
@@ -333,46 +397,45 @@ function newChat() {
 
 /* INIT */
 loadHistoryList();
-  
-  function copyText(btn) {
-    const text = btn.parentElement.querySelector(".bot-text").innerText;
 
-    navigator.clipboard.writeText(text);
+function copyText(btn) {
+  const text = btn.parentElement.querySelector(".bot-text").innerText;
+  navigator.clipboard.writeText(text);
+  btn.innerText = "✅";
+  setTimeout(() => btn.innerText = "📋", 1500);
+}
 
-    btn.innerText = "✅";
-    setTimeout(() => btn.innerText = "📋", 1500);
-  }
-  function toggleSidebar() {
-    const sidebar = document.getElementById("sidebar");
-    sidebar.classList.toggle("open");
-  }
-  document.addEventListener("click", (e) => {
-    const sidebar = document.getElementById("sidebar");
-    const toggle = document.getElementById("menuToggle");
-
-    if (
-      sidebar.classList.contains("active") &&
-      !sidebar.contains(e.target) &&
-      !toggle.contains(e.target)
-    ) {
-      sidebar.classList.remove("active");
-    }
-  });
-  const menuBtn = document.getElementById("menuToggle");
+function toggleSidebar() {
   const sidebar = document.getElementById("sidebar");
+  sidebar.classList.toggle("open");
+}
 
-  menuBtn.addEventListener("click", () => {
-    sidebar.classList.toggle("active");
-    document.body.classList.toggle("sidebar-open");
-  });
-  let useRefiner = false;
+document.addEventListener("click", (e) => {
+  const sidebar = document.getElementById("sidebar");
+  const toggle = document.getElementById("menuToggle");
 
-  function toggleRefiner(btn) {
-    useRefiner = !useRefiner;
-    btn.innerText = useRefiner ? "✨ Refiner ON" : "✨ Refiner OFF";
+  if (
+    sidebar.classList.contains("active") &&
+    !sidebar.contains(e.target) &&
+    !toggle.contains(e.target)
+  ) {
+    sidebar.classList.remove("active");
   }
-  
+});
+
+const menuBtn = document.getElementById("menuToggle");
+const sidebar = document.getElementById("sidebar");
+
+menuBtn.addEventListener("click", () => {
+  sidebar.classList.toggle("active");
+  document.body.classList.toggle("sidebar-open");
+});
+
+function toggleRefiner(btn) {
+  useRefiner = !useRefiner;
+  btn.innerText = useRefiner ? "✨ Refiner ON" : "✨ Refiner OFF";
+}
 </script>
-  
+
 </body>
 </html>
