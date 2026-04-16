@@ -513,11 +513,14 @@ app.get("/tools/category/:category", async (req, res) => {
     const allTools = await Tool.find().lean();
     const categories = [...new Set(allTools.map(t => t.category))];
 
+    const recommended = tools.slice(0, 3); // 🔥 add this
+
     res.render("tools", {
       tools,
       categories,
       selectedCategory: category,
-      searchQuery: searchQuery || ""
+      searchQuery: searchQuery || "",
+      recommended   // 🔥 FIX
     });
 
   } catch (err) {

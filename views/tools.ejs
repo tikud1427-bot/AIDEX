@@ -62,7 +62,7 @@
     <% } %>
 
   </div>
-      <% if (recommended && recommended.length > 0 && searchQuery) { %>
+      <% if (typeof recommended !== "undefined" && recommended.length > 0 && searchQuery) { %>
 
         <div class="ai-recommend-box">
 
