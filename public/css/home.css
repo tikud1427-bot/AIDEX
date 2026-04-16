@@ -1,3 +1,4 @@
+
 /* ===== GLOBAL RESET ===== */
 * {
   margin: 0;
@@ -661,4 +662,14 @@ html {
   font-size: 0.9rem;
   color: #e2e8f0;
   white-space: nowrap; /* prevents breaking */
+}
+
+.explore-all {
+  border: 1px dashed #38bdf8;
+  background: rgba(56, 189, 248, 0.05);
+}
+
+.explore-all:hover {
+  background: rgba(56, 189, 248, 0.15);
+  transform: translateY(-5px);
 }

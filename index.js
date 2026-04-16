@@ -475,37 +475,41 @@ Return ONLY JSON.
 //
 app.get("/tools/category/:category", async (req, res) => {
   try {
-    const category = decodeURIComponent(req.params.category);
+    const rawCategory = req.params.category;
+    const category = rawCategory.replace(/-/g, ' ');
     const searchQuery = req.query.q;
 
     let tools;
 
     if (searchQuery) {
       // 🔍 Search INSIDE category
-      let tools = await Tool.find({ category }).lean();
+      tools = await Tool.find({
+        category: { $regex: new RegExp(`^${category}$`, 'i') }
+      }).lean();
 
-      if (searchQuery) {
-        tools = tools.map(tool => {
-          let score = 0;
+      tools = tools.map(tool => {
+        let score = 0;
 
-          const text = (tool.name + tool.description).toLowerCase();
-          const query = searchQuery.toLowerCase();
+        const text = (tool.name + tool.description).toLowerCase();
+        const query = searchQuery.toLowerCase();
 
-          if (text.includes(query)) score += 5;
+        if (text.includes(query)) score += 5;
 
-          return { ...tool, score };
-        });
+        return { ...tool, score };
+      });
 
-        tools = tools
-          .filter(t => t.score > 0)
-          .sort((a, b) => b.score - a.score);
-      }
+      tools = tools
+        .filter(t => t.score > 0)
+        .sort((a, b) => b.score - a.score);
+
     } else {
       // 📂 Normal category filter
-      tools = await Tool.find({ category }).lean();
+      tools = await Tool.find({
+        category: { $regex: new RegExp(`^${category}$`, 'i') }
+      }).lean();
     }
 
-    // get all categories again
+    // categories list
     const allTools = await Tool.find().lean();
     const categories = [...new Set(allTools.map(t => t.category))];
 
@@ -513,12 +517,26 @@ app.get("/tools/category/:category", async (req, res) => {
       tools,
       categories,
       selectedCategory: category,
-      searchQuery: searchQuery || "" // ✅ FIXED
+      searchQuery: searchQuery || ""
     });
 
   } catch (err) {
     console.error(err);
     res.send("Error loading category");
+  }
+});
+
+app.get("/categories", async (req, res) => {
+  try {
+    const tools = await Tool.find().lean();
+
+    const categories = [...new Set(tools.map(t => t.category))];
+
+    res.render("categories", { categories });
+
+  } catch (err) {
+    console.error(err);
+    res.send("Error loading categories");
   }
 });
 //
