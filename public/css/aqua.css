@@ -1168,3 +1168,28 @@ button:disabled {
 body.sidebar-open {
   overflow: hidden;
 }
+
+
+/* =========================
+   FINAL CLEAN MOBILE PATCH
+========================= */
+
+@media (max-width: 768px) {
+
+  /* Fix layout stacking */
+  .aqua-body {
+    flex-direction: column;
+  }
+
+  /* Ensure main fills screen */
+  .aqua-main {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  /* Prevent header overflow */
+  .aqua-header-pills {
+    flex-wrap: wrap;
+  }
+
+}
