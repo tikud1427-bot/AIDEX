@@ -169,9 +169,8 @@ img {
   font-size: 18px;
 }
 
-/* ===== MOBILE ===== */
+/* ===== MOBILE (legacy) ===== */
 @media (max-width: 768px) {
-
   #menuToggle {
     display: block;
   }
@@ -200,24 +199,12 @@ img {
     height: 65vh;
   }
 }
+
 body.sidebar-open::after {
   content: "";
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.5);
-}
-#menuToggle {
-  position: fixed;
-  top: 70px;
-  left: 10px;
-  z-index: 99999; /* 🔥 VERY HIGH */
-}
-.sidebar {
-  z-index: 99998;
-}
-
-#menuToggle {
-  pointer-events: auto;
 }
 
 .markdown-body {
@@ -225,8 +212,8 @@ body.sidebar-open::after {
   font-size: 15px;
 }
 
-.markdown-body h1, 
-.markdown-body h2, 
+.markdown-body h1,
+.markdown-body h2,
 .markdown-body h3 {
   margin-top: 10px;
   margin-bottom: 6px;
@@ -248,7 +235,6 @@ body.sidebar-open::after {
 
 /* =========================
    🔥 AQUA PREMIUM OVERRIDE
-   Paste this at bottom ONLY
 ========================= */
 
 /* 🌌 Background upgrade */
@@ -260,10 +246,8 @@ body {
 #chat {
   background: rgba(15, 23, 42, 0.6) !important;
   backdrop-filter: blur(12px);
-
   border: 1px solid rgba(56, 189, 248, 0.2) !important;
   border-radius: 16px !important;
-
   padding: 16px !important;
   scroll-behavior: smooth;
 }
@@ -299,7 +283,6 @@ body {
 .chat-input {
   background: rgba(15, 23, 42, 0.7) !important;
   backdrop-filter: blur(10px);
-
   border: 1px solid rgba(56, 189, 248, 0.2) !important;
   border-radius: 14px !important;
   padding: 8px !important;
@@ -331,14 +314,8 @@ input {
 
 /* 🎬 Smooth animation */
 @keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(6px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Typing dots */
@@ -357,26 +334,14 @@ input {
   animation: bounce 1.4s infinite;
 }
 
-.typing span:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.typing span:nth-child(3) {
-  animation-delay: 0.4s;
-}
+.typing span:nth-child(2) { animation-delay: 0.2s; }
+.typing span:nth-child(3) { animation-delay: 0.4s; }
 
 @keyframes bounce {
-  0%, 80%, 100% {
-    transform: scale(0);
-    opacity: 0.3;
-  }
-  40% {
-    transform: scale(1);
-    opacity: 1;
-  }
+  0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+  40%            { transform: scale(1); opacity: 1; }
 }
 
-/* Image loading text */
 .img-loading {
   color: #38bdf8;
   font-size: 14px;
@@ -390,52 +355,7 @@ input {
   color: #94a3b8;
 }
 
-/* =========================
-   🔥 AQUA FINAL PREMIUM FIX
-   Paste at VERY BOTTOM ONLY
-========================= */
-
-/* ✨ Typing dots (ChatGPT style) */
-.typing {
-  display: flex;
-  gap: 6px;
-  padding: 10px;
-  align-items: center;
-}
-
-.typing span {
-  width: 8px;
-  height: 8px;
-  background: #38bdf8;
-  border-radius: 50%;
-  animation: bounce 1.4s infinite;
-}
-
-.typing span:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.typing span:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-@keyframes bounce {
-  0%, 80%, 100% {
-    transform: scale(0);
-    opacity: 0.3;
-  }
-  40% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-/* ✨ "Thinking..." text */
-.typing-text {
-  margin-left: 8px;
-  font-size: 13px;
-  color: #94a3b8;
-}
+/* ===== AQUA FINAL PREMIUM FIX ===== */
 
 /* ✨ Blinking cursor */
 .cursor {
@@ -443,17 +363,15 @@ input {
 }
 
 @keyframes blink {
-  50% {
-    opacity: 0;
-  }
+  50% { opacity: 0; }
 }
 
-/* 💬 Improve message width (more premium feel) */
+/* 💬 Improve message width */
 .msg {
   max-width: 85% !important;
 }
 
-/* 💻 Code block upgrade (VERY IMPORTANT) */
+/* 💻 Code block upgrade */
 .markdown-body pre {
   background: #020617 !important;
   border: 1px solid #334155;
@@ -469,17 +387,8 @@ input {
   border-radius: 6px;
 }
 
-/* 🧠 Smooth rendering (less jitter while streaming) */
 .markdown-body {
   will-change: contents;
-}
-
-/* 🎨 Image loading text polish */
-.img-loading {
-  color: #38bdf8;
-  font-size: 14px;
-  padding: 10px;
-  opacity: 0.9;
 }
 
 /* ✨ Subtle hover for bot messages */
@@ -488,7 +397,578 @@ input {
   transition: 0.2s;
 }
 
-/* ✨ Slight glow on user messages */
+/* ✨ Glow on user messages */
 .user {
   box-shadow: 0 0 14px rgba(56, 189, 248, 0.5);
+}
+
+
+/* =========================
+   🚀 AQUA RESPONSIVE SYSTEM
+   Production-grade upgrades
+========================= */
+
+/* ── AQUA SHELL: fill viewport, no overflow ── */
+.aqua-shell {
+  height: 100dvh; /* dynamic viewport height — fixes iOS browser chrome */
+  height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── HEADER: prevent wrapping on small screens ── */
+.aqua-header {
+  flex-shrink: 0;
+  min-height: 52px;
+  padding: 10px 14px;
+  gap: 8px;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.aqua-header::-webkit-scrollbar { display: none; }
+
+.aqua-logo {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* ── PILL BUTTONS: responsive sizing ── */
+.aqua-header-pills {
+  display: flex;
+  gap: 5px;
+  margin-left: auto;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+
+.pill-btn {
+  padding: 6px 11px;
+  font-size: 0.76rem;
+  white-space: nowrap;
+  min-height: 34px;           /* touch target */
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.18s ease;
+}
+
+.pill-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 200, 255, 0.18);
+}
+
+.pill-btn:active {
+  transform: scale(0.96);
+}
+
+.pill-btn.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(0, 200, 255, 0.1);
+  box-shadow: 0 0 8px rgba(0, 200, 255, 0.2);
+}
+
+.pill-btn.refiner-on {
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.2);
+}
+
+.pill-btn.compare-on {
+  box-shadow: 0 0 8px rgba(167, 139, 250, 0.2);
+}
+
+/* ── BODY: flex, overflow controlled ── */
+.aqua-body {
+  flex: 1;
+  min-height: 0;   /* crucial: allows flex children to shrink */
+  display: flex;
+  overflow: hidden;
+  position: relative;
+}
+
+/* ── SIDEBAR: desktop default ── */
+.aqua-sidebar {
+  flex-shrink: 0;
+  overflow: hidden;
+  /* transition covers both desktop collapse and mobile slide */
+  transition: width 0.3s ease, min-width 0.3s ease, transform 0.3s ease;
+}
+
+.aqua-sidebar.collapsed {
+  width: 0 !important;
+  min-width: 0 !important;
+  overflow: hidden;
+}
+
+/* ── MAIN: fill remaining space ── */
+.aqua-main {
+  flex: 1;
+  min-width: 0;    /* prevents content from expanding beyond flex parent */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ── CHAT SCROLL AREA ── */
+#chat {
+  flex: 1;
+  min-height: 0;  /* critical for flex scroll */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── NEW CHAT BUTTON: high contrast ── */
+.new-chat-btn {
+  font-size: 0.83rem;
+  min-height: 38px;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 10px rgba(0, 200, 255, 0.2);
+  transition: opacity 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.new-chat-btn:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 200, 255, 0.35);
+}
+
+.new-chat-btn:active {
+  transform: scale(0.97);
+}
+
+/* ── SEND BUTTON: high contrast + glow ── */
+.send-btn {
+  min-height: 38px;
+  min-width: 72px;
+  font-size: 0.87rem;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 8px rgba(0, 200, 255, 0.25);
+  transition: opacity 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+}
+
+.send-btn:not(:disabled):hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 200, 255, 0.4);
+}
+
+.send-btn:not(:disabled):active {
+  transform: scale(0.96);
+  box-shadow: none;
+}
+
+.send-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* ── INPUT ROW: prevent shrinking ── */
+.aqua-input-wrap {
+  flex-shrink: 0;
+  padding: 10px 12px 14px;
+}
+
+.aqua-input-row {
+  gap: 6px;
+  min-height: 46px;
+  align-items: flex-end;
+}
+
+#messageInput {
+  min-height: 26px;
+  font-size: 0.92rem;
+}
+
+/* ── INPUT ICON BUTTONS: tap-friendly ── */
+.input-icon-btn {
+  min-width: 34px;
+  min-height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.input-icon-btn:hover {
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+}
+
+.input-icon-btn:active {
+  background: rgba(255,255,255,0.1);
+  transform: scale(0.93);
+}
+
+/* ── MSG ACTION BUTTONS ── */
+.msg-action-btn {
+  min-height: 28px;
+  padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.73rem;
+  transition: all 0.15s ease;
+}
+
+.msg-action-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(0, 200, 255, 0.06);
+  transform: translateY(-1px);
+}
+
+.msg-action-btn:active {
+  transform: scale(0.95);
+}
+
+/* ── EXPORT TOOLBAR ── */
+.export-toolbar {
+  padding: 8px 12px 0;
+  gap: 6px;
+}
+
+.export-btn {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 0.74rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.15s ease;
+}
+
+.export-btn:hover {
+  border-color: var(--accent2);
+  color: var(--accent2);
+  transform: translateY(-1px);
+  background: rgba(123, 94, 167, 0.07);
+}
+
+.export-btn:active {
+  transform: scale(0.95);
+}
+
+/* ── HISTORY LIST ITEMS: touch targets ── */
+#historyList div {
+  min-height: 38px;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+#historyList div button {
+  min-width: 28px;
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  transition: background 0.15s ease;
+}
+
+#historyList div button:hover {
+  background: rgba(239, 68, 68, 0.12);
+  color: #f87171;
+}
+
+/* ── SIDEBAR TOGGLE (desktop header) ── */
+#menuToggle {
+  display: flex;          /* always visible in new layout */
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  min-height: 34px;
+  font-size: 1rem;
+  background: none;
+  border: 1px solid var(--border, #1e2d45);
+  color: var(--muted, #6b7fa3);
+  border-radius: 8px;
+  padding: 0;
+  position: static;       /* override fixed positioning from old rule */
+  z-index: auto;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+#menuToggle:hover {
+  color: var(--text, #e2eaf4);
+  border-color: var(--accent, #00c8ff);
+  background: rgba(0, 200, 255, 0.06);
+}
+
+#menuToggle:active {
+  transform: scale(0.93);
+}
+
+/* ── SIDEBAR TOGGLE BTN (inside sidebar) ── */
+.sidebar-toggle-btn {
+  min-width: 30px;
+  min-height: 30px;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.sidebar-toggle-btn:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.06);
+}
+
+/* ── STARTER CARDS: touch polish ── */
+.starter-card {
+  min-height: 70px;
+  transition: all 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.starter-card:active {
+  transform: scale(0.97);
+  box-shadow: none;
+}
+
+/* ── OVERLAY for mobile sidebar ── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 150;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+  animation: overlayFade 0.25s ease both;
+}
+
+.sidebar-overlay.visible {
+  display: block;
+}
+
+@keyframes overlayFade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* ── NO HORIZONTAL SCROLL ── */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* =========================
+   📱 MOBILE — max-width 640px
+========================= */
+@media (max-width: 640px) {
+
+  /* Header: compact, horizontally scrollable pills */
+  .aqua-header {
+    padding: 8px 10px;
+    min-height: 48px;
+    gap: 6px;
+  }
+
+  .aqua-logo {
+    font-size: 1.05rem;
+  }
+
+  .aqua-header-pills {
+    gap: 4px;
+  }
+
+  .pill-btn {
+    padding: 5px 8px;
+    font-size: 0.72rem;
+    min-height: 32px;
+  }
+
+  /* Sidebar: absolute drawer overlay */
+  .aqua-sidebar {
+    position: absolute !important;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 260px !important;
+    min-width: 260px !important;
+    z-index: 200;
+    transform: translateX(-100%);
+    border-right: 1px solid rgba(56, 189, 248, 0.15);
+  }
+
+  .aqua-sidebar.mobile-open {
+    transform: translateX(0) !important;
+  }
+
+  .aqua-sidebar.collapsed {
+    transform: translateX(-100%) !important;
+    width: 260px !important;
+    min-width: 260px !important;
+  }
+
+  /* Chat: flex-fills available height, no fixed px */
+  #chat {
+    padding: 12px 10px !important;
+  }
+
+  /* Messages: full width on mobile */
+  .msg {
+    max-width: 92% !important;
+  }
+
+  .msg.user {
+    margin-left: auto;
+  }
+
+  /* Input: comfortable vertical spacing */
+  .aqua-input-wrap {
+    padding: 8px 10px 12px;
+  }
+
+  .aqua-input-row {
+    padding: 6px 8px;
+    gap: 5px;
+  }
+
+  #messageInput {
+    font-size: 16px; /* prevents iOS zoom on focus */
+  }
+
+  .send-btn {
+    padding: 7px 14px;
+    font-size: 0.82rem;
+    min-width: 62px;
+  }
+
+  /* Export toolbar: wrap on mobile */
+  .export-toolbar {
+    padding: 6px 10px 0;
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .export-btn {
+    font-size: 0.7rem;
+    padding: 4px 8px;
+  }
+
+  /* Input meta row */
+  .input-meta {
+    font-size: 0.7rem;
+    gap: 5px;
+    flex-wrap: wrap;
+  }
+
+  /* Empty state: compact */
+  .empty-state {
+    padding: 24px 16px;
+    gap: 18px;
+  }
+
+  .empty-state h1 {
+    font-size: 1.5rem;
+  }
+
+  .starter-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+  }
+
+  .starter-card {
+    padding: 10px 12px;
+    font-size: 0.78rem;
+  }
+
+  /* Message actions: wrap naturally */
+  .msg-actions {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .msg-action-btn {
+    font-size: 0.69rem;
+    padding: 3px 8px;
+    min-height: 26px;
+  }
+
+  /* Compare grid: single column */
+  .compare-grid {
+    grid-template-columns: 1fr;
+  }
+
+  /* Tool suggestions */
+  .tool-suggestions {
+    font-size: 0.76rem;
+    padding: 8px 10px;
+  }
+}
+
+/* =========================
+   📱 TABLET — 641px – 768px
+========================= */
+@media (min-width: 641px) and (max-width: 768px) {
+
+  .aqua-sidebar {
+    position: absolute !important;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 240px !important;
+    min-width: 240px !important;
+    z-index: 200;
+    transform: translateX(-100%);
+  }
+
+  .aqua-sidebar.mobile-open {
+    transform: translateX(0) !important;
+  }
+
+  .aqua-sidebar.collapsed {
+    transform: translateX(-100%) !important;
+    width: 240px !important;
+    min-width: 240px !important;
+  }
+
+  .msg {
+    max-width: 88% !important;
+  }
+
+  #messageInput {
+    font-size: 16px;
+  }
+
+  .starter-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .pill-btn {
+    padding: 5px 10px;
+    font-size: 0.74rem;
+  }
+}
+
+/* =========================
+   🖥 DESKTOP: ensure sidebar
+   collapse works cleanly
+========================= */
+@media (min-width: 769px) {
+
+  .aqua-sidebar {
+    transform: none !important; /* never slide off-screen on desktop */
+  }
+
+  .aqua-sidebar.collapsed {
+    width: 0 !important;
+    min-width: 0 !important;
+    transform: none !important;
+  }
+
+  /* Sidebar toggle always visible in header */
+  #menuToggle {
+    display: flex;
+  }
 }

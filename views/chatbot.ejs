@@ -62,8 +62,10 @@
       display: flex;
       flex-direction: column;
       height: 100vh;
+      height: 100dvh;
       position: relative;
       z-index: 1;
+      overflow: hidden;
     }
 
     /* ── HEADER ── */
@@ -78,8 +80,13 @@
       position: sticky;
       top: 0;
       z-index: 100;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      scrollbar-width: none;
+      flex-shrink: 0;
     }
+    .aqua-header::-webkit-scrollbar { display: none; }
+
     .aqua-logo {
       font-family: var(--font-head);
       font-size: 1.25rem;
@@ -88,12 +95,15 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       letter-spacing: -0.5px;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
     .aqua-header-pills {
       display: flex;
       gap: 6px;
       margin-left: auto;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
+      flex-shrink: 0;
     }
     .pill-btn {
       padding: 5px 12px;
@@ -105,6 +115,11 @@
       cursor: pointer;
       transition: all 0.2s;
       font-family: var(--font-body);
+      white-space: nowrap;
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      -webkit-tap-highlight-color: transparent;
     }
     .pill-btn:hover, .pill-btn.active {
       border-color: var(--accent);
@@ -126,7 +141,9 @@
     .aqua-body {
       display: flex;
       flex: 1;
+      min-height: 0;
       overflow: hidden;
+      position: relative;
     }
 
     /* ── SIDEBAR ── */
@@ -139,9 +156,11 @@
       flex-direction: column;
       transition: transform 0.3s ease, width 0.3s ease, min-width 0.3s ease;
       overflow: hidden;
+      flex-shrink: 0;
+      z-index: 200;
     }
     .aqua-sidebar.collapsed {
-      transform: translateX(-240px);
+      transform: none;
       min-width: 0;
       width: 0;
     }
@@ -163,9 +182,12 @@
       font-family: var(--font-body);
       font-weight: 600;
       cursor: pointer;
-      transition: opacity 0.2s;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
+      min-height: 38px;
+      -webkit-tap-highlight-color: transparent;
     }
-    .new-chat-btn:hover { opacity: 0.88; }
+    .new-chat-btn:hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 4px 14px rgba(0,200,255,0.3); }
+    .new-chat-btn:active { transform: scale(0.97); }
 
     .sidebar-toggle-btn {
       background: none;
@@ -174,36 +196,49 @@
       cursor: pointer;
       font-size: 1rem;
       margin-left: 8px;
-      padding: 4px 6px;
-      border-radius: 6px;
-      transition: color 0.2s;
+      padding: 6px 8px;
+      border-radius: 7px;
+      transition: color 0.2s, background 0.15s;
+      min-width: 32px;
+      min-height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      -webkit-tap-highlight-color: transparent;
     }
-    .sidebar-toggle-btn:hover { color: var(--text); }
+    .sidebar-toggle-btn:hover { color: var(--text); background: rgba(255,255,255,0.06); }
 
     #historyList {
       flex: 1;
       overflow-y: auto;
       padding: 8px 6px;
+      -webkit-overflow-scrolling: touch;
     }
     #historyList div {
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 8px 10px;
+      padding: 9px 10px;
       border-radius: 8px;
       cursor: pointer;
       font-size: 0.82rem;
       color: var(--muted);
       transition: all 0.15s;
+      min-height: 38px;
+      -webkit-tap-highlight-color: transparent;
     }
     #historyList div:hover { background: var(--surface2); color: var(--text); }
     #historyList div span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #historyList div button {
       background: none; border: none; color: var(--muted);
-      cursor: pointer; font-size: 0.8rem; padding: 2px 4px;
-      opacity: 0; transition: opacity 0.15s;
+      cursor: pointer; font-size: 0.8rem; padding: 4px 6px;
+      min-width: 28px; min-height: 28px;
+      opacity: 0; transition: opacity 0.15s, background 0.15s;
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
     }
     #historyList div:hover button { opacity: 1; }
+    #historyList div button:hover { background: rgba(239,68,68,0.12); color: #f87171; }
 
     /* ── MAIN ── */
     .aqua-main {
@@ -211,16 +246,20 @@
       display: flex;
       flex-direction: column;
       overflow: hidden;
+      min-width: 0;
     }
 
     #chat {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       padding: 20px 16px;
       display: flex;
       flex-direction: column;
       gap: 12px;
       scroll-behavior: smooth;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
     }
     #chat::-webkit-scrollbar { width: 4px; }
     #chat::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
@@ -239,7 +278,7 @@
     }
     .empty-state h1 {
       font-family: var(--font-head);
-      font-size: clamp(1.5rem, 4vw, 2.4rem);
+      font-size: clamp(1.4rem, 4vw, 2.4rem);
       font-weight: 800;
       background: linear-gradient(135deg, var(--accent), #fff 60%, var(--accent2));
       -webkit-background-clip: text;
@@ -249,7 +288,7 @@
     .empty-state p { color: var(--muted); font-size: 0.9rem; }
     .starter-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
       gap: 10px;
       max-width: 600px;
       width: 100%;
@@ -266,6 +305,8 @@
       color: var(--text);
       font-family: var(--font-body);
       line-height: 1.35;
+      min-height: 70px;
+      -webkit-tap-highlight-color: transparent;
     }
     .starter-card .card-icon { font-size: 1.3rem; margin-bottom: 6px; display: block; }
     .starter-card:hover {
@@ -274,6 +315,7 @@
       transform: translateY(-2px);
       box-shadow: 0 8px 24px rgba(0,200,255,0.08);
     }
+    .starter-card:active { transform: scale(0.97); box-shadow: none; }
 
     /* ── MESSAGES ── */
     .msg {
@@ -312,6 +354,7 @@
       font-size: 0.9rem;
       line-height: 1.6;
       max-width: calc(100% - 44px);
+      word-break: break-word;
     }
     .msg.user .msg-bubble {
       background: var(--user-bg);
@@ -384,8 +427,13 @@
       cursor: pointer;
       transition: all 0.15s;
       font-family: var(--font-body);
+      min-height: 28px;
+      display: inline-flex;
+      align-items: center;
+      -webkit-tap-highlight-color: transparent;
     }
-    .msg-action-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .msg-action-btn:hover { border-color: var(--accent); color: var(--accent); background: rgba(0,200,255,0.06); }
+    .msg-action-btn:active { transform: scale(0.95); }
 
     /* ── STREAMING CURSOR ── */
     .stream-cursor {
@@ -462,6 +510,7 @@
       color: var(--text);
       text-decoration: none;
       transition: border-color 0.15s;
+      -webkit-tap-highlight-color: transparent;
     }
     .tool-chip:hover { border-color: var(--accent); color: var(--accent); }
 
@@ -490,10 +539,11 @@
 
     /* ── INPUT AREA ── */
     .aqua-input-wrap {
-      padding: 12px 16px 16px;
+      padding: 10px 16px 16px;
       border-top: 1px solid var(--border);
       background: rgba(11,15,26,0.95);
       backdrop-filter: blur(10px);
+      flex-shrink: 0;
     }
     .aqua-input-row {
       display: flex;
@@ -504,6 +554,7 @@
       border-radius: var(--radius);
       padding: 8px 10px;
       transition: border-color 0.2s;
+      min-height: 46px;
     }
     .aqua-input-row:focus-within { border-color: var(--accent); }
 
@@ -528,13 +579,19 @@
       color: var(--muted);
       cursor: pointer;
       font-size: 1.05rem;
-      padding: 4px;
-      border-radius: 6px;
-      transition: color 0.15s;
+      padding: 6px;
+      border-radius: 7px;
+      transition: color 0.15s, background 0.15s;
       display: flex;
       align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      min-height: 34px;
+      flex-shrink: 0;
+      -webkit-tap-highlight-color: transparent;
     }
-    .input-icon-btn:hover { color: var(--text); }
+    .input-icon-btn:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+    .input-icon-btn:active { background: rgba(255,255,255,0.1); transform: scale(0.93); }
 
     .send-btn {
       background: linear-gradient(135deg, var(--accent), var(--accent2));
@@ -546,12 +603,17 @@
       padding: 7px 18px;
       border-radius: 9px;
       cursor: pointer;
-      transition: opacity 0.2s, transform 0.1s;
+      transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
       white-space: nowrap;
+      min-height: 38px;
+      min-width: 72px;
+      flex-shrink: 0;
+      box-shadow: 0 2px 10px rgba(0,200,255,0.2);
+      -webkit-tap-highlight-color: transparent;
     }
-    .send-btn:hover { opacity: 0.88; }
-    .send-btn:active { transform: scale(0.97); }
-    .send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .send-btn:not(:disabled):hover { opacity: 0.88; transform: translateY(-1px); box-shadow: 0 4px 16px rgba(0,200,255,0.38); }
+    .send-btn:not(:disabled):active { transform: scale(0.96); box-shadow: none; }
+    .send-btn:disabled { opacity: 0.45; cursor: not-allowed; box-shadow: none; }
 
     .input-meta {
       display: flex;
@@ -560,6 +622,7 @@
       margin-top: 6px;
       font-size: 0.73rem;
       color: var(--muted);
+      flex-wrap: wrap;
     }
     #modeIndicator {
       background: var(--surface2);
@@ -596,8 +659,49 @@
       cursor: pointer;
       transition: all 0.15s;
       font-family: var(--font-body);
+      min-height: 30px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      -webkit-tap-highlight-color: transparent;
     }
-    .export-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+    .export-btn:hover { border-color: var(--accent2); color: var(--accent2); transform: translateY(-1px); background: rgba(123,94,167,0.07); }
+    .export-btn:active { transform: scale(0.95); }
+
+    /* ── SIDEBAR OVERLAY ── */
+    .sidebar-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 150;
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
+    }
+    .sidebar-overlay.visible { display: block; }
+
+    /* ── MENU TOGGLE in header ── */
+    #menuToggle {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 8px;
+      padding: 0;
+      min-width: 34px;
+      min-height: 34px;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      position: static;
+      z-index: auto;
+      transition: color 0.15s, border-color 0.15s, background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #menuToggle:hover { color: var(--text); border-color: var(--accent); background: rgba(0,200,255,0.06); }
+    #menuToggle:active { transform: scale(0.93); }
 
     /* ── ANIMATIONS ── */
     @keyframes fadeUp {
@@ -605,15 +709,67 @@
       to   { opacity: 1; transform: translateY(0); }
     }
 
-    /* ── MOBILE ── */
+    /* ── MOBILE ≤ 640px ── */
     @media (max-width: 640px) {
+      .aqua-header { padding: 8px 10px; gap: 6px; }
+      .aqua-logo { font-size: 1.05rem; }
+      .pill-btn { padding: 5px 8px; font-size: 0.72rem; min-height: 32px; }
+      .aqua-header-pills { gap: 4px; }
+
+      /* Sidebar becomes absolute drawer */
       .aqua-sidebar {
-        position: absolute; left: 0; top: 0;
-        height: 100%; z-index: 200;
+        position: absolute !important;
+        left: 0; top: 0;
+        height: 100%;
+        width: 260px !important;
+        min-width: 260px !important;
+        transform: translateX(-100%);
+        border-right: 1px solid rgba(56,189,248,0.15);
+      }
+      .aqua-sidebar.mobile-open { transform: translateX(0) !important; }
+      .aqua-sidebar.collapsed { transform: translateX(-100%) !important; width: 260px !important; min-width: 260px !important; }
+
+      #chat { padding: 12px 10px !important; }
+      .msg { max-width: 94% !important; }
+      #messageInput { font-size: 16px; }
+      .aqua-input-wrap { padding: 8px 10px 12px; }
+      .aqua-input-row { padding: 6px 8px; gap: 5px; }
+      .send-btn { padding: 7px 13px; font-size: 0.81rem; min-width: 62px; }
+      .export-toolbar { padding: 6px 10px 0; gap: 5px; }
+      .export-btn { font-size: 0.7rem; padding: 4px 8px; }
+      .input-meta { font-size: 0.7rem; }
+      .empty-state { padding: 24px 14px; gap: 18px; }
+      .empty-state h1 { font-size: 1.4rem; }
+      .starter-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+      .starter-card { padding: 10px 12px; font-size: 0.78rem; }
+      .msg-actions { flex-wrap: wrap; gap: 4px; }
+      .msg-action-btn { font-size: 0.69rem; padding: 3px 8px; }
+      .compare-grid { grid-template-columns: 1fr; }
+    }
+
+    /* ── TABLET 641–768px ── */
+    @media (min-width: 641px) and (max-width: 768px) {
+      .aqua-sidebar {
+        position: absolute !important;
+        left: 0; top: 0;
+        height: 100%;
+        width: 240px !important;
+        min-width: 240px !important;
         transform: translateX(-100%);
       }
-      .aqua-sidebar.mobile-open { transform: translateX(0); }
-      .aqua-sidebar.collapsed { transform: translateX(-100%); }
+      .aqua-sidebar.mobile-open { transform: translateX(0) !important; }
+      .aqua-sidebar.collapsed { transform: translateX(-100%) !important; width: 240px !important; min-width: 240px !important; }
+      .msg { max-width: 88% !important; }
+      #messageInput { font-size: 16px; }
+      .starter-grid { grid-template-columns: repeat(2, 1fr); }
+      .pill-btn { padding: 5px 10px; font-size: 0.74rem; }
+    }
+
+    /* ── DESKTOP ≥ 769px ── */
+    @media (min-width: 769px) {
+      .aqua-sidebar { transform: none !important; }
+      .aqua-sidebar.collapsed { width: 0 !important; min-width: 0 !important; transform: none !important; }
+      .sidebar-overlay { display: none !important; }
     }
 
     input[type="file"] { display: none; }
@@ -624,19 +780,22 @@
 <body>
 <%- include('partials/nav') %>
 
+<!-- Mobile sidebar overlay -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="closeSidebar()"></div>
+
 <div class="aqua-shell">
 
   <!-- ── HEADER ── -->
   <div class="aqua-header">
-    <button class="input-icon-btn" id="menuToggle" title="Toggle sidebar" onclick="toggleSidebar()">☰</button>
+    <button id="menuToggle" title="Toggle sidebar" onclick="toggleSidebar()">☰</button>
     <span class="aqua-logo">🌊 Aqua AI</span>
 
     <div class="aqua-header-pills">
       <button class="pill-btn active" id="modeChatBtn"   onclick="setMode('chat')">💬 Chat</button>
       <button class="pill-btn"        id="modeSearchBtn" onclick="setMode('search')">🌐 Search</button>
       <button class="pill-btn"        id="modeImageBtn"  onclick="setMode('image')">🎨 Image</button>
-      <button class="pill-btn refiner-on" id="refinerBtn" onclick="toggleRefiner(this)">✨ Enhance Prompt ON</button>
-      <button class="pill-btn" id="compareBtn" onclick="toggleCompare(this)">⚖️ Compare AI</button>
+      <button class="pill-btn refiner-on" id="refinerBtn" onclick="toggleRefiner(this)">✨ Enhance ON</button>
+      <button class="pill-btn" id="compareBtn" onclick="toggleCompare(this)">⚖️ Compare</button>
     </div>
   </div>
 
@@ -647,7 +806,7 @@
     <div class="aqua-sidebar" id="sidebar">
       <div class="sidebar-header">
         <button class="new-chat-btn" onclick="newChat()">➕ New Chat</button>
-        <button class="sidebar-toggle-btn" onclick="toggleSidebar()" title="Close">✕</button>
+        <button class="sidebar-toggle-btn" onclick="closeSidebar()" title="Close">✕</button>
       </div>
       <div id="historyList"></div>
     </div>
@@ -697,7 +856,7 @@ let currentChatId = null;
 let mode          = "chat";
 let useRefiner    = true;
 let useCompare    = false;
-let isSending     = false; // FIX: prevent double-sends
+let isSending     = false;
 
 // ── ROTATING PLACEHOLDERS ──
 const placeholders = [
@@ -736,20 +895,49 @@ function autoDetectMode(text) {
 
 function toggleRefiner(btn) {
   useRefiner = !useRefiner;
-  btn.textContent = useRefiner ? "✨ Enhance Prompt ON" : "✨ Enhance Prompt OFF";
+  btn.textContent = useRefiner ? "✨ Enhance ON" : "✨ Enhance OFF";
   btn.classList.toggle("refiner-on", useRefiner);
 }
 
 function toggleCompare(btn) {
   useCompare = !useCompare;
   btn.classList.toggle("compare-on", useCompare);
-  btn.textContent = useCompare ? "⚖️ Compare ON" : "⚖️ Compare AI";
+  btn.textContent = useCompare ? "⚖️ Compare ON" : "⚖️ Compare";
+}
+
+// ── SIDEBAR ──
+function isMobile() {
+  return window.innerWidth <= 768;
 }
 
 function toggleSidebar() {
   const s = document.getElementById("sidebar");
-  s.classList.toggle("collapsed");
-  s.classList.toggle("mobile-open");
+  const overlay = document.getElementById("sidebarOverlay");
+
+  if (isMobile()) {
+    const isOpen = s.classList.contains("mobile-open");
+    if (isOpen) {
+      s.classList.remove("mobile-open");
+      overlay.classList.remove("visible");
+    } else {
+      s.classList.remove("collapsed");
+      s.classList.add("mobile-open");
+      overlay.classList.add("visible");
+    }
+  } else {
+    s.classList.toggle("collapsed");
+  }
+}
+
+function closeSidebar() {
+  const s = document.getElementById("sidebar");
+  const overlay = document.getElementById("sidebarOverlay");
+  if (isMobile()) {
+    s.classList.remove("mobile-open");
+    overlay.classList.remove("visible");
+  } else {
+    s.classList.add("collapsed");
+  }
 }
 
 // ── EMPTY STATE ──
@@ -803,7 +991,7 @@ function setSending(val) {
 
 // ── MAIN SEND FUNCTION ──
 async function send() {
-  if (isSending) return; // FIX: prevent double sends
+  if (isSending) return;
 
   const input     = document.getElementById("messageInput");
   const chat      = document.getElementById("chat");
@@ -814,7 +1002,6 @@ async function send() {
 
   if (!message && !file) return;
 
-  // Auto-detect mode
   if (message) {
     const detected = autoDetectMode(message);
     if (detected !== mode) setMode(detected);
@@ -836,15 +1023,12 @@ async function send() {
   formData.append("stream",  (mode === "chat" && !useCompare) ? "true" : "false");
   if (file) formData.append("file", file);
 
-  // Clear empty state
   document.querySelector(".empty-state")?.remove();
 
-  // User bubble
   if (message) appendMessage("user", message);
 
   chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
 
-  // Typing indicator
   const loading = document.createElement("div");
   loading.className = "msg bot";
   loading.id = "loading";
@@ -931,11 +1115,9 @@ async function send() {
     }
 
     // ── STREAM MODE ──
-    // FIX: Check response content-type — server may fallback to JSON
     const contentType = res.headers.get("content-type") || "";
 
     if (!contentType.includes("text/event-stream")) {
-      // Server sent JSON fallback instead of SSE
       const data = await res.json();
       const replyContent = data.reply || "⚠️ No response received.";
       const div = createBotBubble();
@@ -965,7 +1147,6 @@ async function send() {
     bubble.appendChild(textDiv);
     chat.appendChild(botDiv);
 
-    // FIX: cursor is a real DOM element, not embedded in innerHTML
     const cursorEl = document.createElement("span");
     cursorEl.className = "stream-cursor";
     cursorEl.textContent = "▌";
@@ -980,7 +1161,7 @@ async function send() {
       try {
         ({ done, value } = await reader.read());
       } catch {
-        break; // reader closed (e.g., user navigated away)
+        break;
       }
       if (done) break;
 
@@ -1006,7 +1187,6 @@ async function send() {
           let parsed;
           try { parsed = JSON.parse(payload); } catch { continue; }
 
-          // Refined prompt preview
           if (parsed && typeof parsed === "object" && parsed.refined) {
             let refBox = bubble.querySelector(".refined-box");
             if (!refBox) {
@@ -1018,10 +1198,8 @@ async function send() {
             continue;
           }
 
-          // Token string
           if (typeof parsed === "string" && parsed) {
             fullText += parsed;
-            // FIX: Update innerHTML then re-append cursor separately
             textDiv.innerHTML = marked.parse(fullText);
             textDiv.appendChild(cursorEl);
             chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
@@ -1030,16 +1208,13 @@ async function send() {
       }
     }
 
-    // Remove cursor and render final text
     cursorEl.remove();
     textDiv.innerHTML = marked.parse(fullText.trim() || "⚠️ Empty response received.");
 
-    // Tool suggestions (async, non-blocking)
     fetchToolSuggestions(fullText).then(toolSugg => {
       if (toolSugg) bubble.appendChild(toolSugg);
     });
 
-    // Message actions
     bubble.insertAdjacentHTML("beforeend", buildActions(fullText));
 
     messages.push({ role: "assistant", content: fullText });
@@ -1050,14 +1225,12 @@ async function send() {
     console.error("Send error:", err);
     document.getElementById("loading")?.remove();
 
-    // Show error bubble
     const div = createBotBubble();
     div.querySelector(".msg-bubble").innerHTML = `
       <div class="markdown-body">⚠️ Something went wrong. Please try again.</div>
     `;
     chat.appendChild(div);
 
-    // Remove last user message from local state if AI failed
     if (messages.length && messages[messages.length - 1].role === "user") {
       messages.pop();
     }
@@ -1087,7 +1260,6 @@ function appendMessage(role, content) {
   const div  = document.createElement("div");
   div.className = `msg ${role}`;
 
-  // FIX: sanitize content before passing to marked
   const safeContent = (content || "").toString();
 
   div.innerHTML = `
@@ -1099,9 +1271,7 @@ function appendMessage(role, content) {
   chat.appendChild(div);
 }
 
-// FIX: buildActions uses a data attribute to avoid JSON-in-onclick escaping issues
 function buildActions(text) {
-  // Store text in a global map keyed by a random id
   const id = "act_" + Math.random().toString(36).slice(2);
   window.__actionTexts = window.__actionTexts || {};
   window.__actionTexts[id] = text;
@@ -1174,9 +1344,7 @@ async function fetchToolSuggestions(responseText) {
   }
 }
 
-// FIX: appendCompareResult — was broken (messages.push was OUTSIDE the function body)
 function appendCompareResult(data) {
-  // Save best response to messages
   const bestOutput = data.responses?.[0]?.output || "";
   if (bestOutput) {
     messages.push({ role: "assistant", content: bestOutput });
@@ -1265,7 +1433,6 @@ async function loadChat(id) {
       appendMessage(m.role, m.content);
     });
 
-    // Add action buttons to last bot message
     const lastBotContent = [...messages].reverse().find(m => m.role === "assistant")?.content;
     if (lastBotContent) {
       const botMsgs = chat.querySelectorAll(".msg.bot");
@@ -1274,7 +1441,7 @@ async function loadChat(id) {
     }
 
     chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
-    document.getElementById("sidebar").classList.add("collapsed");
+    closeSidebar();
   } catch {}
 }
 
@@ -1333,24 +1500,10 @@ document.getElementById("fileUpload").addEventListener("change", () => {
   tag.textContent = "📎 " + file.name;
   tag.style.display = "inline-block";
 
-  // Show in chat too
   const chat = document.getElementById("chat");
   document.querySelector(".empty-state")?.remove();
   appendMessage("user", `📎 Attached: **${file.name}**`);
   chat.scrollTo({ top: chat.scrollHeight, behavior: "smooth" });
-});
-
-// Close sidebar on outside click (mobile)
-document.addEventListener("click", e => {
-  const sidebar = document.getElementById("sidebar");
-  const toggle  = document.getElementById("menuToggle");
-  if (
-    sidebar.classList.contains("mobile-open") &&
-    !sidebar.contains(e.target) &&
-    !toggle.contains(e.target)
-  ) {
-    sidebar.classList.remove("mobile-open");
-  }
 });
 
 // ── INIT ──
