@@ -1033,3 +1033,82 @@ input[type="file"] {
     display: flex;
   }
 }
+
+/* ============================================================
+   🔥 FINAL MOBILE FIX (PASTE AT BOTTOM)
+   ============================================================ */
+
+@media (max-width: 640px) {
+
+  /* ───────── HEADER FIX ───────── */
+  .aqua-header {
+    flex-wrap: wrap !important;
+    overflow-x: visible !important;
+    padding: 8px 10px;
+  }
+
+  .aqua-header-pills {
+    width: 100%;
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-top: 6px;
+  }
+
+  .pill-btn {
+    width: 100%;
+    justify-content: center;
+    font-size: 0.7rem;
+    padding: 6px;
+  }
+
+  /* ───────── REMOVE DOUBLE HEADER ───────── */
+  nav {
+    display: none !important;
+  }
+
+  /* ───────── CHAT WIDTH FIX ───────── */
+  .msg {
+    max-width: 100% !important;
+  }
+
+  /* ───────── STARTER GRID FIX ───────── */
+  .starter-grid {
+    grid-template-columns: 1fr 1fr !important;
+  }
+
+  .starter-card {
+    padding: 10px;
+    font-size: 0.75rem;
+    min-height: 60px;
+  }
+
+  /* ───────── INPUT FIX ───────── */
+  .aqua-input-row {
+    align-items: center !important;
+  }
+
+  #messageInput {
+    font-size: 16px !important; /* prevent zoom on iOS */
+  }
+
+  /* ───────── SIDEBAR HEIGHT FIX ───────── */
+  .aqua-sidebar {
+    height: 100dvh;
+  }
+
+  /* ───────── BETTER SPACING ───────── */
+  #chat {
+    padding: 12px 10px;
+  }
+
+  .aqua-input-wrap {
+    padding: 8px 10px 12px;
+  }
+
+  /* ───────── OPTIONAL: STICKY INPUT (feels premium) ───────── */
+  .aqua-input-wrap {
+    position: sticky;
+    bottom: 0;
+  }
+}
