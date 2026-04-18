@@ -206,11 +206,64 @@ await Tool.updateOne(
 console.log("✅ Tools synced");
 }
 
+// ── NEW FEATURE: Auto-title generation ──
+// REPLACE your existing saveChat() helper with this version.
+// Backward-compatible: same signature, same fallback.
+
+async function saveChat(messages, chatId, userId, message) {
+  if (chatId) {
+    return await History.findOneAndUpdate(
+      { _id: chatId, userId },
+      { messages },
+      { new: true }
+    );
+  } else {
+    // NEW FEATURE: Generate a short AI title (5–6 words max)
+    let title = message.slice(0, 30); // fallback
+
+    try {
+      const aiTitle = await generateAI([
+        {
+          role: "system",
+          content: "Generate a 5-6 word title for this chat message. Return ONLY the title, no quotes, no punctuation at the end."
+        },
+        {
+          role: "user",
+          content: message.slice(0, 200)
+        }
+      ]);
+
+      if (aiTitle && aiTitle.length < 80) {
+        title = aiTitle.trim();
+      }
+    } catch {
+      // silently fall back to slice(0,30)
+    }
+
+    return await History.create({
+      userId,
+      title,
+      messages
+    });
+  }
+}
+
 // ================= MIDDLEWARE =================
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static("public"));
+const rateLimit = require("express-rate-limit");
+
+// 🚦 Rate limit for chat API
+const chatLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 20,                 // max 20 requests per minute
+  message: "⚠️ Too many requests. Please slow down."
+});
+
+// Apply only to /chat route
+app.use("/chat", chatLimiter);
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 // ✅ SESSION (IMPROVED)
@@ -743,6 +796,42 @@ app.post("/generate-bundle", async (req, res) => {
     });
   }
 });
+
+// ── NEW FEATURE: Tool suggestions JSON endpoint ──
+// Add this route AFTER your existing /tools routes
+// It allows the frontend to fetch relevant tools as JSON
+
+app.get("/api/tools/suggest", async (req, res) => {
+  try {
+    const q = req.query.q || "";
+
+    let tools = await Tool.find().lean();
+
+    if (q) {
+      tools = tools
+        .map(tool => {
+          const text  = (tool.name + " " + tool.description + " " + tool.category).toLowerCase();
+          const query = q.toLowerCase();
+          const score = (text.includes(query) ? 5 : 0) +
+                        (tool.name.toLowerCase().includes(query) ? 3 : 0);
+          return { ...tool, score };
+        })
+        .filter(t => t.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
+    } else {
+      tools = tools.slice(0, 3);
+    }
+
+    res.json(tools.map(t => ({ _id: t._id, name: t.name, url: t.url, category: t.category })));
+  } catch (err) {
+    res.json([]);
+  }
+});
+
+
+
+
 // TRENDING PAGE
 app.get("/trending", async (req, res) => {
 try {
@@ -1470,23 +1559,6 @@ console.error(err);
 res.status(500).send("Error removing tool");
 }
 });
-
-// ================= HELPER =================
-async function saveChat(messages, chatId, userId, message) {
-  if (chatId) {
-    return await History.findOneAndUpdate(
-      { _id: chatId, userId },
-      { messages },
-      { new: true }
-    );
-  } else {
-    return await History.create({
-      userId,
-      title: message.slice(0, 30),
-      messages
-    });
-  }
-}
 
 // ================= START =================
 async function startServer() {
