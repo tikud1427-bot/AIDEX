@@ -54,12 +54,9 @@ html, body {
   --font-mono: monospace;
 
   --header-h: 56px;
-
   --input-h: 76px;
-  
 }
 
-  
 
 /* ── BASE ── */
 
@@ -96,7 +93,7 @@ nav { display: none; }
   z-index: var(--z-base);
 }
 
-/* Body row */
+/* Body row — pushed below the fixed header */
 .aqua-body {
   display: flex;
   flex: 1;
@@ -104,6 +101,9 @@ nav { display: none; }
   overflow: hidden;
   position: relative;
   z-index: var(--z-base);
+  /* FIX START — push content below fixed header */
+  padding-top: var(--header-h);
+  /* FIX END */
 }
 
 /* Main content column */
@@ -112,6 +112,11 @@ nav { display: none; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  /* FIX START — constrain width, centered */
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+  /* FIX END */
 }
 
 
@@ -130,7 +135,6 @@ nav { display: none; }
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  
 
   border-bottom: 1px solid var(--border);
   background: rgba(11, 15, 26, 0.9);
@@ -271,9 +275,11 @@ nav { display: none; }
   color: var(--muted);
   transition: all 0.15s;
   -webkit-tap-highlight-color: transparent;
+  border: 1px solid transparent;
 }
 #historyList div:hover {
-  background: var(--surface2);
+  background: rgba(56,189,248,0.08);
+  border-color: rgba(56,189,248,0.2);
   color: var(--text);
 }
 #historyList div span {
@@ -302,6 +308,13 @@ nav { display: none; }
 #historyList div button:hover {
   background: rgba(239, 68, 68, 0.12);
   color: var(--danger);
+}
+
+/* Active chat item */
+#historyList div.active-chat {
+  background: rgba(56,189,248,0.15);
+  border: 1px solid rgba(56,189,248,0.35);
+  color: #fff;
 }
 
 /* Overlay — mobile only */
@@ -349,9 +362,17 @@ nav { display: none; }
 #chat {
   flex: 1;
   overflow-y: auto;
+  /* FIX START — removed extra padding-top (header offset now handled by .aqua-body padding-top) */
   padding: 20px 16px;
-  padding-top: calc(var(--header-h) + 10px);
+  padding-bottom: calc(var(--input-h) + 20px);
+  /* FIX END */
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
 }
+
 
 /* ============================================================
    EMPTY STATE
@@ -468,6 +489,9 @@ nav { display: none; }
   line-height: 1.6;
   max-width: calc(100% - 44px);
   word-break: break-word;
+  /* FIX START — smooth hover lift */
+  transition: transform 0.15s ease;
+  /* FIX END */
 }
 .msg.user .msg-bubble {
   background: #2563eb;
@@ -478,10 +502,12 @@ nav { display: none; }
   background: var(--surface);
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--text);
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, transform 0.15s ease;
+  max-width: 720px;
 }
 .msg.bot .msg-bubble:hover {
   border-color: rgba(56, 189, 248, 0.4);
+  transform: translateY(-1px);
 }
 
 
@@ -679,6 +705,11 @@ nav { display: none; }
    BUTTONS — Pills
    ============================================================ */
 .pill-btn {
+  /* FIX START — added display:flex for proper text centering */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* FIX END */
   padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid #1f2937;
@@ -686,6 +717,21 @@ nav { display: none; }
   color: #94a3b8;
   font-size: 0.78rem;
   transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.pill-btn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(120deg, transparent, rgba(255,255,255,0.15), transparent);
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+
+.pill-btn:hover::after {
+  opacity: 1;
 }
 
 /* Hover */
@@ -733,8 +779,48 @@ nav { display: none; }
   background: rgba(11, 15, 26, 0.96);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.35);
 
   z-index: 40;
+  height: var(--input-h);
+}
+
+/* FIX START — on desktop offset input bar to the right of the sidebar */
+@media (min-width: 769px) {
+  .aqua-input-wrap {
+    left: var(--sidebar-w);
+    width: calc(100% - var(--sidebar-w));
+    transition: left 0.3s ease, width 0.3s ease;
+  }
+
+  /* When sidebar is collapsed, restore full width */
+  body.sidebar-collapsed .aqua-input-wrap {
+    left: 0;
+    width: 100%;
+  }
+}
+/* FIX END */
+
+.aqua-input-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+
+  background: #020617;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+
+  padding: 8px 10px;
+  min-height: 46px;
+
+  transition: all 0.2s ease;
+}
+
+.aqua-input-row:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px rgba(56,189,248,0.3),
+              0 6px 20px rgba(56,189,248,0.15);
+  transform: translateY(-1px);
 }
 
 #messageInput {
@@ -749,6 +835,7 @@ nav { display: none; }
   max-height: 140px;
   min-height: 24px;
   line-height: 1.5;
+  caret-color: var(--accent);
 }
 #messageInput::placeholder { color: var(--muted); }
 
@@ -835,8 +922,8 @@ nav { display: none; }
    ============================================================ */
 
 @keyframes fadeUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(10px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
 @keyframes blink { 50% { opacity: 0; } }
@@ -870,11 +957,13 @@ nav { display: none; }
     transform: translateX(-100%);
     transition: transform 0.3s ease;
     z-index: var(--z-sidebar);
+    opacity: 1;
   }
 
   .aqua-sidebar.mobile-open {
     transform: translateX(0);
     box-shadow: 0 0 40px rgba(0,0,0,0.6);
+    opacity: 1;
   }
 
   /* Overlay active on mobile */
@@ -891,6 +980,12 @@ nav { display: none; }
 
   /* Input: prevent iOS zoom */
   #messageInput { font-size: 16px; }
+
+  /* FIX START — chat needs bottom padding to clear fixed input bar */
+  #chat {
+    padding-bottom: calc(var(--input-h) + 24px);
+  }
+  /* FIX END */
 }
 
 
@@ -900,14 +995,30 @@ nav { display: none; }
 
 @media (max-width: 640px) {
 
+  /* FIX START — taller header on mobile because pills wrap to 2 rows */
+  :root {
+    --header-h: 108px;
+  }
+  /* FIX END */
+
   /* Header: wrap pills into a grid row */
   .aqua-header {
     flex-wrap: wrap;
     padding: 8px 10px;
-    min-height: 48px;
+    height: auto;
+    min-height: var(--header-h);
     gap: 6px;
+    align-items: flex-start;
   }
   .aqua-logo { font-size: 1.05rem; }
+
+  /* FIX START — left side of header aligns items center */
+  .aqua-header-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  /* FIX END */
 
   .aqua-header-pills {
     display: grid;
@@ -927,9 +1038,10 @@ nav { display: none; }
   }
 
   /* Chat */
-  #chat { padding: 12px 10px; 
-          padding-bottom: 90px;
-        }
+  #chat {
+    padding: 12px 10px;
+    padding-bottom: calc(var(--input-h) + 28px);
+  }
 
   /* Input */
   .aqua-input-wrap { padding: 8px 10px 12px; }
@@ -944,7 +1056,7 @@ nav { display: none; }
   .input-meta { font-size: 0.7rem; gap: 5px; }
 
   /* Empty state */
-  .empty-state { padding: 24px 16px; gap: 18px; }
+  .empty-state { padding: 24px 16px; gap: 18px; margin-top: 0; }
   .empty-state h1 { font-size: 1.5rem; }
   .starter-grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
   .starter-card { padding: 10px 12px; font-size: 0.78rem; min-height: 60px; }
@@ -974,6 +1086,7 @@ nav { display: none; }
     transform: none;
     z-index: auto;
     transition: width 0.3s ease, min-width 0.3s ease;
+    opacity: 1;
   }
 
   .aqua-sidebar.collapsed {
@@ -982,96 +1095,13 @@ nav { display: none; }
   }
 
   /* Overlay never shown */
-  .sidebar-overlay { display: none; }
-}
-
-#historyList div {
-  border: 1px solid transparent;
-}
-
-#historyList div:hover {
-  background: rgba(56,189,248,0.08);
-  border-color: rgba(56,189,248,0.2);
-}
-
-.aqua-input-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-
-  background: #020617;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-
-  padding: 8px 10px;
-  min-height: 46px;
-
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.aqua-input-row:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px rgba(56,189,248,0.3),
-              0 6px 20px rgba(56,189,248,0.15);
-}
-
-@supports (padding: env(safe-area-inset-bottom)) {
-  .aqua-input-wrap {
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
-  }
-}
-
-.aqua-input-wrap {
-  height: var(--input-h);
+  .sidebar-overlay { display: none !important; }
 }
 
 
-
-.aqua-header {
-  height: var(--header-h);
-}
-
-@media (max-width: 640px) {
-  :root {
-    --header-h: 72px;
-  }
-}
-
-#chat {
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-}
-.aqua-sidebar {
-  opacity: 1;
-}
-
-.aqua-sidebar.mobile-open {
-  opacity: 1;
-}
-
-.pill-btn {
-  position: relative;
-  overflow: hidden;
-}
-
-.pill-btn::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(120deg, transparent, rgba(255,255,255,0.15), transparent);
-  opacity: 0;
-  transition: opacity 0.25s;
-}
-
-.pill-btn:hover::after {
-  opacity: 1;
-}
-
-#chat {
-  max-width: 900px;
-  margin: 0 auto;
-  width: 100%;
-}
+/* ============================================================
+   GLOBAL BUTTON RESET
+   ============================================================ */
 
 button {
   cursor: pointer;
@@ -1081,67 +1111,14 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.aqua-input-wrap {
-  box-shadow: 0 -8px 30px rgba(0,0,0,0.35);
-}
+/* ============================================================
+   SAFE AREA (iOS notch / home bar)
+   ============================================================ */
 
-.msg-bubble {
-  max-width: 720px;
-}
-
-@keyframes fadeUp {
-  from {
-    opacity: 0;
-    transform: translateY(10px) scale(0.98);
+@supports (padding: env(safe-area-inset-bottom)) {
+  .aqua-input-wrap {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    height: auto;
+    min-height: var(--input-h);
   }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-textarea {
-  caret-color: var(--accent);
-}
-
-@media (max-width: 768px) {
-  .aqua-sidebar {
-    opacity: 1;
-  }
-}
-  .aqua-sidebar.mobile-open {
-    opacity: 1;
-  }
-}
-
-#historyList div.active-chat {
-  background: rgba(56,189,248,0.15);
-  border: 1px solid rgba(56,189,248,0.35);
-  color: #fff;
-}
-
-.aqua-input-row {
-  transition: all 0.2s ease;
-}
-
-.aqua-input-row:focus-within {
-  transform: translateY(-1px);
-}
-
-.msg-bubble {
-  transition: transform 0.15s ease;
-}
-
-.msg-bubble:hover {
-  transform: translateY(-1px);
-}
-
-.empty-state {
-  margin-top: -40px;
-}
-
-.aqua-main {
-  max-width: 1000px;
-  margin: 0 auto;
-  width: 100%;
 }
