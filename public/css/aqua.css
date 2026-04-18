@@ -22,35 +22,25 @@ html, body {
 /* ── VARIABLES ── */
 
 :root {
-  --bg:        #000;
-  --surface:   #111827;
-  --surface2:  #1a2235;
-  --border:    #1e2d45;
-  --text:      #e2eaf4;
-  --muted:     #6b7fa3;
-  --accent:    #00c8ff;
-  --accent2:   #7b5ea7;
-  --danger:    #f87171;
-  --gold:      #ffd700;
-  --violet:    #a78bfa;
+  --bg:        #020617;
+  --surface:   #0f172a;
+  --surface2:  #111827;
+  --border:    #1f2937;
 
-  --font-body: 'DM Sans', 'Segoe UI', sans-serif;
-  --font-head: 'Syne', sans-serif;
-  --font-mono: 'Fira Code', monospace;
+  --text:      #e5e7eb;
+  --muted:     #94a3b8;
 
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 14px;
+  /* 🔥 NEW ACCENT SYSTEM */
+  --accent:    #38bdf8;   /* primary blue */
+  --accent-strong: #0ea5e9;
+  --accent-soft:   rgba(56, 189, 248, 0.12);
 
-  --sidebar-w: 240px;
-  --sidebar-w-mobile: 260px;
-
-  --z-base:    1;
-  --z-header:  100;
-  --z-overlay: 200;
-  --z-sidebar: 300;
+  --violet:    #8b5cf6;
+  --gold:      #fbbf24;
+  --danger:    #ef4444;
 }
 
+  
 
 /* ── BASE ── */
 
@@ -209,7 +199,7 @@ nav { display: none; }
 .new-chat-btn {
   flex: 1;
   padding: 8px 12px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  background: var(--accent);
   color: #fff;
   border: none;
   border-radius: var(--radius-sm);
@@ -329,26 +319,15 @@ nav { display: none; }
 }
 
 .export-btn {
-  background: var(--surface);
+  background: transparent;
   border: 1px solid var(--border);
   color: var(--muted);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 0.74rem;
-  cursor: pointer;
-  font-family: var(--font-body);
-  min-height: 30px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  transition: all 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
 }
+
 .export-btn:hover {
-  border-color: var(--accent2);
-  color: var(--accent2);
-  transform: translateY(-1px);
-  background: rgba(123, 94, 167, 0.07);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 .export-btn:active { transform: scale(0.95); }
 
@@ -479,11 +458,11 @@ nav { display: none; }
   margin-top: 2px;
 }
 .msg.user .msg-avatar {
-  background: linear-gradient(135deg, #162032, #1e3050);
+  background: var(--accent);
   border: 1px solid var(--border);
 }
 .msg.bot .msg-avatar {
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
+  background: var(--accent);
 }
 
 .msg-bubble {
@@ -576,26 +555,19 @@ nav { display: none; }
 }
 
 .msg-action-btn {
-  background: var(--surface2);
+  background: transparent;
   border: 1px solid var(--border);
   color: var(--muted);
-  padding: 4px 10px;
-  border-radius: var(--radius-sm);
-  font-size: 0.72rem;
-  cursor: pointer;
-  font-family: var(--font-body);
-  min-height: 28px;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  transition: all 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  transition: all 0.2s ease;
 }
+
 .msg-action-btn:hover {
   border-color: var(--accent);
   color: var(--accent);
-  background: rgba(0, 200, 255, 0.06);
-  transform: translateY(-1px);
+  background: var(--accent-soft);
 }
 .msg-action-btn:active { transform: scale(0.95); }
 
@@ -711,48 +683,44 @@ nav { display: none; }
 /* ============================================================
    BUTTONS — Pills
    ============================================================ */
-
 .pill-btn {
-  padding: 6px 11px;
+  padding: 6px 12px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: transparent;
   color: var(--muted);
-  font-size: 0.76rem;
-  font-family: var(--font-body);
+  font-size: 0.78rem;
   cursor: pointer;
-  white-space: nowrap;
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  transition: all 0.18s ease;
-  -webkit-tap-highlight-color: transparent;
+  transition: all 0.2s ease;
 }
+
+/* hover */
 .pill-btn:hover {
+  color: var(--text);
   border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(0, 200, 255, 0.07);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(0, 200, 255, 0.18);
+  background: var(--accent-soft);
 }
-.pill-btn:active { transform: scale(0.96); }
+
+/* ACTIVE (🔥 CLEAN GLOW, NOT HEAVY) */
 .pill-btn.active {
+  background: var(--accent);
+  color: #fff;
   border-color: var(--accent);
-  color: var(--accent);
-  background: rgba(0, 200, 255, 0.10);
-  box-shadow: 0 0 8px rgba(0, 200, 255, 0.2);
+  box-shadow: 0 0 0 1px rgba(56,189,248,0.3),
+              0 4px 14px rgba(56,189,248,0.25);
 }
+
+/* SPECIAL STATES */
 .pill-btn.refiner-on {
+  background: rgba(251,191,36,0.15);
   border-color: var(--gold);
   color: var(--gold);
-  background: rgba(255, 215, 0, 0.06);
-  box-shadow: 0 0 8px rgba(255, 215, 0, 0.2);
 }
+
 .pill-btn.compare-on {
+  background: rgba(139,92,246,0.15);
   border-color: var(--violet);
   color: var(--violet);
-  background: rgba(167, 139, 250, 0.08);
-  box-shadow: 0 0 8px rgba(167, 139, 250, 0.2);
 }
 
 
@@ -826,28 +794,16 @@ nav { display: none; }
 }
 
 .send-btn {
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  border: none;
+  background: var(--accent);
   color: #fff;
-  font-family: var(--font-body);
+  border-radius: 10px;
   font-weight: 600;
-  font-size: 0.87rem;
-  padding: 7px 18px;
-  border-radius: 9px;
-  cursor: pointer;
-  white-space: nowrap;
-  min-height: 38px;
-  min-width: 72px;
-  flex-shrink: 0;
-  letter-spacing: 0.01em;
-  box-shadow: 0 2px 10px rgba(0, 200, 255, 0.25);
-  transition: opacity 0.2s, transform 0.15s, box-shadow 0.2s;
-  -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 6px 20px rgba(56,189,248,0.35);
 }
-.send-btn:not(:disabled):hover {
-  opacity: 0.9;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 200, 255, 0.4);
+
+.send-btn:hover {
+  background: var(--accent-strong);
+  box-shadow: 0 8px 26px rgba(56,189,248,0.5);
 }
 .send-btn:not(:disabled):active {
   transform: scale(0.96);
