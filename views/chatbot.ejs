@@ -239,7 +239,10 @@ function toggleSidebar() {
   const overlay = document.getElementById("sidebarOverlay");
 
   if (isMobile()) {
-    const isOpen = s.classList.contains("mobile-open");
+    s.classList.toggle("mobile-open");
+    overlay.classList.toggle("visible");
+    document.body.classList.toggle("sidebar-open");
+  }
 
     if (isOpen) {
       s.classList.remove("mobile-open");
@@ -257,14 +260,14 @@ function toggleSidebar() {
   }
 }
 
-function closeSidebar() {
-  const s = document.getElementById("sidebar");
-  const overlay = document.getElementById("sidebarOverlay");
+  function closeSidebar() {
+    const s = document.getElementById("sidebar");
+    const overlay = document.getElementById("sidebarOverlay");
 
-  s.classList.remove("mobile-open");
-  overlay.classList.remove("visible");
-  document.body.style.overflow = "";
-}
+    s.classList.remove("mobile-open");
+    overlay.classList.remove("visible");
+    document.body.classList.remove("sidebar-open");
+  }
 
 // ── EMPTY STATE ──
 const STARTERS = [

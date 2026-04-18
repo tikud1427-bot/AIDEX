@@ -1122,3 +1122,49 @@ button:disabled {
     min-height: var(--input-h);
   }
 }
+
+/* ============================================================
+   FINAL FIX — MOBILE SIDEBAR (DO NOT MODIFY EXISTING CODE)
+   ============================================================ */
+
+@media (max-width: 768px) {
+
+  /* Sidebar — force top layer and fix interaction */
+  .aqua-sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    height: 100dvh;
+
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+
+    z-index: 9999 !important; /* 🔥 always on top */
+    will-change: transform;
+  }
+
+  .aqua-sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  /* Overlay — sits behind sidebar */
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+
+    z-index: 9998 !important;
+    display: none;
+  }
+
+  .sidebar-overlay.visible {
+    display: block;
+  }
+
+}
+
+/* Lock background scroll when sidebar open */
+body.sidebar-open {
+  overflow: hidden;
+}
