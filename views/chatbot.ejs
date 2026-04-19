@@ -46,10 +46,14 @@
 <body>
 
 <!-- ── SIDEBAR OVERLAY (mobile only) ── -->
-<div class="sidebar-overlay" id="sidebarOverlay" aria-hidden="true"></div>
+  <!-- Sidebar FIRST -->
+  <aside class="aqua-sidebar" id="sidebar"></aside>
 
-<div class="aqua-shell">
+  <!-- Overlay -->
+  <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
+  <!-- App -->
+  <div class="aqua-shell">
   <!-- ── HEADER ── -->
   <header class="aqua-header">
 
@@ -192,7 +196,8 @@ function toggleSidebar() {
     historyList.addEventListener("click", (e) => {
 
       // Ignore delete button clicks
-      if (e.target.closest("button")) return;
+      const deleteBtn = e.target.closest(".delete-btn");
+      if (deleteBtn) return;
 
       const item = e.target.closest("[data-id]");
       if (!item || !historyList.contains(item)) return;
