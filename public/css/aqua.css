@@ -1136,3 +1136,46 @@ body.sidebar-open {
   flex-direction: row !important;
 }
 
+/* Sidebar should be ABOVE overlay */
+/* Correct stacking using your actual classes */
+
+.aqua-sidebar {
+  z-index: var(--z-sidebar); /* 200 */
+  position: fixed;
+}
+
+.sidebar-overlay {
+  z-index: var(--z-overlay); /* 100 */
+  position: fixed;
+}
+
+/* Main content below everything */
+.aqua-main {
+  z-index: 1;
+}
+.sidebar {
+  pointer-events: auto;
+}
+.sidebar-overlay {
+  width: 100%;
+  height: 100%;
+}
+
+/* ============================================================
+   FINAL FIX — DO NOT MOVE ABOVE
+============================================================ */
+
+.aqua-sidebar {
+  position: fixed;
+  z-index: 9999;
+  -webkit-transform: translateZ(0);
+}
+
+.sidebar-overlay {
+  position: fixed;
+  z-index: 9998;
+}
+
+#historyList div {
+  -webkit-transform: translateZ(0);
+}
