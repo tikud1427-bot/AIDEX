@@ -1179,3 +1179,69 @@ body.sidebar-open {
 #historyList div {
   -webkit-transform: translateZ(0);
 }
+
+/* ============================================================
+   FINAL SIDEBAR CLICK FIX (MOBILE TOUCH + Z-INDEX + BLOCKERS)
+   Paste this at VERY END of aqua.css
+============================================================ */
+
+/* Sidebar MUST be top-most clickable layer */
+.aqua-sidebar {
+  position: fixed !important;
+  z-index: 1000 !important;
+  pointer-events: auto !important;
+}
+
+/* Sidebar header (where ❌ is) must be above everything */
+.sidebar-header {
+  position: relative !important;
+  z-index: 1001 !important;
+}
+
+/* Close button must ALWAYS receive clicks */
+#closeSidebarBtn {
+  position: relative !important;
+  z-index: 2000 !important;
+  pointer-events: auto !important;
+}
+
+/* Overlay BELOW sidebar */
+.sidebar-overlay {
+  z-index: 900 !important;
+  pointer-events: auto;
+}
+
+/* Ensure NOTHING inside sidebar blocks taps */
+.aqua-sidebar * {
+  pointer-events: auto !important;
+}
+
+/* Kill any transform bugs (iOS tap issues) */
+.aqua-sidebar,
+.aqua-sidebar * {
+  transform: none !important;
+}
+
+/* Background effects must NEVER block clicks */
+body::before,
+body::after {
+  pointer-events: none !important;
+  z-index: 0 !important;
+}
+
+/* Prevent any accidental blocking from main content */
+.aqua-main {
+  position: relative;
+  z-index: 1;
+}
+
+/* Extra safety: buttons inside sidebar */
+.aqua-sidebar button {
+  pointer-events: auto !important;
+  z-index: 2000 !important;
+}
+
+/* Fix weird mobile tap delay / ghost layers */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
