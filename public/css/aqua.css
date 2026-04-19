@@ -1245,3 +1245,44 @@ body::after {
 * {
   -webkit-tap-highlight-color: transparent;
 }
+/* ============================================================
+   CLEAN FINAL FIX — NO CONFLICTS
+============================================================ */
+
+/* Proper stacking order */
+.aqua-sidebar {
+  z-index: 300; /* above overlay */
+}
+
+.sidebar-overlay {
+  z-index: 200; /* below sidebar */
+}
+
+/* Make header clickable */
+.sidebar-header {
+  position: relative;
+  z-index: 301;
+}
+
+/* Close button MUST receive touch */
+#closeSidebarBtn {
+  position: relative;
+  z-index: 302;
+  pointer-events: auto;
+}
+
+/* IMPORTANT: DO NOT disable transforms globally */
+/* Remove this if you added it earlier:
+   .aqua-sidebar, .aqua-sidebar * { transform: none !important; }
+*/
+
+/* Fix iOS tap issues ONLY on button */
+#closeSidebarBtn:active {
+  transform: scale(0.95);
+}
+
+/* Ensure nothing blocks clicks */
+body::before,
+body::after {
+  pointer-events: none;
+}
