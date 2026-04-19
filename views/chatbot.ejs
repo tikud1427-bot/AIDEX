@@ -275,17 +275,17 @@
     const closeBtn = document.getElementById("closeSidebarBtn");
 
     // Direct onclick on close button — most reliable possible approach
-    closeBtn.onclick = function(e) {
-      e.stopPropagation();
+    closeBtn.addEventListener("click", closeSidebar);
+    closeBtn.addEventListener("touchstart", function(e) {
+      e.preventDefault();
       closeSidebar();
-      return false;
-    };
+    }, { passive: false });
 
-    menuBtn.onclick = function(e) {
-      e.stopPropagation();
+    menuBtn.addEventListener("click", toggleSidebar);
+    menuBtn.addEventListener("touchstart", function(e) {
+      e.preventDefault();
       toggleSidebar();
-      return false;
-    };
+    }, { passive: false });
 
     overlay.onclick = function() { closeSidebar(); };
 
