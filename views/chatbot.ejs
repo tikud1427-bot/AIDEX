@@ -846,6 +846,31 @@ window.addEventListener("resize", () => {
 // ── INIT ──
 renderEmptyState();
 loadHistoryList();
+
+  const menuToggle = document.getElementById("menuToggle");
+  const sidebar = document.querySelector(".aqua-sidebar");
+  const overlay = document.querySelector(".sidebar-overlay");
+
+  function isMobile() {
+    return window.innerWidth <= 768;
+  }
+
+  menuToggle.addEventListener("click", () => {
+    if (isMobile()) {
+      sidebar.classList.toggle("mobile-open");
+      overlay.classList.toggle("visible");
+      document.body.classList.toggle("sidebar-open");
+    } else {
+      sidebar.classList.toggle("collapsed");
+    }
+  });
+
+  // Overlay click → close sidebar
+  overlay.addEventListener("click", () => {
+    sidebar.classList.remove("mobile-open");
+    overlay.classList.remove("visible");
+    document.body.classList.remove("sidebar-open");
+  });
 </script>
 </body>
 </html>

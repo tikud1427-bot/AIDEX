@@ -13,15 +13,14 @@
   padding: 0;
 }
 
-html {
+html, body {
   height: 100%;
-  overflow: hidden;
+  overflow: hidden; /* keep for layout */
 }
 
-body {
-  height: 100%;
-  overflow: hidden;
-  max-width: 100vw;
+/* BUT allow chat to scroll (already done correctly) */
+#chat {
+  overflow-y: auto;
 }
 
 /* ── VARIABLES ── */
@@ -1008,6 +1007,7 @@ button:disabled { cursor: not-allowed; }
     position: fixed;
     top: 0;
     left: 0;
+    height: 100vh;
     height: 100dvh;
     width: var(--sidebar-w-mobile);
     min-width: var(--sidebar-w-mobile);
@@ -1114,4 +1114,10 @@ body.sidebar-open {
 
   /* Tool suggestions */
   .tool-suggestions { font-size: 0.76rem; padding: 8px 10px; }
+}
+button, .starter-card, .msg-action-btn {
+  touch-action: manipulation;
+}
+#historyList {
+  -webkit-overflow-scrolling: touch;
 }
