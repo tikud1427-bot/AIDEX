@@ -1,7 +1,6 @@
 /* ============================================================
-   AQUA AI — Production CSS v2
+   AQUA AI — Production CSS v3
    Architecture: Reset → Variables → Layout → Components → Responsive
-   Mobile-first. Clean z-index. No !important hacks. No blur bugs.
 ============================================================ */
 
 /* ── RESET ── */
@@ -43,11 +42,9 @@ body {
   --gold:           #fbbf24;
   --danger:         #ef4444;
 
-  /* Z-index scale — clean hierarchy, no conflicts */
-  --z-base:         1;
   --z-header:       10;
-  --z-overlay:      20;
-  --z-sidebar:      30;
+  --z-overlay:      100;
+  --z-sidebar:      200;
 
   --sidebar-w:         260px;
   --sidebar-w-mobile:  240px;
@@ -172,9 +169,7 @@ button:disabled { cursor: not-allowed; }
   border-color: var(--accent);
   background: rgba(56, 189, 248, 0.06);
 }
-#menuToggle:active {
-  transform: scale(0.92);
-}
+#menuToggle:active { transform: scale(0.92); }
 
 .aqua-header-pills {
   display: flex;
@@ -197,9 +192,6 @@ button:disabled { cursor: not-allowed; }
 
 /* ============================================================
    SIDEBAR OVERLAY
-   Uses opacity+visibility (no display:none).
-   pointer-events toggled by .visible class.
-   NO backdrop-filter — prevents click-blocking bug on mobile.
 ============================================================ */
 
 .sidebar-overlay {
@@ -209,9 +201,9 @@ button:disabled { cursor: not-allowed; }
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
-  z-index: var(--z-overlay);
+  /* sits BELOW sidebar (--z-sidebar: 200) but ABOVE everything else */
+  z-index: 150;
   transition: opacity 0.25s ease, visibility 0.25s ease;
-  /* NO backdrop-filter here — it creates stacking context bugs on iOS */
 }
 
 .sidebar-overlay.visible {
@@ -221,7 +213,7 @@ button:disabled { cursor: not-allowed; }
 }
 
 /* ============================================================
-   SIDEBAR
+   SIDEBAR — desktop: in-flow panel
 ============================================================ */
 
 .aqua-sidebar {
@@ -234,10 +226,8 @@ button:disabled { cursor: not-allowed; }
   flex-direction: column;
   overflow: hidden;
   transition: width 0.28s ease, min-width 0.28s ease;
-  /* Desktop: in-flow, no z-index needed */
 }
 
-/* Desktop collapse */
 .aqua-sidebar.collapsed {
   width: 0;
   min-width: 0;
@@ -294,6 +284,8 @@ button:disabled { cursor: not-allowed; }
   background: rgba(255, 255, 255, 0.06);
 }
 
+/* ── History list ── */
+
 #historyList {
   flex: 1;
   overflow-y: auto;
@@ -307,44 +299,68 @@ button:disabled { cursor: not-allowed; }
   align-items: center;
   gap: 6px;
   padding: 9px 10px;
-  min-height: 40px;
+  min-height: 44px;          /* larger tap target */
   border-radius: var(--radius-sm);
   cursor: pointer;
   font-size: 0.82rem;
   color: var(--muted);
   transition: background 0.15s, border-color 0.15s, color 0.15s;
   border: 1px solid transparent;
+  /* Mobile tap essentials */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: rgba(56,189,248,0.15);
+  user-select: none;
+  pointer-events: auto;
 }
-#historyList div:hover {
+
+#historyList div:hover,
+#historyList div:active {
   background: rgba(56,189,248,0.08);
   border-color: rgba(56,189,248,0.2);
   color: var(--text);
 }
+
 #historyList div span {
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  pointer-events: none; /* let clicks pass to parent div */
 }
-#historyList div button {
+
+/* Delete button — always visible on mobile, hover on desktop */
+#historyList div button.delete-btn {
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 0.8rem;
-  width: 28px;
-  height: 28px;
-  opacity: 0;
+  font-size: 0.85rem;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  pointer-events: auto;
+  touch-action: manipulation;
+  /* visible on mobile always, fade on desktop */
+  opacity: 1;
+  transition: background 0.15s, color 0.15s;
 }
-#historyList div:hover button { opacity: 1; }
-#historyList div button:hover {
+
+#historyList div button.delete-btn:hover {
   background: rgba(239, 68, 68, 0.12);
   color: var(--danger);
+}
+
+/* On desktop hide until hover */
+@media (hover: hover) {
+  #historyList div button.delete-btn {
+    opacity: 0;
+  }
+  #historyList div:hover button.delete-btn {
+    opacity: 1;
+  }
 }
 
 #historyList div.active-chat {
@@ -363,6 +379,7 @@ button:disabled { cursor: not-allowed; }
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
+  pointer-events: auto;
 }
 
 /* ============================================================
@@ -396,7 +413,7 @@ button:disabled { cursor: not-allowed; }
 .export-btn:active { transform: scale(0.95); }
 
 /* ============================================================
-   CHAT AREA — only scrollable region
+   CHAT AREA
 ============================================================ */
 
 #chat {
@@ -504,9 +521,7 @@ button:disabled { cursor: not-allowed; }
   width: 100%;
   margin-bottom: 4px;
 }
-.msg.user {
-  flex-direction: row-reverse;
-}
+.msg.user { flex-direction: row-reverse; }
 
 .msg-avatar {
   width: 30px;
@@ -544,9 +559,7 @@ button:disabled { cursor: not-allowed; }
   max-width: 720px;
   transition: border-color 0.2s;
 }
-.msg.bot .msg-bubble:hover {
-  border-color: rgba(56, 189, 248, 0.3);
-}
+.msg.bot .msg-bubble:hover { border-color: rgba(56, 189, 248, 0.3); }
 
 /* ── Markdown ── */
 
@@ -854,9 +867,7 @@ button:disabled { cursor: not-allowed; }
   color: var(--text);
   background: rgba(255,255,255,0.06);
 }
-.input-icon-btn:active {
-  transform: scale(0.92);
-}
+.input-icon-btn:active { transform: scale(0.92); }
 
 .send-btn {
   background: linear-gradient(135deg, #38bdf8, #0ea5e9);
@@ -931,9 +942,7 @@ button:disabled { cursor: not-allowed; }
 }
 
 /* ============================================================
-   DESKTOP (≥ 769px)
-   Sidebar is in-flow. Toggle collapses width.
-   Overlay always hidden.
+   DESKTOP (≥ 769px) — sidebar is in-flow
 ============================================================ */
 
 @media (min-width: 769px) {
@@ -941,7 +950,6 @@ button:disabled { cursor: not-allowed; }
     position: relative;
     transform: none;
     z-index: auto;
-    /* Override any leftover mobile state */
     height: auto;
   }
 
@@ -950,21 +958,16 @@ button:disabled { cursor: not-allowed; }
     min-width: 0;
   }
 
-  /* Overlay never shown on desktop */
   .sidebar-overlay {
     display: none;
   }
 }
 
 /* ============================================================
-   TABLET & MOBILE (≤ 768px)
-   Sidebar = fixed drawer. Slides from left.
-   Toggle adds .mobile-open to sidebar.
+   MOBILE (≤ 768px) — sidebar is a fixed drawer
 ============================================================ */
 
 @media (max-width: 768px) {
-
-  /* Remove from in-flow, become a fixed drawer */
   .aqua-sidebar {
     position: fixed;
     top: 0;
@@ -973,13 +976,14 @@ button:disabled { cursor: not-allowed; }
     height: 100dvh;
     width: var(--sidebar-w-mobile);
     min-width: var(--sidebar-w-mobile);
-    z-index: var(--z-sidebar);
+    /* ABOVE overlay (150) and everything else */
+    z-index: 200;
     transform: translateX(-100%);
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
-    /* Isolate stacking context cleanly */
     will-change: transform;
-    /* Reset desktop width transitions */
-    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    pointer-events: auto;
   }
 
   .aqua-sidebar.mobile-open {
@@ -987,7 +991,7 @@ button:disabled { cursor: not-allowed; }
     box-shadow: 4px 0 32px rgba(0,0,0,0.5);
   }
 
-  /* Desktop collapsed class has no effect on mobile */
+  /* collapsed has no effect on mobile — sidebar uses transform */
   .aqua-sidebar.collapsed {
     width: var(--sidebar-w-mobile);
     min-width: var(--sidebar-w-mobile);
@@ -996,22 +1000,20 @@ button:disabled { cursor: not-allowed; }
   .msg { max-width: 100%; }
   .compare-grid { grid-template-columns: 1fr; }
 
-  /* Prevent iOS zoom */
+  /* Prevent iOS zoom on input focus */
   #messageInput { font-size: 16px; }
 }
 
-/* Prevent background scroll when mobile drawer open */
+/* Prevent background scroll when drawer open */
 body.sidebar-open {
   overflow: hidden;
-  /* Do NOT add touch-action:none here — it breaks child scroll */
 }
 
 /* ============================================================
-   MOBILE ONLY (≤ 640px)
+   SMALL MOBILE (≤ 640px)
 ============================================================ */
 
 @media (max-width: 640px) {
-
   .aqua-header {
     flex-wrap: wrap;
     padding: 8px 10px;
@@ -1054,80 +1056,5 @@ body.sidebar-open {
   .starter-card { padding: 10px 12px; font-size: 0.78rem; min-height: 60px; }
 
   .msg-action-btn { font-size: 0.69rem; padding: 4px 8px; }
-
   .tool-suggestions { font-size: 0.75rem; padding: 8px 10px; }
-}
-
-/* Removes the 300ms tap delay and ghost-click on mobile */
-#historyList div {
-  touch-action: manipulation;
-  /* already present in your file — confirm it's there */
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-}
-#historyList div {
-  cursor: pointer;
-}
-
-/* =========================
-   MOBILE SIDEBAR FIX (FINAL)
-   ========================= */
-
-/* Sidebar must be ABOVE everything */
-@media (max-width: 768px) {
-  .aqua-sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    height: 100%;
-    z-index: 9999;
-    pointer-events: auto;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-}
-
-.sidebar-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 9997;  /* ← always below sidebar (9999) AND its contents */
-  pointer-events: none;
-}
-
-.sidebar-overlay.visible {
-  pointer-events: auto;
-}
-
-/* Prevent overlay from blocking sidebar */
-.aqua-sidebar.mobile-open {
-  pointer-events: auto;
-}
-
-/* Fix tap issues on list items */
-#historyList div {
-  pointer-events: auto;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-  cursor: pointer;
-}
-
-/* Ensure buttons inside list still clickable */
-#historyList button {
-  pointer-events: auto;
-}
-
-/* Just in case any parent blocks clicks */
-.aqua-body,
-.aqua-main {
-  pointer-events: auto;
-}
-body {
-  height: 100%;
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-#historyList div {
-  color: #94a3b8;  /* was inheriting near-invisible dark color */
 }

@@ -11,7 +11,6 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
   <style>
-    /* ── Page-level decorative glows ── */
     body::before {
       content: '';
       position: fixed;
@@ -34,8 +33,6 @@
       pointer-events: none;
       z-index: 0;
     }
-
-    /* Shell above decorative glows */
     .aqua-shell {
       position: relative;
       z-index: 1;
@@ -45,97 +42,74 @@
 
 <body>
 
-<!-- ── SIDEBAR OVERLAY (mobile only) ── -->
-  <!-- Sidebar FIRST -->
-
-  <!-- Overlay -->
+  <!-- Overlay OUTSIDE shell, z-index below sidebar -->
   <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-  <!-- App -->
   <div class="aqua-shell">
-  <!-- ── HEADER ── -->
-  <header class="aqua-header">
 
-    <div class="aqua-header-left">
-      <!-- Menu toggle — always visible, works on all screen sizes -->
-      <button id="menuToggle" aria-label="Toggle sidebar" aria-expanded="false">☰</button>
-
-      <a href="/" class="back-home-btn">← Home</a>
-
-      <span class="aqua-logo">🌊 Aqua AI</span>
-    </div>
-
-    <div class="aqua-header-pills">
-      <button class="pill-btn active" id="modeChatBtn"   onclick="setMode('chat')">💬 Chat</button>
-      <button class="pill-btn"        id="modeSearchBtn" onclick="setMode('search')">🌐 Search</button>
-      <button class="pill-btn"        id="modeImageBtn"  onclick="setMode('image')">🎨 Image</button>
-      <button class="pill-btn refiner-on" id="refinerBtn" onclick="toggleRefiner(this)">✨ Enhance ON</button>
-      <button class="pill-btn"        id="compareBtn"    onclick="toggleCompare(this)">⚖️ Compare</button>
-    </div>
-
-  </header>
-
-  <!-- ── BODY ── -->
-  <div class="aqua-body">
-
-    <!-- ── SIDEBAR ── -->
-    <aside class="aqua-sidebar" id="sidebar" aria-label="Chat history">
-      <div class="sidebar-header">
-        <button class="new-chat-btn" onclick="newChat()">➕ New Chat</button>
-        <button class="sidebar-toggle-btn" onclick="closeSidebar()" title="Close sidebar" aria-label="Close sidebar">✕</button>
+    <header class="aqua-header">
+      <div class="aqua-header-left">
+        <button id="menuToggle" aria-label="Toggle sidebar" aria-expanded="false">☰</button>
+        <a href="/" class="back-home-btn">← Home</a>
+        <span class="aqua-logo">🌊 Aqua AI</span>
       </div>
-      <div id="historyList" role="list"></div>
-    </aside>
-
-    <!-- ── MAIN ── -->
-    <main class="aqua-main">
-
-      <!-- Export toolbar -->
-      <div class="export-toolbar">
-        <button class="export-btn" onclick="copyFullConversation()">📋 Copy Chat</button>
-        <button class="export-btn" onclick="exportAsText()">⬇ Export .txt</button>
-        <button class="export-btn" onclick="shareChat()">🔗 Share</button>
+      <div class="aqua-header-pills">
+        <button class="pill-btn active" id="modeChatBtn"   onclick="setMode('chat')">💬 Chat</button>
+        <button class="pill-btn"        id="modeSearchBtn" onclick="setMode('search')">🌐 Search</button>
+        <button class="pill-btn"        id="modeImageBtn"  onclick="setMode('image')">🎨 Image</button>
+        <button class="pill-btn refiner-on" id="refinerBtn" onclick="toggleRefiner(this)">✨ Enhance ON</button>
+        <button class="pill-btn"        id="compareBtn"    onclick="toggleCompare(this)">⚖️ Compare</button>
       </div>
+    </header>
 
-      <!-- Chat messages -->
-      <div id="chat" role="log" aria-live="polite" aria-label="Chat messages"></div>
+    <div class="aqua-body">
 
-      <!-- ── INPUT ── -->
-      <div class="aqua-input-wrap">
-        <div class="aqua-input-row">
-          <button class="input-icon-btn" onclick="document.getElementById('fileUpload').click()" title="Attach file" aria-label="Attach file">📎</button>
-          <input type="file" id="fileUpload" aria-label="File upload" />
-          <textarea
-            id="messageInput"
-            rows="1"
-            placeholder="Ask anything..."
-            aria-label="Message input"
-            autocomplete="off"
-            autocorrect="on"
-            spellcheck="true"
-          ></textarea>
-          <button class="send-btn" id="sendBtn" onclick="send()" aria-label="Send message">Send ↑</button>
+      <!-- ONE sidebar only, with all content -->
+      <aside class="aqua-sidebar" id="sidebar" aria-label="Chat history">
+        <div class="sidebar-header">
+          <button class="new-chat-btn" onclick="newChat()">➕ New Chat</button>
+          <button class="sidebar-toggle-btn" onclick="closeSidebar()" title="Close sidebar" aria-label="Close sidebar">✕</button>
         </div>
-        <div class="input-meta">
-          <span id="modeIndicator">MODE: CHAT</span>
-          <span id="fileNameTag" class="file-name-tag" style="display:none;" aria-live="polite"></span>
-        </div>
-      </div>
+        <div id="historyList" role="list"></div>
+      </aside>
 
-    </main>
+      <main class="aqua-main">
+        <div class="export-toolbar">
+          <button class="export-btn" onclick="copyFullConversation()">📋 Copy Chat</button>
+          <button class="export-btn" onclick="exportAsText()">⬇ Export .txt</button>
+          <button class="export-btn" onclick="shareChat()">🔗 Share</button>
+        </div>
+
+        <div id="chat" role="log" aria-live="polite" aria-label="Chat messages"></div>
+
+        <div class="aqua-input-wrap">
+          <div class="aqua-input-row">
+            <button class="input-icon-btn" onclick="document.getElementById('fileUpload').click()" title="Attach file" aria-label="Attach file">📎</button>
+            <input type="file" id="fileUpload" aria-label="File upload" />
+            <textarea
+              id="messageInput"
+              rows="1"
+              placeholder="Ask anything..."
+              aria-label="Message input"
+              autocomplete="off"
+              autocorrect="on"
+              spellcheck="true"
+            ></textarea>
+            <button class="send-btn" id="sendBtn" onclick="send()" aria-label="Send message">Send ↑</button>
+          </div>
+          <div class="input-meta">
+            <span id="modeIndicator">MODE: CHAT</span>
+            <span id="fileNameTag" class="file-name-tag" style="display:none;" aria-live="polite"></span>
+          </div>
+        </div>
+      </main>
+
+    </div>
   </div>
-</div>
 
 <script>
-// ============================================================
-// AQUA AI — FRONTEND
-// Clean, production-grade. No hacks.
-// ============================================================
-
-// ── MARKED CONFIG ──
 marked.setOptions({ gfm: true, breaks: true });
 
-// ── STATE ──
 let messages      = [];
 let currentChatId = null;
 let mode          = "chat";
@@ -144,20 +118,16 @@ let useCompare    = false;
 let isSending     = false;
 let sidebarOpen   = false;
 
-// ── UTILITY: is viewport mobile-sized? ──
 function isMobile() {
   return window.matchMedia("(max-width: 768px)").matches;
 }
 
-// ── SIDEBAR ──
 function openSidebar() {
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("sidebarOverlay");
   const toggle  = document.getElementById("menuToggle");
-
   sidebarOpen = true;
   toggle.setAttribute("aria-expanded", "true");
-
   if (isMobile()) {
     sidebar.classList.add("mobile-open");
     overlay.classList.add("visible");
@@ -171,11 +141,8 @@ function closeSidebar() {
   const sidebar = document.getElementById("sidebar");
   const overlay = document.getElementById("sidebarOverlay");
   const toggle  = document.getElementById("menuToggle");
-
   sidebarOpen = false;
   toggle.setAttribute("aria-expanded", "false");
-
-  // Always remove both classes — safe on both breakpoints
   sidebar.classList.remove("mobile-open");
   overlay.classList.remove("visible");
   document.body.classList.remove("sidebar-open");
@@ -185,55 +152,57 @@ function toggleSidebar() {
   sidebarOpen ? closeSidebar() : openSidebar();
 }
 
-// ── INIT SIDEBAR EVENTS ──
-  document.addEventListener("DOMContentLoaded", () => {
-    let isLoadingChat = false;
-    const historyList = document.getElementById("historyList");
-    const overlay     = document.getElementById("sidebarOverlay");
-    const menuBtn     = document.getElementById("menuToggle");
+document.addEventListener("DOMContentLoaded", () => {
+  let isLoadingChat = false;
+  const historyList = document.getElementById("historyList");
+  const overlay     = document.getElementById("sidebarOverlay");
+  const menuBtn     = document.getElementById("menuToggle");
 
-    historyList.addEventListener("click", (e) => {
+  // Use touchend for instant mobile response, fallback to click
+  const tapEvent = ('ontouchend' in window) ? 'touchend' : 'click';
 
-      // Ignore delete button clicks
-      const deleteBtn = e.target.closest(".delete-btn");
-      if (deleteBtn) return;
+  historyList.addEventListener(tapEvent, (e) => {
+    e.preventDefault();
 
-      const item = e.target.closest("[data-id]");
-      if (!item || !historyList.contains(item)) return;
+    const deleteBtn = e.target.closest(".delete-btn");
+    if (deleteBtn) {
+      const id = deleteBtn.getAttribute("data-delete-id");
+      if (id) deleteChat(id);
+      return;
+    }
 
-      const id = item.getAttribute("data-id");
-      if (!id) return;
+    const item = e.target.closest("[data-id]");
+    if (!item) return;
 
-      // Highlight active
-      document.querySelectorAll("#historyList [data-id]").forEach(d => {
-        d.classList.remove("active-chat");
-      });
-      item.classList.add("active-chat");
+    const id = item.getAttribute("data-id");
+    if (!id) return;
 
-      // Prevent rapid double taps
-      if (isLoadingChat) return;
-      isLoadingChat = true;
-
-      loadChat(id).finally(() => {
-        isLoadingChat = false;
-      });
-
-    }); // ✅ THIS WAS MISSING
-
-    menuBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openSidebar();
+    document.querySelectorAll("#historyList [data-id]").forEach(d => {
+      d.classList.remove("active-chat");
     });
+    item.classList.add("active-chat");
 
-    overlay.addEventListener("click", closeSidebar);
+    if (isLoadingChat) return;
+    isLoadingChat = true;
 
-    renderEmptyState();
-    loadHistoryList();
+    loadChat(id).then(() => {
+      isLoadingChat = false;
+    }).catch(() => {
+      isLoadingChat = false;
+    });
   });
-    // activateChatItem is now a standalone function with its own
-    // querySelector — no dependency on a closed-over variable
-    
-// ── ROTATING PLACEHOLDERS ──
+
+  menuBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    openSidebar();
+  });
+
+  overlay.addEventListener("click", closeSidebar);
+
+  renderEmptyState();
+  loadHistoryList();
+});
+
 const placeholders = [
   "Ask anything...",
   "Generate a startup idea 💡",
@@ -251,7 +220,6 @@ setInterval(() => {
   }
 }, 3500);
 
-// ── MODE ──
 function setMode(m) {
   mode = m;
   document.getElementById("modeIndicator").textContent = "MODE: " + m.toUpperCase();
@@ -281,7 +249,6 @@ function toggleCompare(btn) {
   btn.textContent = useCompare ? "⚖️ Compare ON" : "⚖️ Compare";
 }
 
-// ── EMPTY STATE ──
 const STARTERS = [
   { icon: "🚀", text: "Build a startup idea",     prompt: "Help me brainstorm a startup idea with market validation and a go-to-market strategy." },
   { icon: "📸", text: "Create Instagram content", prompt: "Create a week of Instagram content ideas for a lifestyle brand with captions and hashtags." },
@@ -316,13 +283,11 @@ function sendStarter(prompt) {
   send();
 }
 
-// ── AUTO-RESIZE TEXTAREA ──
 document.getElementById("messageInput")?.addEventListener("input", function () {
   this.style.height = "auto";
   this.style.height = Math.min(this.scrollHeight, 140) + "px";
 });
 
-// ── SEND LOCK ──
 function setSending(val) {
   isSending = val;
   const btn = document.getElementById("sendBtn");
@@ -331,7 +296,6 @@ function setSending(val) {
   btn.textContent = val ? "..." : "Send ↑";
 }
 
-// ── MAIN SEND ──
 async function send() {
   if (isSending) return;
 
@@ -350,7 +314,6 @@ async function send() {
   }
 
   setSending(true);
-
   input.value = "";
   input.style.height = "auto";
 
@@ -366,12 +329,9 @@ async function send() {
   if (file) formData.append("file", file);
 
   document.querySelector(".empty-state")?.remove();
-
   if (message) appendMessage("user", message);
-
   chat.scrollTop = chat.scrollHeight;
 
-  // Typing indicator
   const loading = document.createElement("div");
   loading.className = "msg bot";
   loading.id = "loading";
@@ -388,17 +348,13 @@ async function send() {
   chat.scrollTop = chat.scrollHeight;
 
   try {
-
-    // ── COMPARE MODE ──
     if (useCompare) {
       const res = await fetch("/multi-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt: message, messages: messages.slice(-10) })
       });
-
       if (!res.ok) throw new Error("Compare request failed: " + res.status);
-
       const data = await res.json();
       document.getElementById("loading")?.remove();
       appendCompareResult(data);
@@ -409,10 +365,8 @@ async function send() {
 
     const res = await fetch("/chat", { method: "POST", body: formData });
     document.getElementById("loading")?.remove();
-
     if (!res.ok) throw new Error("Chat request failed: " + res.status);
 
-    // ── IMAGE MODE ──
     if (mode === "image") {
       const data = await res.json();
       const div  = createBotBubble();
@@ -435,7 +389,6 @@ async function send() {
       return;
     }
 
-    // ── SEARCH / NON-STREAM ──
     if (mode !== "chat") {
       const data = await res.json();
       const replyContent = data.reply || "⚠️ No response received.";
@@ -455,11 +408,8 @@ async function send() {
       return;
     }
 
-    // ── STREAM MODE ──
     const contentType = res.headers.get("content-type") || "";
-
     if (!contentType.includes("text/event-stream")) {
-      // Server returned JSON even though stream was requested
       const data = await res.json();
       const replyContent = data.reply || "⚠️ No response received.";
       const div = createBotBubble();
@@ -478,10 +428,8 @@ async function send() {
       return;
     }
 
-    // True SSE stream
     const reader  = res.body.getReader();
     const decoder = new TextDecoder("utf-8", { fatal: false });
-
     const botDiv  = createBotBubble();
     const bubble  = botDiv.querySelector(".msg-bubble");
     const textDiv = document.createElement("div");
@@ -500,11 +448,7 @@ async function send() {
 
     while (!streamDone) {
       let done, value;
-      try {
-        ({ done, value } = await reader.read());
-      } catch {
-        break;
-      }
+      try { ({ done, value } = await reader.read()); } catch { break; }
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
@@ -514,13 +458,11 @@ async function send() {
       for (const part of parts) {
         if (streamDone) break;
         const lines = part.split("\n");
-
         for (const line of lines) {
           const trimmed = line.trim();
           if (!trimmed.startsWith("data:")) continue;
           const payload = trimmed.slice(5).trim();
           if (!payload) continue;
-
           if (payload === "[DONE]") { streamDone = true; break; }
 
           let parsed;
@@ -549,11 +491,9 @@ async function send() {
 
     cursorEl.remove();
     textDiv.innerHTML = marked.parse(fullText.trim() || "⚠️ Empty response received.");
-
     fetchToolSuggestions(fullText).then(toolSugg => {
       if (toolSugg) bubble.appendChild(toolSugg);
     });
-
     bubble.insertAdjacentHTML("beforeend", buildActions(fullText));
     messages.push({ role: "assistant", content: fullText });
     chat.scrollTop = chat.scrollHeight;
@@ -562,18 +502,12 @@ async function send() {
   } catch (err) {
     console.error("Send error:", err);
     document.getElementById("loading")?.remove();
-
     const div = createBotBubble();
-    div.querySelector(".msg-bubble").innerHTML = `
-      <div class="markdown-body">⚠️ Something went wrong. Please try again.</div>
-    `;
+    div.querySelector(".msg-bubble").innerHTML = `<div class="markdown-body">⚠️ Something went wrong. Please try again.</div>`;
     chat.appendChild(div);
-
-    // Roll back user message if it was added
     if (messages.length && messages[messages.length - 1].role === "user") {
       messages.pop();
     }
-
   } finally {
     setSending(false);
     document.getElementById("fileUpload").value = "";
@@ -582,15 +516,10 @@ async function send() {
   }
 }
 
-// ── HELPERS ──
-
 function createBotBubble() {
   const div = document.createElement("div");
   div.className = "msg bot";
-  div.innerHTML = `
-    <div class="msg-avatar">🌊</div>
-    <div class="msg-bubble"></div>
-  `;
+  div.innerHTML = `<div class="msg-avatar">🌊</div><div class="msg-bubble"></div>`;
   return div;
 }
 
@@ -677,19 +606,16 @@ async function fetchToolSuggestions(responseText) {
 function appendCompareResult(data) {
   const bestOutput = data.responses?.[0]?.output || "";
   if (bestOutput) messages.push({ role: "assistant", content: bestOutput });
-
   const chat = document.getElementById("chat");
   const div  = document.createElement("div");
   div.className = "msg bot";
   div.style.maxWidth = "100%";
-
   const responsesHtml = (data.responses || []).map(r => `
     <div class="compare-card">
       <div class="model-name">${r.model || "Model"}</div>
       <div class="markdown-body">${marked.parse(r.output || "")}</div>
     </div>
   `).join("");
-
   div.innerHTML = `
     <div class="msg-avatar">⚖️</div>
     <div class="msg-bubble" style="flex:1;">
@@ -699,13 +625,10 @@ function appendCompareResult(data) {
       <div class="compare-grid">${responsesHtml}</div>
     </div>
   `;
-
   chat.appendChild(div);
   chat.scrollTop = chat.scrollHeight;
   loadHistoryList().catch(() => {});
 }
-
-// ── HISTORY ──
 
 async function loadHistoryList() {
   try {
@@ -726,20 +649,20 @@ async function loadHistoryList() {
       const span = document.createElement("span");
       span.textContent = c.title || "Chat";
 
+      // delete button: class="delete-btn", data-delete-id for identification
       const btn = document.createElement("button");
       btn.textContent = "🗑️";
       btn.className = "delete-btn";
-
+      btn.setAttribute("data-delete-id", c._id);
+      // stopPropagation so the div click doesn't also fire
       btn.addEventListener("click", (e) => {
         e.stopPropagation();
+        e.preventDefault();
         deleteChat(c._id);
       });
 
       div.appendChild(span);
       div.appendChild(btn);
-
-      
-
       list.appendChild(div);
     });
   } catch (err) {
@@ -799,8 +722,6 @@ function newChat() {
   closeSidebar();
 }
 
-// ── EXPORT / SHARE ──
-
 function copyFullConversation() {
   const text = messages
     .filter(m => m.role !== "system")
@@ -833,9 +754,6 @@ function shareChat() {
   }
 }
 
- 
-// ── INPUT EVENTS ──
-
 document.getElementById("messageInput")?.addEventListener("keydown", e => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -849,7 +767,6 @@ document.getElementById("fileUpload")?.addEventListener("change", () => {
   const tag = document.getElementById("fileNameTag");
   tag.textContent = "📎 " + file.name;
   tag.style.display = "inline-block";
-
   document.querySelector(".empty-state")?.remove();
   appendMessage("user", `📎 Attached: **${file.name}**`);
   document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
