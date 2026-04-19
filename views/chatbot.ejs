@@ -137,11 +137,10 @@ function toggleSidebar() {
 document.addEventListener("DOMContentLoaded", () => {  
   const overlay = document.getElementById("sidebarOverlay");  
   const menuBtn = document.getElementById("menuToggle");
-  document.getElementById("sidebar").addEventListener("click", (e) => {
-    if (e.target.closest("#closeSidebarBtn")) {
-      e.stopPropagation();
-      closeSidebar();
-    }
+  document.getElementById("closeSidebarBtn").addEventListener("click", (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    closeSidebar();
   });
 
   menuBtn.addEventListener("click", (e) => {
