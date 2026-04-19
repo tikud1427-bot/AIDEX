@@ -1058,3 +1058,7 @@ body.sidebar-open {
 
   .tool-suggestions { font-size: 0.75rem; padding: 8px 10px; }
 }
+
+#historyList div {
+  touch-action: manipulation;
+}

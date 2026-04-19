@@ -184,6 +184,34 @@ function toggleSidebar() {
 
 // ── INIT SIDEBAR EVENTS ──
   document.addEventListener("DOMContentLoaded", () => {
+    const historyList = document.getElementById("historyList");
+
+    // CLICK (desktop)
+    historyList.addEventListener("click", (e) => {
+      const item = e.target.closest("[data-id]");
+      if (!item) return;
+
+      const id = item.getAttribute("data-id");
+      if (!id) return;
+
+      activateChatItem(item);
+      loadChat(id);
+    });
+
+    // TOUCH (mobile fix)
+    historyList.addEventListener("pointerup", (e) => {
+      const item = e.target.closest("[data-id]");
+      if (!item) return;
+
+      // ignore right click / secondary touch
+      if (e.button !== 0) return;
+
+      const id = item.getAttribute("data-id");
+      if (!id) return;
+
+      activateChatItem(item);
+      loadChat(id);
+    });
     const overlay = document.getElementById("sidebarOverlay");
     const menuBtn = document.getElementById("menuToggle");
     const sidebar = document.getElementById("sidebar");
@@ -696,11 +724,7 @@ async function loadHistoryList() {
         <button onclick="event.stopPropagation(); deleteChat('${c._id}')" aria-label="Delete chat">🗑️</button>
       `;
 
-      div.addEventListener("click", () => {
-        document.querySelectorAll("#historyList div").forEach(d => d.classList.remove("active-chat"));
-        div.classList.add("active-chat");
-        loadChat(c._id);
-      });
+      
 
       list.appendChild(div);
     });
@@ -794,6 +818,13 @@ function shareChat() {
     alert("Send a message first to generate a shareable link.");
   }
 }
+
+  function activateChatItem(item) {
+    historyList.querySelectorAll("div").forEach(d => {
+      d.classList.remove("active-chat");
+    });
+    item.classList.add("active-chat");
+  }
 
 // ── INPUT EVENTS ──
 
