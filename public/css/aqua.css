@@ -1058,3 +1058,80 @@ body.sidebar-open {
   .msg-action-btn { font-size: 0.69rem; padding: 4px 8px; }
   .tool-suggestions { font-size: 0.75rem; padding: 8px 10px; }
 }
+
+/* ============================================================
+   STYLES.CSS CONFLICT OVERRIDES
+   styles.css is loaded globally and breaks the chatbot sidebar.
+   These rules undo every conflicting rule it sets.
+   Must stay at the very bottom of this file.
+============================================================ */
+
+/* styles.css sets .sidebar { display:none } and .sidebar.active { display:block }
+   Our sidebar uses .mobile-open not .active — reset display fully */
+.aqua-sidebar {
+  display: flex !important;
+}
+
+/* styles.css sets #historyList div to horizontal scroll with min-width:120px
+   on mobile — this completely breaks our vertical list */
+#historyList {
+  display: block !important;
+  overflow-x: visible !important;
+  width: auto !important;
+  height: auto !important;
+  flex-direction: column !important;
+}
+
+#historyList div {
+  display: flex !important;
+  min-width: 0 !important;
+  width: auto !important;
+  flex-shrink: 1 !important;
+  /* Restore tap target */
+  min-height: 44px !important;
+  padding: 9px 10px !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+  pointer-events: auto !important;
+  /* undo styles.css transform on hover that breaks iOS taps */
+  transform: none !important;
+}
+
+#historyList div:hover,
+#historyList div:active {
+  transform: none !important;
+  background: rgba(56,189,248,0.08) !important;
+}
+
+/* styles.css global button rule applies !important background/transform
+   to ALL buttons including our history delete buttons — undo it */
+#historyList div button,
+#historyList div button:hover {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  transform: none !important;
+  color: var(--muted) !important;
+  width: 32px !important;
+  height: 32px !important;
+  min-width: 0 !important;
+  padding: 0 !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
+
+/* styles.css sets global button:hover { transform: translateY(-1px) }
+   This causes iOS to miss the touchend target — kill it for sidebar */
+.aqua-sidebar button:hover {
+  transform: none !important;
+}
+
+/* styles.css sets .chat-container flex-direction:column on mobile
+   which collapses our sidebar — our sidebar is fixed so not affected,
+   but reset just in case */
+.aqua-body {
+  display: flex !important;
+  flex-direction: row !important;
+}
