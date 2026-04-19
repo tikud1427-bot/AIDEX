@@ -191,19 +191,11 @@ function toggleSidebar() {
     // OPEN
     menuBtn.addEventListener("click", (e) => {
       e.stopPropagation();
-      sidebar.classList.add("mobile-open");
-      overlay.classList.add("visible");
-      document.body.classList.add("sidebar-open");
+      openSidebar();
     });
 
     // CLOSE
     overlay.addEventListener("click", closeSidebar);
-
-    // TOUCH FIX (important for mobile)
-    overlay.addEventListener("touchend", (e) => {
-      e.preventDefault();
-      closeSidebar();
-    }, { passive: false });
 
     // Init
     renderEmptyState();
