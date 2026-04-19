@@ -618,26 +618,6 @@ function appendCompareResult(data) {
       console.error("History load failed:", err);
     }
   }
-      const span = document.createElement("span");
-      span.textContent = c.title || "Chat";
-      span.style.pointerEvents = "none"; // taps pass through to div.onclick
-
-      const btn = document.createElement("button");
-      btn.textContent = "🗑️";
-      btn.className = "delete-btn";
-      btn.onclick = function(e) {
-        e.stopPropagation();
-        deleteChat(id);
-      };
-
-      div.appendChild(span);
-      div.appendChild(btn);
-      list.appendChild(div);
-    });
-  } catch (err) {
-    console.error("History load failed:", err);
-  }
-}
 
 async function deleteChat(id) {
   if (!confirm("Delete this chat?")) return;
