@@ -124,6 +124,16 @@
      CSS only provides the transition and fixed positioning on mobile.
   ══════════════════════════════════════════════ */
 
+  /* ── Sidebar helpers: always clear ALL mode-specific properties ── */
+
+  function _sidebarReset(sidebar) {
+    /* Wipe every property either mode could have set, so nothing bleeds across */
+    sidebar.style.transform  = "";
+    sidebar.style.boxShadow  = "";
+    sidebar.style.width      = "";
+    sidebar.style.minWidth   = "";
+  }
+
   function openSidebar() {
     const sidebar = document.getElementById("sidebar");
     const overlay = document.getElementById("sidebarOverlay");
@@ -131,6 +141,7 @@
 
     sidebarOpen = true;
     toggle.setAttribute("aria-expanded", "true");
+    _sidebarReset(sidebar);
 
     if (isMobile()) {
       sidebar.style.transform = "translateX(0px)";
@@ -138,9 +149,12 @@
       overlay.classList.add("visible");
       document.body.style.overflow = "hidden";
     } else {
+      /* Desktop: let CSS width/minWidth from the rule take effect;
+         override with explicit values so the transition fires */
       sidebar.style.width    = "260px";
       sidebar.style.minWidth = "260px";
-      sidebar.style.transform = "";
+      overlay.classList.remove("visible");
+      document.body.style.overflow = "";
     }
   }
 
@@ -151,6 +165,7 @@
 
     sidebarOpen = false;
     toggle.setAttribute("aria-expanded", "false");
+    _sidebarReset(sidebar);
 
     if (isMobile()) {
       sidebar.style.transform = "translateX(-100%)";
@@ -160,6 +175,8 @@
     } else {
       sidebar.style.width    = "0";
       sidebar.style.minWidth = "0";
+      overlay.classList.remove("visible");
+      document.body.style.overflow = "";
     }
   }
 
@@ -176,20 +193,22 @@
     const input    = document.getElementById("messageInput");
     const fileUpload = document.getElementById("fileUpload");
 
-    /* Set correct initial state via JS — avoids CSS/inline race condition */
+    /* Always wipe all inline styles first so no stale values persist */
+    _sidebarReset(sidebar);
+
+    /* Set correct initial state for current viewport */
     if (isMobile()) {
+      /* Mobile: start hidden off-screen */
       sidebar.style.transform = "translateX(-100%)";
       sidebar.style.boxShadow = "none";
       sidebarOpen = false;
     } else {
-      /* Desktop: sidebar open by default */
+      /* Desktop: start open, in-flow */
       sidebar.style.width    = "260px";
       sidebar.style.minWidth = "260px";
-      sidebar.style.transform = "";
       sidebarOpen = true;
     }
 
-    /* Use only click — no touchstart (prevents double-fire & preventDefault issues) */
     menuBtn.addEventListener("click", function(e) {
       e.stopPropagation();
       toggleSidebar();
@@ -205,19 +224,29 @@
       closeSidebar();
     });
 
-    /* Re-init on resize (e.g. rotating device) */
+    /* Re-init on resize / device rotation */
     window.addEventListener("resize", function() {
-      if (!isMobile() && !sidebarOpen) {
-        /* On desktop, reset to open */
+      /* Always re-apply correct state for new viewport size */
+      _sidebarReset(sidebar);
+      if (isMobile()) {
+        if (sidebarOpen) {
+          sidebar.style.transform = "translateX(0px)";
+          sidebar.style.boxShadow = "4px 0 32px rgba(0,0,0,0.6)";
+          overlay.classList.add("visible");
+          document.body.style.overflow = "hidden";
+        } else {
+          sidebar.style.transform = "translateX(-100%)";
+          sidebar.style.boxShadow = "none";
+          overlay.classList.remove("visible");
+          document.body.style.overflow = "";
+        }
+      } else {
+        /* On desktop, always open */
         sidebar.style.width    = "260px";
         sidebar.style.minWidth = "260px";
-        sidebar.style.transform = "";
         overlay.classList.remove("visible");
         document.body.style.overflow = "";
         sidebarOpen = true;
-      } else if (isMobile() && !sidebarOpen) {
-        sidebar.style.transform = "translateX(-100%)";
-        sidebar.style.boxShadow = "none";
       }
     });
 
