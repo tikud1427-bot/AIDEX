@@ -183,44 +183,32 @@ function toggleSidebar() {
 }
 
 // ── INIT SIDEBAR EVENTS ──
-// All event wiring happens in DOMContentLoaded — no inline handlers for sidebar
-document.addEventListener("DOMContentLoaded", () => {
+  document.addEventListener("DOMContentLoaded", () => {
+    const overlay = document.getElementById("sidebarOverlay");
+    const menuBtn = document.getElementById("menuToggle");
+    const sidebar = document.getElementById("sidebar");
 
-  const menuToggle = document.getElementById("menuToggle");
-  const overlay    = document.getElementById("sidebarOverlay");
+    // OPEN
+    menuBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      sidebar.classList.add("mobile-open");
+      overlay.classList.add("visible");
+      document.body.classList.add("sidebar-open");
+    });
 
-  // Menu toggle — prefer click; touchstart for 300ms delay fix
-  menuToggle.addEventListener("click", (e) => {
-    e.stopPropagation();
-    toggleSidebar();
+    // CLOSE
+    overlay.addEventListener("click", closeSidebar);
+
+    // TOUCH FIX (important for mobile)
+    overlay.addEventListener("touchend", (e) => {
+      e.preventDefault();
+      closeSidebar();
+    }, { passive: false });
+
+    // Init
+    renderEmptyState();
+    loadHistoryList();
   });
-
-  // Overlay tap/click closes sidebar
-  overlay.addEventListener("click", closeSidebar);
-
-  // Also handle touchend on overlay for iOS reliability
-  overlay.addEventListener("touchend", (e) => {
-    // Only close if it was a simple tap (not a scroll)
-    e.preventDefault();
-    closeSidebar();
-  }, { passive: false });
-
-  // Resize: if switching from mobile → desktop, clean up mobile classes
-  window.addEventListener("resize", () => {
-    if (!isMobile() && sidebarOpen) {
-      // On desktop: just ensure no mobile classes linger
-      document.getElementById("sidebar").classList.remove("mobile-open");
-      document.getElementById("sidebarOverlay").classList.remove("visible");
-      document.body.classList.remove("sidebar-open");
-      // Keep sidebarOpen=true so desktop state is preserved
-    }
-  });
-
-  // Init
-  renderEmptyState();
-  loadHistoryList();
-});
-
 // ── ROTATING PLACEHOLDERS ──
 const placeholders = [
   "Ask anything...",

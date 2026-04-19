@@ -1058,3 +1058,12 @@ body.sidebar-open {
 
   .tool-suggestions { font-size: 0.75rem; padding: 8px 10px; }
 }
+
+/* Fix overlay click issue */
+.sidebar-overlay {
+  pointer-events: none;
+}
+
+.sidebar-overlay.visible {
+  pointer-events: auto;
+}
