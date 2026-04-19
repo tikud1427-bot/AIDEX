@@ -1059,6 +1059,10 @@ body.sidebar-open {
   .tool-suggestions { font-size: 0.75rem; padding: 8px 10px; }
 }
 
+/* Removes the 300ms tap delay and ghost-click on mobile */
 #historyList div {
   touch-action: manipulation;
+  /* already present in your file — confirm it's there */
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }

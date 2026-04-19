@@ -184,51 +184,48 @@ function toggleSidebar() {
 
 // ── INIT SIDEBAR EVENTS ──
   document.addEventListener("DOMContentLoaded", () => {
-    const historyList = document.getElementById("historyList");
+  const historyList = document.getElementById("historyList");
+  const overlay     = document.getElementById("sidebarOverlay");
+  const menuBtn     = document.getElementById("menuToggle");
 
-    // CLICK (desktop)
-    historyList.addEventListener("click", (e) => {
-      const item = e.target.closest("[data-id]");
-      if (!item) return;
+  // ── SINGLE pointer event on history list ──
+  // pointerdown fires immediately (no 300ms delay), works on
+  // mouse, touch, and stylus. No click needed alongside it.
+  historyList.addEventListener("pointerdown", (e) => {
+    // Only primary button / first touch point
+    if (e.button !== 0 && e.button !== undefined) return;
 
-      const id = item.getAttribute("data-id");
-      if (!id) return;
+    const item = e.target.closest("[data-id]");
+    if (!item) return;
 
-      activateChatItem(item);
-      loadChat(id);
-    });
+    // Prevent the browser synthesising a click event after touch
+    e.preventDefault();
 
-    // TOUCH (mobile fix)
-    historyList.addEventListener("pointerup", (e) => {
-      const item = e.target.closest("[data-id]");
-      if (!item) return;
+    const id = item.getAttribute("data-id");
+    if (!id) return;
 
-      // ignore right click / secondary touch
-      if (e.button !== 0) return;
-
-      const id = item.getAttribute("data-id");
-      if (!id) return;
-
-      activateChatItem(item);
-      loadChat(id);
-    });
-    const overlay = document.getElementById("sidebarOverlay");
-    const menuBtn = document.getElementById("menuToggle");
-    const sidebar = document.getElementById("sidebar");
-
-    // OPEN
-    menuBtn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      openSidebar();
-    });
-
-    // CLOSE
-    overlay.addEventListener("click", closeSidebar);
-
-    // Init
-    renderEmptyState();
-    loadHistoryList();
+    activateChatItem(item);
+    loadChat(id);
   });
+    menuBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openSidebar();
+      });
+
+      overlay.addEventListener("click", closeSidebar);
+
+      renderEmptyState();
+      loadHistoryList();
+    });
+
+    // activateChatItem is now a standalone function with its own
+    // querySelector — no dependency on a closed-over variable
+    function activateChatItem(item) {
+      document.querySelectorAll("#historyList [data-id]").forEach(d => {
+        d.classList.remove("active-chat");
+      });
+      item.classList.add("active-chat");
+    }
 // ── ROTATING PLACEHOLDERS ──
 const placeholders = [
   "Ask anything...",
