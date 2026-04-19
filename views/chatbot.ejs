@@ -34,98 +34,11 @@
       position: relative;
       z-index: 1;
     }
-
-    /* ── SIDEBAR INLINE-STYLE APPROACH ──
-       We bypass ALL class-based CSS conflicts by driving open/close
-       purely through element.style.transform and element.style.width.
-       No .mobile-open, no .collapsed — nothing that styles.css can hijack.
-    ── */
-
- 
-
-    /* Desktop sidebar: in-flow, driven by width */
-    @media (min-width: 769px) {
-      #sidebar {
-        position: relative !important;
-        transform: none !important;
-        height: auto !important;
-        z-index: auto !important;
-        display: flex !important;
-        flex-direction: column !important;
-        overflow: hidden !important;
-        transition: width 0.28s ease, min-width 0.28s ease !important;
-        background: #0b1628 !important;
-        border-right: 1px solid #1f2937 !important;
-      }
-    }
-
-    /* Overlay */
-    #sidebarOverlay {
-      position: fixed !important;
-      inset: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-      background: rgba(0,0,0,0.6) !important;
-      z-index: 9998 !important;
-      opacity: 0 !important;
-      visibility: hidden !important;
-      pointer-events: none !important;
-      transition: opacity 0.25s ease, visibility 0.25s ease !important;
-    }
-    #sidebarOverlay.visible {
-      opacity: 1 !important;
-      visibility: visible !important;
-      pointer-events: auto !important;
-    }
-
-    /* Close button — guaranteed clickable */
-    #closeSidebarBtn {
-      background: none !important;
-      border: none !important;
-      color: #94a3b8 !important;
-      font-size: 1.1rem !important;
-      width: 36px !important;
-      height: 36px !important;
-      min-width: 36px !important;
-      padding: 0 !important;
-      margin: 0 !important;
-      cursor: pointer !important;
-      pointer-events: auto !important;
-      touch-action: manipulation !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      border-radius: 6px !important;
-      position: relative !important;
-      z-index: 10000 !important;
-      flex-shrink: 0 !important;
-      transform: none !important;
-      box-shadow: none !important;
-      -webkit-tap-highlight-color: rgba(56,189,248,0.2) !important;
-    }
-    #closeSidebarBtn:hover {
-      background: rgba(255,255,255,0.08) !important;
-      color: #e5e7eb !important;
-      transform: none !important;
-    }
-    #closeSidebarBtn:active {
-      background: rgba(255,255,255,0.12) !important;
-      transform: scale(0.9) !important;
-    }
-
-    .sidebar-header {
-      display: flex !important;
-      align-items: center !important;
-      justify-content: space-between !important;
-      padding: 12px !important;
-      border-bottom: 1px solid #1f2937 !important;
-      flex-shrink: 0 !important;
-      gap: 8px !important;
-    }
   </style>
 </head>
 <body>
 
+  <!-- Overlay: sits behind sidebar, closes it when tapped -->
   <div id="sidebarOverlay"></div>
 
   <div class="aqua-shell">
@@ -147,7 +60,7 @@
 
     <div class="aqua-body">
 
-      <aside id="sidebar" class="aqua-sidebar" aria-label="Chat history">
+      <aside id="sidebar" aria-label="Chat history">
         <div class="sidebar-header">
           <button class="new-chat-btn" onclick="newChat()">➕ New Chat</button>
           <button id="closeSidebarBtn" title="Close sidebar" aria-label="Close sidebar">✕</button>
@@ -192,6 +105,7 @@
   <script>
   marked.setOptions({ gfm: true, breaks: true });
 
+  /* ── STATE ── */
   let messages      = [];
   let currentChatId = null;
   let mode          = "chat";
@@ -204,24 +118,29 @@
     return window.matchMedia("(max-width: 768px)").matches;
   }
 
-  // ── SIDEBAR CONTROL ──
-  // Uses inline styles directly — immune to any external CSS class overrides.
+  /* ══════════════════════════════════════════════
+     SIDEBAR — open / close / toggle
+     All state driven by JS inline styles.
+     CSS only provides the transition and fixed positioning on mobile.
+  ══════════════════════════════════════════════ */
 
   function openSidebar() {
     const sidebar = document.getElementById("sidebar");
     const overlay = document.getElementById("sidebarOverlay");
     const toggle  = document.getElementById("menuToggle");
+
     sidebarOpen = true;
     toggle.setAttribute("aria-expanded", "true");
 
     if (isMobile()) {
-      sidebar.style.transform = "translateX(0)";
-      sidebar.style.boxShadow = "4px 0 32px rgba(0,0,0,0.5)";
+      sidebar.style.transform = "translateX(0px)";
+      sidebar.style.boxShadow = "4px 0 32px rgba(0,0,0,0.6)";
       overlay.classList.add("visible");
       document.body.style.overflow = "hidden";
     } else {
-      sidebar.style.width = "260px";
+      sidebar.style.width    = "260px";
       sidebar.style.minWidth = "260px";
+      sidebar.style.transform = "";
     }
   }
 
@@ -229,6 +148,7 @@
     const sidebar = document.getElementById("sidebar");
     const overlay = document.getElementById("sidebarOverlay");
     const toggle  = document.getElementById("menuToggle");
+
     sidebarOpen = false;
     toggle.setAttribute("aria-expanded", "false");
 
@@ -238,7 +158,7 @@
       overlay.classList.remove("visible");
       document.body.style.overflow = "";
     } else {
-      sidebar.style.width = "0";
+      sidebar.style.width    = "0";
       sidebar.style.minWidth = "0";
     }
   }
@@ -247,36 +167,61 @@
     sidebarOpen ? closeSidebar() : openSidebar();
   }
 
-    document.addEventListener("DOMContentLoaded", () => {
+  /* ── INIT ── */
+  document.addEventListener("DOMContentLoaded", () => {
+    const sidebar  = document.getElementById("sidebar");
     const overlay  = document.getElementById("sidebarOverlay");
     const menuBtn  = document.getElementById("menuToggle");
     const closeBtn = document.getElementById("closeSidebarBtn");
 
-    // Initialize sidebar on mobile
+    /* Set correct initial state via JS — avoids CSS/inline race condition */
     if (isMobile()) {
-      document.getElementById("sidebar").style.transform = "translateX(-100%)";
+      sidebar.style.transform = "translateX(-100%)";
+      sidebar.style.boxShadow = "none";
+    } else {
+      /* Desktop: sidebar open by default */
+      sidebar.style.width    = "260px";
+      sidebar.style.minWidth = "260px";
+      sidebarOpen = true;
     }
 
-    // ── Use ONLY click events — touchstart + preventDefault blocks click on mobile ──
-    closeBtn.addEventListener("click", function(e) {
-      e.stopPropagation();
-      closeSidebar();
-    });
-
+    /* Use only click — no touchstart (prevents double-fire & preventDefault issues) */
     menuBtn.addEventListener("click", function(e) {
       e.stopPropagation();
       toggleSidebar();
+    });
+
+    closeBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      closeSidebar();
     });
 
     overlay.addEventListener("click", function(e) {
       e.stopPropagation();
       closeSidebar();
     });
-      renderEmptyState();
-        loadHistoryList();
-      });
-    
 
+    /* Re-init on resize (e.g. rotating device) */
+    window.addEventListener("resize", function() {
+      if (!isMobile() && !sidebarOpen) {
+        /* On desktop, reset to open */
+        sidebar.style.width    = "260px";
+        sidebar.style.minWidth = "260px";
+        sidebar.style.transform = "";
+        overlay.classList.remove("visible");
+        document.body.style.overflow = "";
+        sidebarOpen = true;
+      } else if (isMobile() && !sidebarOpen) {
+        sidebar.style.transform = "translateX(-100%)";
+        sidebar.style.boxShadow = "none";
+      }
+    });
+
+    renderEmptyState();
+    loadHistoryList();
+  });
+
+  /* ── Placeholder rotation ── */
   const placeholders = [
     "Ask anything...",
     "Generate a startup idea 💡",
@@ -294,6 +239,7 @@
     }
   }, 3500);
 
+  /* ── Mode ── */
   function setMode(m) {
     mode = m;
     document.getElementById("modeIndicator").textContent = "MODE: " + m.toUpperCase();
@@ -323,6 +269,7 @@
     btn.textContent = useCompare ? "⚖️ Compare ON" : "⚖️ Compare";
   }
 
+  /* ── Starter cards ── */
   const STARTERS = [
     { icon: "🚀", text: "Build a startup idea",     prompt: "Help me brainstorm a startup idea with market validation and a go-to-market strategy." },
     { icon: "📸", text: "Create Instagram content", prompt: "Create a week of Instagram content ideas for a lifestyle brand with captions and hashtags." },
@@ -370,6 +317,9 @@
     btn.textContent = val ? "..." : "Send ↑";
   }
 
+  /* ══════════════════════════════════════════════
+     SEND
+  ══════════════════════════════════════════════ */
   async function send() {
     if (isSending) return;
 
@@ -502,6 +452,7 @@
         return;
       }
 
+      /* Streaming */
       const reader  = res.body.getReader();
       const decoder = new TextDecoder("utf-8", { fatal: false });
       const botDiv  = createBotBubble();
@@ -717,6 +668,7 @@
       chats.forEach(c => {
         const div = document.createElement("div");
         div.setAttribute("data-id", c._id);
+        if (c._id === currentChatId) div.classList.add("active-chat");
         div.innerHTML = `
           <span>${c.title || "Chat"}</span>
           <button class="delete-btn" onclick="event.stopPropagation(); deleteChat('${c._id}')">🗑️</button>
