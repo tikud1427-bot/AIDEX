@@ -247,39 +247,35 @@
     sidebarOpen ? closeSidebar() : openSidebar();
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
+    document.addEventListener("DOMContentLoaded", () => {
     const overlay  = document.getElementById("sidebarOverlay");
     const menuBtn  = document.getElementById("menuToggle");
     const closeBtn = document.getElementById("closeSidebarBtn");
-    // Initialize sidebar transform explicitly on mobile
+
+    // Initialize sidebar on mobile
     if (isMobile()) {
       document.getElementById("sidebar").style.transform = "translateX(-100%)";
     }
 
-    // Direct onclick on close button — most reliable possible approach
-    closeBtn.addEventListener("click", closeSidebar);
-    closeBtn.addEventListener("touchstart", function(e) {
-      e.preventDefault();
+    // ── Use ONLY click events — touchstart + preventDefault blocks click on mobile ──
+    closeBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
       closeSidebar();
-    }, { passive: false });
+    });
 
-    menuBtn.addEventListener("click", toggleSidebar);
-    menuBtn.addEventListener("touchstart", function(e) {
-      e.preventDefault();
+    menuBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
       toggleSidebar();
-    }, { passive: false });
+    });
 
-    overlay.onclick = function() { closeSidebar(); };
-
-    // Touch support for overlay
-    overlay.addEventListener("touchend", function(e) {
-      e.preventDefault();
+    overlay.addEventListener("click", function(e) {
+      e.stopPropagation();
       closeSidebar();
-    }, { passive: false });
-
-    renderEmptyState();
-    loadHistoryList();
-  });
+    });
+      renderEmptyState();
+        loadHistoryList();
+      });
+    
 
   const placeholders = [
     "Ask anything...",
