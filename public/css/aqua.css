@@ -312,23 +312,7 @@ button:disabled { cursor: not-allowed; }
    Appears behind the drawer, above the main content.
    Tapping it closes the sidebar.
 */
-.sidebar-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(4px);
-  z-index: var(--z-overlay);
 
-  cursor: pointer;
-  touch-action: manipulation;
-  pointer-events: none;
-}
-
-.sidebar-overlay.visible {
-  display: block;
-  pointer-events: auto;
-}
 /* ============================================================
    MAIN COLUMN — flex column, only #chat scrolls
 ============================================================ */
@@ -1020,7 +1004,6 @@ button:disabled { cursor: not-allowed; }
     height: 100dvh;
     width: var(--sidebar-w-mobile);
     min-width: var(--sidebar-w-mobile);
-    transform: translateX(-100%);
     transition: transform 0.3s ease;
     z-index: var(--z-sidebar);
     will-change: transform;
@@ -1129,4 +1112,108 @@ button, .starter-card, .msg-action-btn {
 }
 #historyList {
   -webkit-overflow-scrolling: touch;
+}
+
+/* ============================================================
+   🔥 FINAL MOBILE SIDEBAR FIX (DO NOT MODIFY)
+   Fixes:
+   - Blur blocking clicks
+   - Sidebar not clickable
+   - Overlay touch issues
+   - Z-index GPU bugs
+============================================================ */
+
+/* ── FORCE PROPER LAYERING ── */
+.aqua-sidebar {
+  z-index: 999 !important;
+  pointer-events: auto;
+}
+
+.sidebar-overlay {
+  z-index: 50 !important;
+  pointer-events: none;
+}
+
+/* When visible → allow clicks */
+.sidebar-overlay.visible {
+  pointer-events: auto;
+}
+
+/* ── CRITICAL: FIX BACKDROP-FILTER BUG ── */
+/* Replace blur with stable fallback */
+.sidebar-overlay {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  background: rgba(0, 0, 0, 0.65) !important;
+}
+
+/* ── ENSURE SIDEBAR ALWAYS INTERACTIVE ── */
+.aqua-sidebar,
+.aqua-sidebar * {
+  pointer-events: auto !important;
+}
+
+/* ── FIX TRANSFORM LAYER ISSUES ── */
+.aqua-sidebar {
+  transform: translateX(-100%);
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.aqua-sidebar.mobile-open {
+  transform: translateX(0);
+}
+
+
+/* ── FIX BUTTON TAP DELAY ── */
+#menuToggle {
+  touch-action: manipulation;
+}
+
+/* ── EXTRA SAFETY FOR MOBILE ── */
+@media (max-width: 768px) {
+  .aqua-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100dvh;
+    width: var(--sidebar-w-mobile);
+    min-width: var(--sidebar-w-mobile);
+    overflow: hidden;
+  }
+
+  .sidebar-overlay {
+    position: fixed;
+    inset: 0;
+  }
+}
+
+/* ============================================================
+   ✅ FINAL OVERLAY SYSTEM (CLEAN & STABLE)
+============================================================ */
+
+.sidebar-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.65);
+
+  /* NO display toggle */
+  opacity: 0;
+  visibility: hidden;
+
+  z-index: 90;
+
+  transition: opacity 0.25s ease;
+
+  pointer-events: none;
+
+  /* IMPORTANT: remove blur completely */
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+.sidebar-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
