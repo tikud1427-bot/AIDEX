@@ -311,6 +311,9 @@ button:disabled { cursor: not-allowed; }
   -webkit-tap-highlight-color: rgba(56,189,248,0.15);
   user-select: none;
   pointer-events: auto;
+  /* Prevent iOS from swallowing taps due to stacking context */
+  position: relative;
+  z-index: 1;
 }
 
 #historyList div:hover,
@@ -328,32 +331,43 @@ button:disabled { cursor: not-allowed; }
   pointer-events: none; /* let clicks pass to parent div */
 }
 
-/* Delete button — always visible on mobile, hover on desktop */
+/* ── Delete button ── */
+/* JS creates this with class="delete-btn" so CSS overrides from styles.css
+   targeting bare "button" selectors are overridden here at higher specificity */
+
 #historyList div button.delete-btn {
-  background: none;
-  border: none;
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  transform: none !important;
   color: var(--muted);
   font-size: 0.85rem;
   width: 32px;
   height: 32px;
+  min-width: 0 !important;
+  padding: 0 !important;
   flex-shrink: 0;
   border-radius: var(--radius-sm);
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Always tappable — never block with opacity:0 on mobile */
   pointer-events: auto;
   touch-action: manipulation;
-  /* visible on mobile always, fade on desktop */
+  position: relative;
+  z-index: 2;
+  /* visible on mobile, hidden until hover on desktop */
   opacity: 1;
   transition: background 0.15s, color 0.15s;
 }
 
 #historyList div button.delete-btn:hover {
-  background: rgba(239, 68, 68, 0.12);
+  background: rgba(239, 68, 68, 0.12) !important;
   color: var(--danger);
+  transform: none !important;
 }
 
-/* On desktop hide until hover */
+/* On desktop only: hide delete button until row is hovered */
 @media (hover: hover) {
   #historyList div button.delete-btn {
     opacity: 0;
@@ -983,6 +997,7 @@ button:disabled { cursor: not-allowed; }
     will-change: transform;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    /* Critical: ensure sidebar itself receives all pointer events */
     pointer-events: auto;
   }
 
@@ -1094,6 +1109,9 @@ body.sidebar-open {
   cursor: pointer !important;
   touch-action: manipulation !important;
   pointer-events: auto !important;
+  /* Stacking context so iOS doesn't lose taps to overlapping elements */
+  position: relative !important;
+  z-index: 1 !important;
   /* undo styles.css transform on hover that breaks iOS taps */
   transform: none !important;
 }
@@ -1104,15 +1122,13 @@ body.sidebar-open {
   background: rgba(56,189,248,0.08) !important;
 }
 
-/* styles.css global button rule applies !important background/transform
-   to ALL buttons including our history delete buttons — undo it */
-#historyList div button,
-#historyList div button:hover {
+/* Override styles.css global button rules for delete button inside history */
+#historyList div button.delete-btn,
+#historyList div button.delete-btn:hover {
   background: none !important;
   border: none !important;
   box-shadow: none !important;
   transform: none !important;
-  color: var(--muted) !important;
   width: 32px !important;
   height: 32px !important;
   min-width: 0 !important;
@@ -1120,6 +1136,9 @@ body.sidebar-open {
   opacity: 1 !important;
   pointer-events: auto !important;
   touch-action: manipulation !important;
+  /* Above the row's stacking context */
+  position: relative !important;
+  z-index: 2 !important;
 }
 
 /* styles.css sets global button:hover { transform: translateY(-1px) }

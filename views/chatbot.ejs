@@ -594,30 +594,84 @@ function appendCompareResult(data) {
   loadHistoryList().catch(() => {});
 }
 
-  async function loadHistoryList() {
-    try {
-      const res = await fetch("/history");
-      if (!res.ok) return;
-      const chats = await res.json();
-      if (!Array.isArray(chats)) return;
+/* ── FIX: Build history items with JS-only event listeners (no inline onclick)
+   so that styles.css button overrides and iOS touch event quirks
+   cannot intercept or block taps on either the row or the delete button. ── */
+async function loadHistoryList() {
+  try {
+    const res = await fetch("/history");
+    if (!res.ok) return;
+    const chats = await res.json();
+    if (!Array.isArray(chats)) return;
 
-      const list = document.getElementById("historyList");
-      list.innerHTML = "";
+    const list = document.getElementById("historyList");
+    list.innerHTML = "";
 
-      chats.forEach(c => {
-        const div = document.createElement("div");
-        div.setAttribute("data-id", c._id);
-        div.innerHTML = `
-          <span>${c.title || "Chat"}</span>
-          <button onclick="event.stopPropagation(); deleteChat('${c._id}')">🗑️</button>
-        `;
-        div.onclick = () => loadChat(c._id);
-        list.appendChild(div);
+    chats.forEach(c => {
+      /* Row wrapper */
+      const row = document.createElement("div");
+      row.setAttribute("data-id", c._id);
+      row.setAttribute("role", "listitem");
+
+      /* Title span */
+      const span = document.createElement("span");
+      span.textContent = c.title || "Chat";
+
+      /* Delete button — class="delete-btn" so CSS override targets it */
+      const delBtn = document.createElement("button");
+      delBtn.className = "delete-btn";
+      delBtn.setAttribute("aria-label", "Delete chat");
+      delBtn.textContent = "🗑️";
+
+      row.appendChild(span);
+      row.appendChild(delBtn);
+      list.appendChild(row);
+
+      /* ── Touch-safe tap handler for the ROW ── */
+      let touchMoved = false;
+
+      row.addEventListener("touchstart", () => { touchMoved = false; }, { passive: true });
+      row.addEventListener("touchmove",  () => { touchMoved = true;  }, { passive: true });
+      row.addEventListener("touchend", (e) => {
+        if (touchMoved) return;
+        /* If the tap landed on the delete button, let its own handler fire */
+        if (e.target === delBtn || delBtn.contains(e.target)) return;
+        e.preventDefault();
+        loadChat(c._id);
       });
-    } catch(err) {
-      console.error("History load failed:", err);
-    }
+
+      /* Mouse click fallback for desktop */
+      row.addEventListener("click", (e) => {
+        if (e.target === delBtn || delBtn.contains(e.target)) return;
+        loadChat(c._id);
+      });
+
+      /* ── Touch-safe tap handler for the DELETE BUTTON ── */
+      let delTouchMoved = false;
+
+      delBtn.addEventListener("touchstart", (e) => {
+        e.stopPropagation();
+        delTouchMoved = false;
+      }, { passive: true });
+      delBtn.addEventListener("touchmove",  () => { delTouchMoved = true; }, { passive: true });
+      delBtn.addEventListener("touchend", (e) => {
+        e.stopPropagation();
+        if (delTouchMoved) return;
+        e.preventDefault();
+        deleteChat(c._id);
+      });
+
+      delBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        deleteChat(c._id);
+      });
+    });
+
+  } catch(err) {
+    console.error("History load failed:", err);
   }
+}
+
 async function deleteChat(id) {
   if (!confirm("Delete this chat?")) return;
   try {
