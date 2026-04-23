@@ -1509,6 +1509,17 @@ app.get('/founders', (req, res) => {
   res.render('founders');
 });
 
+app.get("/download", (req, res) => {
+  const filePath = path.join(__dirname, "public/uploads/Aquiplex.apk");
+
+  res.download(filePath, "Aquiplex.apk", (err) => {
+    if (err) {
+      console.error("Download error:", err);
+      res.status(500).send("Download failed");
+    }
+  });
+});
+
 // ================= START =================
 async function startServer() {
   console.log("GROQ:", process.env.GROQ_API_KEY ? "OK" : "MISSING");
