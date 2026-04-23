@@ -37,6 +37,19 @@
       position: relative;
       z-index: 1;
     }
+
+    /* Code mode pill active state */
+    .pill-btn.code-on {
+      background: linear-gradient(135deg, #10b981, #059669);
+      color: #fff;
+      border-color: transparent;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    }
+
+    /* Code mode indicator */
+    #modeIndicator.code-mode {
+      color: #10b981;
+    }
   </style>
 </head>
 
@@ -57,6 +70,7 @@
         <button class="pill-btn active" id="modeChatBtn"   onclick="setMode('chat')">💬 Chat</button>
         <button class="pill-btn"        id="modeSearchBtn" onclick="setMode('search')">🌐 Search</button>
         <button class="pill-btn"        id="modeImageBtn"  onclick="setMode('image')">🎨 Image</button>
+        <button class="pill-btn"        id="modeCodeBtn"   onclick="setMode('code')">💻 Code</button>
         <button class="pill-btn refiner-on" id="refinerBtn" onclick="toggleRefiner(this)">✨ Enhance ON</button>
         <button class="pill-btn"        id="compareBtn"    onclick="toggleCompare(this)">⚖️ Compare</button>
       </div>
@@ -118,6 +132,21 @@ let useCompare    = false;
 let isSending     = false;
 let sidebarOpen   = false;
 
+// Mode placeholders map
+const modePlaceholders = {
+  chat:   ["Ask anything...", "Generate a startup idea 💡", "Create viral content 🔥", "Explain like I'm 10 🧒"],
+  search: ["Search the web...", "Find latest news on...", "Who is...", "What happened with..."],
+  image:  ["Describe an image to generate...", "A futuristic city at night...", "Draw a logo for my startup..."],
+  code:   [
+    "Fix bugs, build code, or ask programming questions...",
+    "Debug my JavaScript function...",
+    "Build a REST API in Node.js...",
+    "Explain this Python code...",
+    "Write a React component for..."
+  ]
+};
+let phIdx = 0;
+
 function isMobile() {
   return window.matchMedia("(max-width: 768px)").matches;
 }
@@ -130,8 +159,6 @@ function openSidebar() {
   toggle.setAttribute("aria-expanded", "true");
   if (isMobile()) {
     sidebar.classList.add("mobile-open");
-    // Overlay only covers the area RIGHT of the sidebar so it
-    // never intercepts touches on sidebar content (iOS Safari fix)
     const sidebarW = parseInt(getComputedStyle(document.documentElement)
       .getPropertyValue("--sidebar-w-mobile")) || 240;
     overlay.style.left = sidebarW + "px";
@@ -150,7 +177,7 @@ function closeSidebar() {
   toggle.setAttribute("aria-expanded", "false");
   sidebar.classList.remove("mobile-open");
   overlay.classList.remove("visible");
-  overlay.style.left = "";   // reset for next open
+  overlay.style.left = "";
   document.body.classList.remove("sidebar-open");
 }
 
@@ -171,39 +198,62 @@ document.addEventListener("DOMContentLoaded", () => {
 
   renderEmptyState();
   loadHistoryList();
-});
 
-const placeholders = [
-  "Ask anything...",
-  "Generate a startup idea 💡",
-  "Create viral content 🔥",
-  "Explain like I'm 10 🧒",
-  "Fix my code 🛠️",
-  "Design a product roadmap 📋"
-];
-let phIdx = 0;
-setInterval(() => {
-  phIdx = (phIdx + 1) % placeholders.length;
-  const inp = document.getElementById("messageInput");
-  if (inp && document.activeElement !== inp) {
-    inp.placeholder = placeholders[phIdx];
-  }
-}, 3500);
+  // Rotating placeholders per active mode
+  setInterval(() => {
+    const pool = modePlaceholders[mode] || modePlaceholders.chat;
+    phIdx = (phIdx + 1) % pool.length;
+    const inp = document.getElementById("messageInput");
+    if (inp && document.activeElement !== inp) {
+      inp.placeholder = pool[phIdx];
+    }
+  }, 3500);
+});
 
 function setMode(m) {
   mode = m;
-  document.getElementById("modeIndicator").textContent = "MODE: " + m.toUpperCase();
-  ["modeChatBtn", "modeSearchBtn", "modeImageBtn"].forEach(id => {
-    document.getElementById(id)?.classList.remove("active");
+
+  // Update indicator
+  const indicator = document.getElementById("modeIndicator");
+  indicator.textContent = "MODE: " + m.toUpperCase();
+  indicator.className = m === "code" ? "code-mode" : "";
+
+  // Update pill buttons
+  ["modeChatBtn", "modeSearchBtn", "modeImageBtn", "modeCodeBtn"].forEach(id => {
+    document.getElementById(id)?.classList.remove("active", "code-on");
   });
-  const map = { chat: "modeChatBtn", search: "modeSearchBtn", image: "modeImageBtn" };
-  document.getElementById(map[m])?.classList.add("active");
+
+  const map = {
+    chat:   "modeChatBtn",
+    search: "modeSearchBtn",
+    image:  "modeImageBtn",
+    code:   "modeCodeBtn"
+  };
+
+  const activeBtn = document.getElementById(map[m]);
+  if (activeBtn) {
+    if (m === "code") {
+      activeBtn.classList.add("code-on");
+    } else {
+      activeBtn.classList.add("active");
+    }
+  }
+
+  // Update placeholder immediately on mode switch
+  const pool = modePlaceholders[m] || modePlaceholders.chat;
+  phIdx = 0;
+  const inp = document.getElementById("messageInput");
+  if (inp && document.activeElement !== inp) {
+    inp.placeholder = pool[0];
+  }
 }
 
 function autoDetectMode(text) {
   const t = text.toLowerCase();
   if (/^(generate|create|draw).*(image|photo|art|logo)/.test(t)) return "image";
   if (/\b(latest|news|search|find|who is|current|today|2024|2025|2026)\b/.test(t)) return "search";
+  // Auto-detect code-related queries
+  if (/\b(debug|fix (my |this )?(bug|code|error)|build (a |an )?(api|app|function|component|script)|write (a |an )?(function|class|script|program)|code for|how to (code|program|implement))\b/.test(t)) return "code";
   return "chat";
 }
 
@@ -225,7 +275,7 @@ const STARTERS = [
   { icon: "🧠", text: "Explain a concept",        prompt: "Explain quantum computing like I'm 10 years old with a fun analogy." },
   { icon: "🎨", text: "Generate an image",        prompt: "Generate an image of a futuristic city at night with neon lights." },
   { icon: "🛠️", text: "Fix my code",             prompt: "Here is my code. Please review it, find bugs, and suggest improvements:" },
-  { icon: "📊", text: "Summarize research",       prompt: "Summarize the key findings of the latest research on AI and productivity." },
+  { icon: "💻", text: "Build an API",             prompt: "Build a complete REST API in Node.js with Express for a todo app with CRUD operations." },
 ];
 
 function renderEmptyState() {
@@ -234,7 +284,7 @@ function renderEmptyState() {
     <div class="empty-state">
       <div>
         <h1>What can I help<br>you build today?</h1>
-        <p style="margin-top:8px;">Powered by Groq · OpenRouter · Gemini</p>
+        <p style="margin-top:8px;">Powered by Groq · OpenRouter · Gemini · DeepSeek</p>
       </div>
       <div class="starter-grid">
         ${STARTERS.map(s => `
@@ -295,6 +345,7 @@ async function send() {
   formData.append("chatId",  currentChatId || "");
   formData.append("history", JSON.stringify(messages.slice(-10)));
   formData.append("refiner", useRefiner ? "true" : "false");
+  // Code mode and compare mode skip streaming; only chat mode streams
   formData.append("stream",  (mode === "chat" && !useCompare) ? "true" : "false");
   if (file) formData.append("file", file);
 
@@ -305,12 +356,18 @@ async function send() {
   const loading = document.createElement("div");
   loading.className = "msg bot";
   loading.id = "loading";
+
+  // Custom thinking text for code mode
+  const thinkText = mode === "code"
+    ? "Aqua Dev is coding..."
+    : "Aqua is thinking...";
+
   loading.innerHTML = `
-    <div class="msg-avatar">🌊</div>
+    <div class="msg-avatar">${mode === "code" ? "💻" : "🌊"}</div>
     <div class="msg-bubble">
       <div class="typing-indicator">
         <span></span><span></span><span></span>
-        <span class="think-text">Aqua is thinking...</span>
+        <span class="think-text">${thinkText}</span>
       </div>
     </div>
   `;
@@ -339,7 +396,7 @@ async function send() {
 
     if (mode === "image") {
       const data = await res.json();
-      const div  = createBotBubble();
+      const div  = createBotBubble("image");
       const imgHtml = data.image
         ? `<img src="${data.image}" alt="Generated image" style="max-width:100%;border-radius:10px;margin-top:10px;" onerror="this.style.display='none'" />
            <div class="msg-actions">
@@ -356,6 +413,26 @@ async function send() {
       setSending(false);
       fileInput.value = "";
       document.getElementById("fileNameTag").style.display = "none";
+      return;
+    }
+
+    // ── CODE MODE: non-streaming JSON response ──
+    if (mode === "code") {
+      const data = await res.json();
+      const replyContent = data.reply || "⚠️ No response received.";
+      const div = createBotBubble("code");
+      div.querySelector(".msg-bubble").innerHTML = `
+        <div class="markdown-body">${marked.parse(replyContent)}</div>
+        ${buildActions(replyContent)}
+      `;
+      chat.appendChild(div);
+      messages.push({ role: "assistant", content: replyContent });
+      if (data.chatId) currentChatId = data.chatId;
+      chat.scrollTop = chat.scrollHeight;
+      setSending(false);
+      fileInput.value = "";
+      document.getElementById("fileNameTag").style.display = "none";
+      await loadHistoryList();
       return;
     }
 
@@ -486,10 +563,12 @@ async function send() {
   }
 }
 
-function createBotBubble() {
+// Accept optional modeOverride for avatar icon
+function createBotBubble(modeOverride) {
   const div = document.createElement("div");
   div.className = "msg bot";
-  div.innerHTML = `<div class="msg-avatar">🌊</div><div class="msg-bubble"></div>`;
+  const avatar = modeOverride === "code" ? "💻" : "🌊";
+  div.innerHTML = `<div class="msg-avatar">${avatar}</div><div class="msg-bubble"></div>`;
   return div;
 }
 
@@ -600,9 +679,6 @@ function appendCompareResult(data) {
   loadHistoryList().catch(() => {});
 }
 
-/* ── FIX: Build history items with JS-only event listeners (no inline onclick)
-   so that styles.css button overrides and iOS touch event quirks
-   cannot intercept or block taps on either the row or the delete button. ── */
 async function loadHistoryList() {
   try {
     const res = await fetch("/history");
@@ -614,16 +690,13 @@ async function loadHistoryList() {
     list.innerHTML = "";
 
     chats.forEach(c => {
-      /* Row wrapper */
       const row = document.createElement("div");
       row.setAttribute("data-id", c._id);
       row.setAttribute("role", "listitem");
 
-      /* Title span */
       const span = document.createElement("span");
       span.textContent = c.title || "Chat";
 
-      /* Delete button — class="delete-btn" so CSS override targets it */
       const delBtn = document.createElement("button");
       delBtn.className = "delete-btn";
       delBtn.setAttribute("aria-label", "Delete chat");
@@ -633,26 +706,22 @@ async function loadHistoryList() {
       row.appendChild(delBtn);
       list.appendChild(row);
 
-      /* ── Touch-safe tap handler for the ROW ── */
       let touchMoved = false;
 
       row.addEventListener("touchstart", () => { touchMoved = false; }, { passive: true });
       row.addEventListener("touchmove",  () => { touchMoved = true;  }, { passive: true });
       row.addEventListener("touchend", (e) => {
         if (touchMoved) return;
-        /* If the tap landed on the delete button, let its own handler fire */
         if (e.target === delBtn || delBtn.contains(e.target)) return;
         e.preventDefault();
         loadChat(c._id);
       });
 
-      /* Mouse click fallback for desktop */
       row.addEventListener("click", (e) => {
         if (e.target === delBtn || delBtn.contains(e.target)) return;
         loadChat(c._id);
       });
 
-      /* ── Touch-safe tap handler for the DELETE BUTTON ── */
       let delTouchMoved = false;
 
       delBtn.addEventListener("touchstart", (e) => {

@@ -15,7 +15,6 @@ const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
 
 // ================= MULTI-AI MODELS LIST =================
-// FIX: was referenced in /multi-generate but never defined
 const models = [
   {
     name: "Aqua Fast",
@@ -102,6 +101,75 @@ async function generateAI(messages) {
   }
 
   return "⚠️ All AI services are busy. Please try again in a moment.";
+}
+
+// ================= CODE AI ENGINE (OpenRouter DeepSeek) =================
+
+async function generateCodeAI(messages) {
+  const CODE_SYSTEM_PROMPT = `You are Aqua Dev Engine, an expert software engineer.
+
+Rules:
+- Always return clean, working code
+- Fix bugs completely (no partial fixes)
+- Follow best practices
+- Keep explanation short and clear
+- If user provides code, debug and fix it fully
+- If user asks to build something, generate complete code`;
+
+  const fullMessages = [
+    { role: "system", content: CODE_SYSTEM_PROMPT },
+    ...messages
+  ];
+
+  // 🥇 1. OpenRouter DeepSeek Coder
+  try {
+    const res = await axios.post(
+      "https://openrouter.ai/api/v1/chat/completions",
+      {
+        model: "deepseek/deepseek-coder",
+        messages: fullMessages
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 30000
+      }
+    );
+
+    const content = res.data?.choices?.[0]?.message?.content;
+    if (content) return content;
+    throw new Error("Empty response from DeepSeek");
+
+  } catch (err) {
+    console.log("❌ DeepSeek Coder failed:", err.message);
+  }
+
+  // 🥈 2. Fallback: Groq with code system prompt
+  try {
+    const res = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama-3.1-8b-instant",
+        messages: fullMessages
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        timeout: 15000
+      }
+    );
+
+    return res.data.choices[0].message.content;
+
+  } catch (err) {
+    console.log("❌ Groq code fallback failed:", err.message);
+  }
+
+  return "⚠️ Code engine is unavailable. Please try again in a moment.";
 }
 
 async function generateImage(prompt) {
@@ -218,7 +286,7 @@ async function importTools() {
 
 // ================= SAVE CHAT HELPER =================
 async function saveChat(messages, chatId, userId, message) {
-  if (!userId) return null; // guard: not logged in
+  if (!userId) return null;
 
   if (chatId) {
     try {
@@ -232,7 +300,6 @@ async function saveChat(messages, chatId, userId, message) {
       return null;
     }
   } else {
-    // Generate a short AI title (5–6 words max)
     let title = (message || "New Chat").slice(0, 30);
 
     try {
@@ -275,12 +342,11 @@ app.use(express.static("public"));
 
 const rateLimit = require("express-rate-limit");
 
-// FIX: Raised limit and only apply to POST /chat to avoid blocking normal usage
 const chatLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
-  max: 40, // raised from 20 to 40 — streaming counts as one request
+  max: 40,
   message: "⚠️ Too many requests. Please slow down.",
-  skip: (req) => req.method === "GET" // never rate-limit GETs
+  skip: (req) => req.method === "GET"
 });
 
 app.set("view engine", "ejs");
@@ -294,7 +360,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      maxAge: 1000 * 60 * 60 * 24, // 1 day
+      maxAge: 1000 * 60 * 60 * 24,
       httpOnly: true,
       secure: false,
     },
@@ -956,14 +1022,11 @@ app.get("/chatbot", requireLogin, (req, res) => {
 });
 
 // ================= CHAT ROUTE =================
-// FIX: Rate limiter applied only to POST
 app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
   let { message, history, mode, chatId, stream } = req.body;
 
-  // FIX: Parse stream flag reliably
   stream = stream === "true" || stream === true;
 
-  // FIX: Robust history parsing — handle array, string, or missing
   let parsedHistory = [];
   try {
     if (Array.isArray(history)) {
@@ -980,7 +1043,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
     return res.json({ reply: "⚠️ Message required" });
   }
 
-  // Normalize message
   message = (message || "").trim();
 
   try {
@@ -1008,7 +1070,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
         fileText = "⚠️ Failed to read file";
       }
 
-      // Delete file after read
       fs.unlink(req.file.path, () => {});
     }
 
@@ -1036,7 +1097,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
           },
           { role: "user", content: refinerInput }
         ]);
-        // Guard against empty refiner output
         if (!refinedMessage || refinedMessage.includes("⚠️")) {
           refinedMessage = message;
         }
@@ -1045,7 +1105,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
       }
     }
 
-    // Push user message (refined if applicable)
     messages.push({
       role: "user",
       content: req.body.refiner === "true" ? refinedMessage : message
@@ -1103,15 +1162,37 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
       }
     }
 
+    // ================= CODE MODE =================
+    if (mode === "code") {
+      try {
+        const reply = await generateCodeAI(messages.filter(m => m.role !== "system"));
+
+        const savedChat = await saveChat(
+          [...messages, { role: "assistant", content: reply }],
+          chatId, req.session.userId, message
+        );
+
+        return res.json({
+          reply,
+          chatId: savedChat?._id
+        });
+
+      } catch (err) {
+        console.error("CODE MODE ERROR:", err.message);
+        return res.json({
+          reply: "⚠️ Code engine encountered an error. Please try again."
+        });
+      }
+    }
+
     // ================= STREAM MODE =================
     if (stream) {
       res.setHeader("Content-Type", "text/event-stream");
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
-      res.setHeader("X-Accel-Buffering", "no"); // disables nginx buffering on Replit/Render
+      res.setHeader("X-Accel-Buffering", "no");
       res.flushHeaders?.();
 
-      // Send refined prompt preview immediately
       if (req.body.refiner === "true" && refinedMessage !== message) {
         res.write(`data: ${JSON.stringify({ refined: refinedMessage })}\n\n`);
       }
@@ -1142,7 +1223,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
           timeout: 30000
         });
 
-        // FIX: Line buffer across chunks — Groq TCP may split SSE lines
         let lineBuffer = "";
         let streamEnded = false;
 
@@ -1151,7 +1231,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
 
           lineBuffer += chunk.toString();
 
-          // Split on newlines, keep incomplete last segment
           const lines = lineBuffer.split("\n");
           lineBuffer = lines.pop() || "";
 
@@ -1164,7 +1243,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
 
             if (payload === "[DONE]") {
               streamEnded = true;
-              // Save chat async
               (async () => {
                 await saveChat(
                   [...messages, { role: "assistant", content: fullReply }],
@@ -1182,7 +1260,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
 
               if (token) {
                 fullReply += token;
-                // FIX: JSON.stringify keeps \n from breaking SSE frame
                 res.write(`data: ${JSON.stringify(token)}\n\n`);
               }
             } catch {
@@ -1193,7 +1270,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
 
         axiosStream.data.on("end", () => {
           if (!streamEnded) {
-            // Flush any remaining buffer
             if (lineBuffer.trim()) {
               const trimmed = lineBuffer.trim();
               if (trimmed.startsWith("data:")) {
@@ -1226,12 +1302,10 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
         axiosStream.data.on("error", async () => {
           if (!streamEnded) {
             streamEnded = true;
-            // Fallback: send what we have
             if (fullReply) {
               res.write("data: [DONE]\n\n");
               res.end();
             } else {
-              // Full fallback to non-stream
               const fallbackReply = await generateAI([
                 { role: "system", content: "You are Aqua AI. Be helpful and clear." },
                 ...messages.slice(-10)
@@ -1243,7 +1317,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
           }
         });
 
-        // Client disconnect cleanup
         req.on("close", () => {
           streamEnded = true;
           if (axiosStream) axiosStream.data.destroy();
@@ -1254,7 +1327,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
       } catch (err) {
         console.log("❌ Stream init failed → fallback:", err.message);
 
-        // Fallback to non-stream response
         const reply = await generateAI([
           { role: "system", content: "You are Aqua AI. Be helpful and clear." },
           ...messages.slice(-10)
@@ -1265,7 +1337,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
           chatId, req.session.userId, message
         );
 
-        // Send as SSE so frontend stream reader still works
         res.write(`data: ${JSON.stringify(reply)}\n\n`);
         res.write("data: [DONE]\n\n");
         res.end();
