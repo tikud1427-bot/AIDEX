@@ -127,6 +127,7 @@ marked.setOptions({ gfm: true, breaks: true });
 let messages      = [];
 let currentChatId = null;
 let mode          = "chat";
+let modeManual    = false;   // true when user explicitly clicked a mode pill
 let useRefiner    = true;
 let useCompare    = false;
 let isSending     = false;
@@ -210,8 +211,9 @@ document.addEventListener("DOMContentLoaded", () => {
   }, 3500);
 });
 
-function setMode(m) {
+function setMode(m, manual = true) {
   mode = m;
+  if (manual) modeManual = true;
 
   // Update indicator
   const indicator = document.getElementById("modeIndicator");
@@ -250,11 +252,13 @@ function setMode(m) {
 
 function autoDetectMode(text) {
   const t = text.toLowerCase();
-  if (/^(generate|create|draw).*(image|photo|art|logo)/.test(t)) return "image";
-  if (/\b(latest|news|search|find|who is|current|today|2024|2025|2026)\b/.test(t)) return "search";
-  // Auto-detect code-related queries
-  if (/\b(debug|fix (my |this )?(bug|code|error)|build (a |an )?(api|app|function|component|script)|write (a |an )?(function|class|script|program)|code for|how to (code|program|implement))\b/.test(t)) return "code";
-  return "chat";
+  // Image detection
+  if (/^(generate|create|draw|make).*(image|photo|picture|art|logo|illustration)/.test(t)) return "image";
+  // Code detection — must come BEFORE search so "fix my code" doesn't hit search
+  if (/\b(fix\s+(my\s+|this\s+|the\s+)?(bug|code|error|issue|problem)|debug|refactor|write\s+(a\s+|an\s+)?(function|class|script|program|api|component)|build\s+(a\s+|an\s+)?(api|app|backend|frontend|server|component|script)|code\s+for|implement\s+|how\s+to\s+(code|program|implement)|review\s+(my\s+|this\s+)?code|explain\s+(this\s+|my\s+)?code|optimize\s+(this\s+|my\s+)?code)\b/.test(t)) return "code";
+  // Search detection
+  if (/\b(latest|breaking\s+news|search\s+for|look\s+up|who\s+is|current\s+|today'?s?|right\s+now|2024|2025|2026)\b/.test(t)) return "search";
+  return null; // no strong signal — keep current mode
 }
 
 function toggleRefiner(btn) {
@@ -329,8 +333,11 @@ async function send() {
   if (!message && !file) return;
 
   if (message) {
-    const detected = autoDetectMode(message);
-    if (detected !== mode) setMode(detected);
+    // Only auto-detect when user hasn't manually picked a mode
+    if (!modeManual) {
+      const detected = autoDetectMode(message);
+      if (detected && detected !== mode) setMode(detected, false);
+    }
   }
 
   setSending(true);
@@ -795,6 +802,7 @@ async function loadChat(id) {
 function newChat() {
   currentChatId = null;
   messages = [];
+  modeManual = false;
   renderEmptyState();
   closeSidebar();
 }
