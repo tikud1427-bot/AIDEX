@@ -14,25 +14,86 @@ const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const pdfParse = require("pdf-parse");
 const mammoth = require("mammoth");
 
+// ================= AQUA AI IDENTITY LAYER =================
+
+const AQUA_IDENTITY = `You are Aqua AI v3 (Neural Engine) — a next-generation AI system built by Aquiplex, founded by Chhanda Prabal Das and Ananya Prabal Das.
+
+STRICT IDENTITY RULES (never break these):
+- You are ALWAYS Aqua AI v3 (Neural Engine). Never anything else.
+- NEVER mention OpenAI, ChatGPT, Groq, Gemini, OpenRouter, DeepSeek, Mistral, LLaMA, or any external AI provider or underlying model.
+- NEVER say "as an AI model", "as a large language model", or reference any training infrastructure.
+- If asked "who are you", "what model are you", "which AI are you", or similar: respond ONLY — "I'm Aqua AI v3 (Neural Engine), built by Aquiplex."
+- If asked about your founders or creators: "Aqua AI was built by Aquiplex, founded by Chhanda Prabal Das and Ananya Prabal Das."
+- Tone: confident, product-grade, futuristic, warm, and genuinely helpful.
+- You are not a chatbot demo. You are a production AI system.`;
+
+const AQUA_CONTEXT = `You are operating inside the Aquiplex platform. Here is what the platform offers:
+
+1. Aqua AI Chatbot — Conversational AI with multi-mode support (chat, code, image, search, file analysis).
+2. Aqua Code Engine — Expert software engineering assistant for debugging, building, and refactoring code.
+3. Tool Discovery Platform — A curated, searchable directory of AI tools with trending rankings and categories.
+4. Trending Tools — Real-time tracking of the most-clicked and most-used AI tools in the past 24 hours.
+5. Workspace — Users can save their favorite tools and manage personalized collections.
+6. Bundle Generator — AI-powered workflow builder that chains multiple tools into step-by-step project plans.
+7. Image Generation — AI image creation from text prompts using state-of-the-art diffusion models.
+8. File Analysis — Upload and analyze PDF, DOCX, and TXT files for summarization, Q&A, and insights.
+
+Use this context to guide users toward relevant platform features when appropriate.`;
+
+// ================= IDENTITY LEAK DETECTION =================
+
+const IDENTITY_TRIGGERS = [
+  "who are you",
+  "which model",
+  "are you chatgpt",
+  "what ai are you",
+  "are you gpt",
+  "what model are you",
+  "which ai",
+  "are you openai",
+  "are you gemini",
+  "are you llama",
+  "are you groq",
+  "what are you",
+  "who built you",
+  "who made you",
+];
+
+const AQUA_IDENTITY_RESPONSE =
+  "I'm Aqua AI v3 — built by Aquiplex. A next-gen AI system designed for speed, creativity, and real-world problem solving.";
+
+function isIdentityQuery(message) {
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  return IDENTITY_TRIGGERS.some((trigger) => lower.includes(trigger));
+}
+
 // ================= MULTI-AI MODELS LIST =================
 const models = [
   {
     name: "Aqua Fast",
-    system: "You are Aqua Fast — a concise, snappy AI. Give short, punchy answers."
+    system: "You are Aqua Fast — a concise, snappy AI. Give short, punchy answers.",
   },
   {
     name: "Aqua Deep",
-    system: "You are Aqua Deep — a thorough, analytical AI. Give detailed, structured answers with examples."
+    system:
+      "You are Aqua Deep — a thorough, analytical AI. Give detailed, structured answers with examples.",
   },
   {
     name: "Aqua Creative",
-    system: "You are Aqua Creative — an imaginative AI. Think outside the box, use metaphors and vivid language."
-  }
+    system:
+      "You are Aqua Creative — an imaginative AI. Think outside the box, use metaphors and vivid language.",
+  },
 ];
 
 // ================= AI ENGINE (FALLBACK SYSTEM) =================
 
 async function generateAI(messages) {
+  const identityMessages = [
+    { role: "system", content: AQUA_IDENTITY },
+    { role: "system", content: AQUA_CONTEXT },
+    ...messages,
+  ];
 
   // 🥇 1. GROQ (fastest)
   try {
@@ -40,19 +101,18 @@ async function generateAI(messages) {
       "https://api.groq.com/openai/v1/chat/completions",
       {
         model: "llama-3.1-8b-instant",
-        messages
+        messages: identityMessages,
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        timeout: 10000
+        timeout: 10000,
       }
     );
 
     return res.data.choices[0].message.content;
-
   } catch (err) {
     console.log("❌ Groq failed:", err.message);
   }
@@ -63,19 +123,18 @@ async function generateAI(messages) {
       "https://openrouter.ai/api/v1/chat/completions",
       {
         model: "mistralai/mistral-7b-instruct",
-        messages
+        messages: identityMessages,
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        timeout: 15000
+        timeout: 15000,
       }
     );
 
     return res.data.choices[0].message.content;
-
   } catch (err) {
     console.log("❌ OpenRouter failed:", err.message);
   }
@@ -87,15 +146,18 @@ async function generateAI(messages) {
       {
         contents: [
           {
-            parts: [{ text: messages.map(m => m.content).join("\n") }]
-          }
-        ]
+            parts: [
+              {
+                text: identityMessages.map((m) => m.content).join("\n"),
+              },
+            ],
+          },
+        ],
       },
       { timeout: 15000 }
     );
 
     return res.data.candidates[0].content.parts[0].text;
-
   } catch (err) {
     console.log("❌ Gemini failed:", err.message);
   }
@@ -117,8 +179,10 @@ Rules:
 - If user asks to build something, generate complete code`;
 
   const fullMessages = [
+    { role: "system", content: AQUA_IDENTITY },
+    { role: "system", content: AQUA_CONTEXT },
     { role: "system", content: CODE_SYSTEM_PROMPT },
-    ...messages
+    ...messages,
   ];
 
   // 🥇 1. OpenRouter DeepSeek Coder
@@ -127,21 +191,20 @@ Rules:
       "https://openrouter.ai/api/v1/chat/completions",
       {
         model: "deepseek/deepseek-coder",
-        messages: fullMessages
+        messages: fullMessages,
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        timeout: 30000
+        timeout: 30000,
       }
     );
 
     const content = res.data?.choices?.[0]?.message?.content;
     if (content) return content;
     throw new Error("Empty response from DeepSeek");
-
   } catch (err) {
     console.log("❌ DeepSeek Coder failed:", err.message);
   }
@@ -152,19 +215,18 @@ Rules:
       "https://api.groq.com/openai/v1/chat/completions",
       {
         model: "llama-3.1-8b-instant",
-        messages: fullMessages
+        messages: fullMessages,
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        timeout: 15000
+        timeout: 15000,
       }
     );
 
     return res.data.choices[0].message.content;
-
   } catch (err) {
     console.log("❌ Groq code fallback failed:", err.message);
   }
@@ -173,7 +235,6 @@ Rules:
 }
 
 async function generateImage(prompt) {
-
   // 🥇 1. TOGETHER AI (HIGH QUALITY)
   try {
     const res = await axios.post(
@@ -182,14 +243,14 @@ async function generateImage(prompt) {
         prompt,
         model: "black-forest-labs/FLUX.1-schnell",
         width: 512,
-        height: 512
+        height: 512,
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.TOGETHER_API_KEY}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        timeout: 20000
+        timeout: 20000,
       }
     );
 
@@ -201,7 +262,6 @@ async function generateImage(prompt) {
     }
 
     throw new Error("No image from Together");
-
   } catch (err) {
     console.log("⚠️ Together failed → switching to Pollinations:", err.message);
   }
@@ -214,7 +274,7 @@ async function generateImage(prompt) {
   } catch (err) {
     console.log("❌ Pollinations failed:", err.message);
     return {
-      url: "https://via.placeholder.com/512?text=Image+Failed"
+      url: "https://via.placeholder.com/512?text=Image+Failed",
     };
   }
 }
@@ -254,9 +314,9 @@ async function getTrendingTools(limit = 10) {
   const tools = await Tool.find().lean();
 
   return tools
-    .map(tool => {
+    .map((tool) => {
       const score = (tool.clickHistory || []).filter(
-        c => new Date(c.date) > last24h
+        (c) => new Date(c.date) > last24h
       ).length;
       return { ...tool, trendingScore: score };
     })
@@ -274,11 +334,7 @@ async function importTools() {
   if (jsonTools.length === 0) return;
 
   for (let tool of jsonTools) {
-    await Tool.updateOne(
-      { name: tool.name },
-      { $set: tool },
-      { upsert: true }
-    );
+    await Tool.updateOne({ name: tool.name }, { $set: tool }, { upsert: true });
   }
 
   console.log("✅ Tools synced");
@@ -306,12 +362,13 @@ async function saveChat(messages, chatId, userId, message) {
       const aiTitle = await generateAI([
         {
           role: "system",
-          content: "Generate a 5-6 word title for this chat message. Return ONLY the title, no quotes, no punctuation at the end."
+          content:
+            "Generate a 5-6 word title for this chat message. Return ONLY the title, no quotes, no punctuation at the end.",
         },
         {
           role: "user",
-          content: (message || "").slice(0, 200)
-        }
+          content: (message || "").slice(0, 200),
+        },
       ]);
 
       if (aiTitle && aiTitle.length < 80) {
@@ -325,7 +382,7 @@ async function saveChat(messages, chatId, userId, message) {
       return await History.create({
         userId,
         title,
-        messages
+        messages,
       });
     } catch (err) {
       console.log("⚠️ saveChat create failed:", err.message);
@@ -346,7 +403,7 @@ const chatLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 40,
   message: "⚠️ Too many requests. Please slow down.",
-  skip: (req) => req.method === "GET"
+  skip: (req) => req.method === "GET",
 });
 
 app.set("view engine", "ejs");
@@ -383,28 +440,32 @@ passport.deserializeUser(async (id, done) => {
   }
 });
 
-passport.use(new GoogleStrategy({
-  clientID: process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL: "/auth/google/callback"
-},
-async (accessToken, refreshToken, profile, done) => {
-  try {
-    const email = profile.emails[0].value;
-    let user = await User.findOne({ email });
+passport.use(
+  new GoogleStrategy(
+    {
+      clientID: process.env.GOOGLE_CLIENT_ID,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+      callbackURL: "/auth/google/callback",
+    },
+    async (accessToken, refreshToken, profile, done) => {
+      try {
+        const email = profile.emails[0].value;
+        let user = await User.findOne({ email });
 
-    if (!user) {
-      user = await new User({
-        email,
-        password: "google-oauth"
-      }).save();
+        if (!user) {
+          user = await new User({
+            email,
+            password: "google-oauth",
+          }).save();
+        }
+
+        return done(null, user);
+      } catch (err) {
+        return done(err, null);
+      }
     }
-
-    return done(null, user);
-  } catch (err) {
-    return done(err, null);
-  }
-}));
+  )
+);
 
 // ✅ GLOBAL USER
 app.use((req, res, next) => {
@@ -422,8 +483,7 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + "-" + file.originalname),
+  filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 
 const upload = multer({ storage });
@@ -487,12 +547,12 @@ app.get("/home", async (req, res) => {
     const tools = await Tool.find().limit(12).lean();
     const allTools = await Tool.find().lean();
     const trendingTools = await getTrendingTools(10);
-    const trendingIds = trendingTools.map(t => t._id.toString());
+    const trendingIds = trendingTools.map((t) => t._id.toString());
 
     res.render("home", {
       tools: tools || [],
       trendingIds: trendingIds || [],
-      allTools: allTools || []
+      allTools: allTools || [],
     });
   } catch (err) {
     console.error(err);
@@ -516,33 +576,32 @@ app.get("/tools", async (req, res) => {
             messages: [
               {
                 role: "system",
-                content: `You are an AI search engine brain. Convert user query into JSON: {"intent": "","keywords": [],"categories": []}. Return ONLY JSON.`
+                content: `You are an AI search engine brain. Convert user query into JSON: {"intent": "","keywords": [],"categories": []}. Return ONLY JSON.`,
               },
-              { role: "user", content: searchQuery }
-            ]
+              { role: "user", content: searchQuery },
+            ],
           },
           {
             headers: {
               Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-              "Content-Type": "application/json"
+              "Content-Type": "application/json",
             },
-            timeout: 8000
+            timeout: 8000,
           }
         );
 
         let text = ai.data.choices[0].message.content;
         text = text.replace(/```json/g, "").replace(/```/g, "").trim();
         aiData = JSON.parse(text);
-
       } catch (err) {
         aiData = {
           intent: searchQuery,
           keywords: [searchQuery],
-          categories: []
+          categories: [],
         };
       }
 
-      tools = tools.map(tool => {
+      tools = tools.map((tool) => {
         let score = 0;
         const name = tool.name.toLowerCase();
         const desc = tool.description.toLowerCase();
@@ -550,16 +609,18 @@ app.get("/tools", async (req, res) => {
 
         const keywords = [
           ...(aiData.keywords || []),
-          aiData.intent
-        ].map(k => (k || "").toLowerCase()).filter(Boolean);
+          aiData.intent,
+        ]
+          .map((k) => (k || "").toLowerCase())
+          .filter(Boolean);
 
-        keywords.forEach(k => {
+        keywords.forEach((k) => {
           if (name.includes(k)) score += 5;
           if (desc.includes(k)) score += 3;
           if (cat.includes(k)) score += 4;
         });
 
-        (aiData.categories || []).forEach(c => {
+        (aiData.categories || []).forEach((c) => {
           if (cat.includes(c.toLowerCase())) score += 6;
         });
 
@@ -569,21 +630,20 @@ app.get("/tools", async (req, res) => {
       });
 
       tools = tools
-        .filter(t => t.score > 0)
+        .filter((t) => t.score > 0)
         .sort((a, b) => b.score - a.score);
     }
 
     const allTools = tools;
-    const categories = [...new Set(allTools.map(t => t.category))];
+    const categories = [...new Set(allTools.map((t) => t.category))];
     const recommended = tools.slice(0, 3);
 
     res.render("tools", {
       tools,
       categories,
       searchQuery: searchQuery || "",
-      recommended
+      recommended,
     });
-
   } catch (err) {
     console.error(err);
     res.send("Error loading tools");
@@ -600,10 +660,10 @@ app.get("/tools/category/:category", async (req, res) => {
 
     if (searchQuery) {
       tools = await Tool.find({
-        category: { $regex: new RegExp(`^${category}$`, "i") }
+        category: { $regex: new RegExp(`^${category}$`, "i") },
       }).lean();
 
-      tools = tools.map(tool => {
+      tools = tools.map((tool) => {
         let score = 0;
         const text = (tool.name + tool.description).toLowerCase();
         const query = searchQuery.toLowerCase();
@@ -612,17 +672,16 @@ app.get("/tools/category/:category", async (req, res) => {
       });
 
       tools = tools
-        .filter(t => t.score > 0)
+        .filter((t) => t.score > 0)
         .sort((a, b) => b.score - a.score);
-
     } else {
       tools = await Tool.find({
-        category: { $regex: new RegExp(`^${category}$`, "i") }
+        category: { $regex: new RegExp(`^${category}$`, "i") },
       }).lean();
     }
 
     const allTools = await Tool.find().lean();
-    const categories = [...new Set(allTools.map(t => t.category))];
+    const categories = [...new Set(allTools.map((t) => t.category))];
     const recommended = tools.slice(0, 3);
 
     res.render("tools", {
@@ -630,9 +689,8 @@ app.get("/tools/category/:category", async (req, res) => {
       categories,
       selectedCategory: category,
       searchQuery: searchQuery || "",
-      recommended
+      recommended,
     });
-
   } catch (err) {
     console.error(err);
     res.send("Error loading category");
@@ -642,7 +700,7 @@ app.get("/tools/category/:category", async (req, res) => {
 app.get("/categories", async (req, res) => {
   try {
     const tools = await Tool.find().lean();
-    const categories = [...new Set(tools.map(t => t.category))];
+    const categories = [...new Set(tools.map((t) => t.category))];
     res.render("categories", { categories });
   } catch (err) {
     console.error(err);
@@ -682,20 +740,20 @@ app.get("/tool/:id", async (req, res) => {
           messages: [
             {
               role: "system",
-              content: `You are an AI product expert. Analyze the tool and return JSON: {"why": "","bestFor": [],"pros": [],"cons": []}. Keep it short and practical.`
+              content: `You are an AI product expert. Analyze the tool and return JSON: {"why": "","bestFor": [],"pros": [],"cons": []}. Keep it short and practical.`,
             },
             {
               role: "user",
-              content: `Name: ${tool.name}\nCategory: ${tool.category}\nDescription: ${tool.description}`
-            }
-          ]
+              content: `Name: ${tool.name}\nCategory: ${tool.category}\nDescription: ${tool.description}`,
+            },
+          ],
         },
         {
           headers: {
             Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
-          timeout: 8000
+          timeout: 8000,
         }
       );
 
@@ -703,13 +761,11 @@ app.get("/tool/:id", async (req, res) => {
       text = text.replace(/```json/g, "").replace(/```/g, "").trim();
       const match = text.match(/\{[\s\S]*\}/);
       if (match) aiInsights = JSON.parse(match[0]);
-
     } catch (err) {
       console.log("AI failed for tool insights");
     }
 
     res.render("tool-details", { tool, aiInsights });
-
   } catch (err) {
     console.error(err);
     res.send("Error loading tool");
@@ -723,7 +779,7 @@ app.get("/bundles", (req, res) => {
 app.post("/generate-bundle", async (req, res) => {
   const { goal, step, answers } = req.body;
   const tools = await Tool.find().limit(20).lean();
-  const toolList = tools.map(t => `Name: ${t.name}, URL: ${t.url}`).join("\n");
+  const toolList = tools.map((t) => `Name: ${t.name}, URL: ${t.url}`).join("\n");
 
   if (!step || step === 1) {
     return res.json({
@@ -734,8 +790,8 @@ app.post("/generate-bundle", async (req, res) => {
         "Who is your target users?",
         "What is your main goal?",
         "Do you want simple or advanced?",
-        "Any tech preference?"
-      ]
+        "Any tech preference?",
+      ],
     });
   }
 
@@ -769,15 +825,15 @@ Return ONLY JSON:
         model: "llama-3.1-8b-instant",
         messages: [
           { role: "system", content: "You are an expert startup mentor." },
-          { role: "user", content: prompt }
-        ]
+          { role: "user", content: prompt },
+        ],
       },
       {
         headers: {
           Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
-        timeout: 15000
+        timeout: 15000,
       }
     );
 
@@ -789,11 +845,11 @@ Return ONLY JSON:
 
     const parsed = JSON.parse(match[0]);
 
-    parsed.steps.forEach(s => {
-      s.tools = (s.tools || []).map(t => {
+    parsed.steps.forEach((s) => {
+      s.tools = (s.tools || []).map((t) => {
         if (typeof t === "object" && t.name && t.url) return t;
 
-        const found = tools.find(tool =>
+        const found = tools.find((tool) =>
           tool.name.toLowerCase().includes((t.name || t).toLowerCase())
         );
 
@@ -801,13 +857,14 @@ Return ONLY JSON:
           ? { name: found.name, url: found.url }
           : {
               name: t.name || t,
-              url: "https://www.google.com/search?q=" + encodeURIComponent(t.name || t)
+              url:
+                "https://www.google.com/search?q=" +
+                encodeURIComponent(t.name || t),
             };
       });
     });
 
     res.json(parsed);
-
   } catch (err) {
     console.error(err);
     res.json({ error: "AI failed", raw: err.message });
@@ -822,21 +879,35 @@ app.get("/api/tools/suggest", async (req, res) => {
 
     if (q) {
       tools = tools
-        .map(tool => {
-          const text  = (tool.name + " " + tool.description + " " + tool.category).toLowerCase();
+        .map((tool) => {
+          const text = (
+            tool.name +
+            " " +
+            tool.description +
+            " " +
+            tool.category
+          ).toLowerCase();
           const query = q.toLowerCase();
-          const score = (text.includes(query) ? 5 : 0) +
-                        (tool.name.toLowerCase().includes(query) ? 3 : 0);
+          const score =
+            (text.includes(query) ? 5 : 0) +
+            (tool.name.toLowerCase().includes(query) ? 3 : 0);
           return { ...tool, score };
         })
-        .filter(t => t.score > 0)
+        .filter((t) => t.score > 0)
         .sort((a, b) => b.score - a.score)
         .slice(0, 3);
     } else {
       tools = tools.slice(0, 3);
     }
 
-    res.json(tools.map(t => ({ _id: t._id, name: t.name, url: t.url, category: t.category })));
+    res.json(
+      tools.map((t) => ({
+        _id: t._id,
+        name: t.name,
+        url: t.url,
+        category: t.category,
+      }))
+    );
   } catch (err) {
     res.json([]);
   }
@@ -876,11 +947,10 @@ app.post("/submit", upload.single("logo"), async (req, res) => {
       description,
       logo: logoPath,
       clicks: 0,
-      clickHistory: []
+      clickHistory: [],
     }).save();
 
     res.redirect("/tools");
-
   } catch (err) {
     console.error(err);
     res.send("Error submitting tool");
@@ -898,17 +968,19 @@ app.post("/multi-generate", async (req, res) => {
   if (!prompt && (!messages || messages.length === 0)) {
     return res.json({
       responses: [{ model: "Error", output: "⚠️ No input received" }],
-      recommended: "Error"
+      recommended: "Error",
     });
   }
 
   try {
     const selectedModels = aiType
-      ? models.filter(m => m.name.toLowerCase().includes(aiType.toLowerCase()))
+      ? models.filter((m) =>
+          m.name.toLowerCase().includes(aiType.toLowerCase())
+        )
       : models;
 
     const topTools = await Tool.find().limit(5).lean();
-    const toolList = topTools.map(t => t.name).join(", ");
+    const toolList = topTools.map((t) => t.name).join(", ");
 
     const responses = await Promise.all(
       selectedModels.map(async (ai) => {
@@ -922,41 +994,44 @@ app.post("/multi-generate", async (req, res) => {
             {
               model: "llama-3.1-8b-instant",
               messages: [
+                { role: "system", content: AQUA_IDENTITY },
+                { role: "system", content: AQUA_CONTEXT },
                 {
                   role: "system",
-                  content: `You are AQUIPLEX AI. Suggest tools when needed: ${toolList}`
+                  content: `Suggest tools when needed: ${toolList}`,
                 },
                 { role: "system", content: ai.system },
-                ...finalMessages
-              ]
+                ...finalMessages,
+              ],
             },
             {
               headers: {
                 Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-                "Content-Type": "application/json"
+                "Content-Type": "application/json",
               },
-              timeout: 10000
+              timeout: 10000,
             }
           );
 
           return {
             model: ai.name,
-            output: result?.data?.choices?.[0]?.message?.content || "⚠️ Empty response"
+            output:
+              result?.data?.choices?.[0]?.message?.content ||
+              "⚠️ Empty response",
           };
-
         } catch {
           return {
             model: ai.name,
-            output: "⚠️ Error generating response"
+            output: "⚠️ Error generating response",
           };
         }
       })
     );
 
-    const best = responses.find(r => !r.output.includes("⚠️")) || responses[0];
+    const best =
+      responses.find((r) => !r.output.includes("⚠️")) || responses[0];
 
     res.json({ responses, recommended: best.model });
-
   } catch (err) {
     console.error("❌ GLOBAL ERROR:", err);
     res.status(500).json({ error: "AI generation failed" });
@@ -992,14 +1067,13 @@ app.post("/bundle/save", requireLogin, async (req, res) => {
       userId: req.session.userId,
       title,
       steps,
-      progress: steps.map(s => ({
+      progress: steps.map((s) => ({
         step: s.step,
-        status: "pending"
-      }))
+        status: "pending",
+      })),
     }).save();
 
     res.json({ success: true, id: saved._id });
-
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to save bundle" });
@@ -1045,6 +1119,11 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
 
   message = (message || "").trim();
 
+  // ================= HARD IDENTITY OVERRIDE =================
+  if (message && isIdentityQuery(message)) {
+    return res.json({ reply: AQUA_IDENTITY_RESPONSE });
+  }
+
   try {
     let messages = [...parsedHistory];
     let fileText = "";
@@ -1080,7 +1159,7 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
     if (fileText) {
       messages.push({
         role: "system",
-        content: `User uploaded file:\n${fileText}`
+        content: `User uploaded file:\n${fileText}`,
       });
     }
 
@@ -1089,13 +1168,16 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
 
     if (req.body.refiner === "true" && message) {
       try {
-        const refinerInput = fileText ? message + "\n\nFile:\n" + fileText : message;
+        const refinerInput = fileText
+          ? message + "\n\nFile:\n" + fileText
+          : message;
         refinedMessage = await generateAI([
           {
             role: "system",
-            content: "Rewrite user input into a clear, detailed AI prompt. Return ONLY the improved prompt, nothing else."
+            content:
+              "Rewrite user input into a clear, detailed AI prompt. Return ONLY the improved prompt, nothing else.",
           },
-          { role: "user", content: refinerInput }
+          { role: "user", content: refinerInput },
         ]);
         if (!refinedMessage || refinedMessage.includes("⚠️")) {
           refinedMessage = message;
@@ -1107,7 +1189,7 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
 
     messages.push({
       role: "user",
-      content: req.body.refiner === "true" ? refinedMessage : message
+      content: req.body.refiner === "true" ? refinedMessage : message,
     });
 
     // ================= IMAGE MODE =================
@@ -1115,7 +1197,7 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
       const result = await generateImage(message);
       return res.json({
         reply: "🖼️ Here is your image:",
-        image: result.url
+        image: result.url,
       });
     }
 
@@ -1128,36 +1210,44 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
           {
             headers: {
               "X-API-KEY": process.env.SERPER_API_KEY,
-              "Content-Type": "application/json"
+              "Content-Type": "application/json",
             },
-            timeout: 8000
+            timeout: 8000,
           }
         );
 
         const results = search.data?.organic || [];
         const resultsText = results
           .slice(0, 5)
-          .map(r => `${r.title}: ${r.snippet}`)
+          .map((r) => `${r.title}: ${r.snippet}`)
           .join("\n");
 
         const reply = await generateAI([
-          { role: "system", content: "You are Aqua AI. Summarize search results clearly and concisely with proper formatting." },
-          { role: "user", content: `Question: ${message}\n\nSearch results:\n${resultsText}` }
+          {
+            role: "system",
+            content:
+              "Summarize search results clearly and concisely with proper formatting.",
+          },
+          {
+            role: "user",
+            content: `Question: ${message}\n\nSearch results:\n${resultsText}`,
+          },
         ]);
 
         const savedChat = await saveChat(
           [...messages, { role: "assistant", content: reply }],
-          chatId, req.session.userId, message
+          chatId,
+          req.session.userId,
+          message
         );
 
         return res.json({
           reply,
-          chatId: savedChat?._id
+          chatId: savedChat?._id,
         });
-
       } catch {
         return res.json({
-          reply: `🔎 Here's a Google search for your query: [Search Results](https://www.google.com/search?q=${encodeURIComponent(message)})`
+          reply: `🔎 Here's a Google search for your query: [Search Results](https://www.google.com/search?q=${encodeURIComponent(message)})`,
         });
       }
     }
@@ -1165,22 +1255,25 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
     // ================= CODE MODE =================
     if (mode === "code") {
       try {
-        const reply = await generateCodeAI(messages.filter(m => m.role !== "system"));
+        const reply = await generateCodeAI(
+          messages.filter((m) => m.role !== "system")
+        );
 
         const savedChat = await saveChat(
           [...messages, { role: "assistant", content: reply }],
-          chatId, req.session.userId, message
+          chatId,
+          req.session.userId,
+          message
         );
 
         return res.json({
           reply,
-          chatId: savedChat?._id
+          chatId: savedChat?._id,
         });
-
       } catch (err) {
         console.error("CODE MODE ERROR:", err.message);
         return res.json({
-          reply: "⚠️ Code engine encountered an error. Please try again."
+          reply: "⚠️ Code engine encountered an error. Please try again.",
         });
       }
     }
@@ -1207,26 +1300,24 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
           data: {
             model: "llama-3.1-8b-instant",
             messages: [
-              {
-                role: "system",
-                content: "You are Aqua AI, a smart and helpful assistant. Format responses clearly using markdown: headings, bullet points, and clean spacing. Be concise but thorough."
-              },
-              ...messages.slice(-10)
+              { role: "system", content: AQUA_IDENTITY },
+              { role: "system", content: AQUA_CONTEXT },
+              ...messages.slice(-10),
             ],
-            stream: true
+            stream: true,
           },
           responseType: "stream",
           headers: {
             Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
           },
-          timeout: 30000
+          timeout: 30000,
         });
 
         let lineBuffer = "";
         let streamEnded = false;
 
-        axiosStream.data.on("data", chunk => {
+        axiosStream.data.on("data", (chunk) => {
           if (streamEnded) return;
 
           lineBuffer += chunk.toString();
@@ -1246,7 +1337,9 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
               (async () => {
                 await saveChat(
                   [...messages, { role: "assistant", content: fullReply }],
-                  chatId, req.session.userId, message
+                  chatId,
+                  req.session.userId,
+                  message
                 );
               })();
               res.write("data: [DONE]\n\n");
@@ -1290,7 +1383,9 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
             (async () => {
               await saveChat(
                 [...messages, { role: "assistant", content: fullReply }],
-                chatId, req.session.userId, message
+                chatId,
+                req.session.userId,
+                message
               );
             })();
 
@@ -1307,8 +1402,7 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
               res.end();
             } else {
               const fallbackReply = await generateAI([
-                { role: "system", content: "You are Aqua AI. Be helpful and clear." },
-                ...messages.slice(-10)
+                ...messages.slice(-10),
               ]);
               res.write(`data: ${JSON.stringify(fallbackReply)}\n\n`);
               res.write("data: [DONE]\n\n");
@@ -1323,18 +1417,16 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
         });
 
         return;
-
       } catch (err) {
         console.log("❌ Stream init failed → fallback:", err.message);
 
-        const reply = await generateAI([
-          { role: "system", content: "You are Aqua AI. Be helpful and clear." },
-          ...messages.slice(-10)
-        ]);
+        const reply = await generateAI([...messages.slice(-10)]);
 
         const savedChat = await saveChat(
           [...messages, { role: "assistant", content: reply }],
-          chatId, req.session.userId, message
+          chatId,
+          req.session.userId,
+          message
         );
 
         res.write(`data: ${JSON.stringify(reply)}\n\n`);
@@ -1348,21 +1440,23 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
     const reply = await generateAI([
       {
         role: "system",
-        content: "You are Aqua AI. Use headings, bullet points, and clear structure in your responses."
+        content:
+          "Use headings, bullet points, and clear structure in your responses.",
       },
-      ...messages.slice(-10)
+      ...messages.slice(-10),
     ]);
 
     const savedChat = await saveChat(
       [...messages, { role: "assistant", content: reply }],
-      chatId, req.session.userId, message
+      chatId,
+      req.session.userId,
+      message
     );
 
     res.json({
       reply,
-      chatId: savedChat?._id
+      chatId: savedChat?._id,
     });
-
   } catch (err) {
     console.error("CHAT ERROR:", err.message);
     res.json({ reply: "⚠️ Something went wrong. Please try again." });
@@ -1374,7 +1468,7 @@ app.get("/history/:id", requireLogin, async (req, res) => {
   try {
     const chat = await History.findOne({
       _id: req.params.id,
-      userId: req.session.userId
+      userId: req.session.userId,
     });
     res.json(chat);
   } catch {
@@ -1387,7 +1481,7 @@ app.delete("/history/:id", requireLogin, async (req, res) => {
   try {
     await History.deleteOne({
       _id: req.params.id,
-      userId: req.session.userId
+      userId: req.session.userId,
     });
     res.sendStatus(200);
   } catch {
@@ -1411,8 +1505,7 @@ app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password)
-      return res.send("All fields are required");
+    if (!email || !password) return res.send("All fields are required");
 
     const user = await User.findOne({ email });
     if (!user) return res.send("User not found");
@@ -1423,31 +1516,32 @@ app.post("/login", async (req, res) => {
     req.session.user = {
       _id: user._id,
       email: user.email,
-      username: user.email.split("@")[0]
+      username: user.email.split("@")[0],
     };
     req.session.userId = user._id;
 
     req.session.save(() => {
       res.redirect("/home");
     });
-
   } catch (err) {
     console.error(err);
     res.send("Login error");
   }
 });
 
-app.get("/auth/google",
+app.get(
+  "/auth/google",
   passport.authenticate("google", { scope: ["profile", "email"] })
 );
 
-app.get("/auth/google/callback",
+app.get(
+  "/auth/google/callback",
   passport.authenticate("google", { failureRedirect: "/login" }),
   (req, res) => {
     req.session.user = {
       _id: req.user._id,
       email: req.user.email,
-      username: req.user.email.split("@")[0]
+      username: req.user.email.split("@")[0],
     };
     req.session.userId = req.user._id;
     res.redirect("/home");
@@ -1458,8 +1552,7 @@ app.post("/signup", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password)
-      return res.send("All fields are required");
+    if (!email || !password) return res.send("All fields are required");
 
     const exists = await User.findOne({ email });
     if (exists) return res.send("User already exists");
@@ -1474,14 +1567,13 @@ app.post("/signup", async (req, res) => {
     req.session.user = {
       _id: newUser._id,
       email: newUser.email,
-      username: newUser.email.split("@")[0]
+      username: newUser.email.split("@")[0],
     };
     req.session.userId = newUser._id;
 
     req.session.save(() => {
       res.redirect("/home");
     });
-
   } catch (err) {
     console.error(err);
     res.send("Signup error");
@@ -1500,7 +1592,9 @@ app.get("/logout", (req, res) => {
 app.get("/workspace", requireLogin, async (req, res) => {
   let workspace = await Workspace.findOne({
     userId: req.session.userId,
-  }).populate("tools").lean();
+  })
+    .populate("tools")
+    .lean();
 
   if (!workspace) {
     workspace = await new Workspace({
@@ -1510,8 +1604,10 @@ app.get("/workspace", requireLogin, async (req, res) => {
   }
 
   const bundles = await Bundle.find({
-    userId: req.session.userId
-  }).sort({ createdAt: -1 }).lean();
+    userId: req.session.userId,
+  })
+    .sort({ createdAt: -1 })
+    .lean();
 
   res.render("workspace", { workspace, bundles });
 });
@@ -1520,7 +1616,7 @@ app.post("/bundle/remove/:id", requireLogin, async (req, res) => {
   try {
     await Bundle.deleteOne({
       _id: req.params.id,
-      userId: req.session.userId
+      userId: req.session.userId,
     });
     res.sendStatus(200);
   } catch (err) {
@@ -1561,23 +1657,23 @@ app.post("/workspace/remove/:toolId", requireLogin, async (req, res) => {
 });
 
 // ABOUT
-app.get('/about', (req, res) => {
-  res.render('about');
+app.get("/about", (req, res) => {
+  res.render("about");
 });
 
 // AQUA AI
-app.get('/aqua-ai', (req, res) => {
-  res.render('aqua-ai');
+app.get("/aqua-ai", (req, res) => {
+  res.render("aqua-ai");
 });
 
 // PROJECT ENGINE
-app.get('/aqua-project-engine', (req, res) => {
-  res.render('aqua-project-engine');
+app.get("/aqua-project-engine", (req, res) => {
+  res.render("aqua-project-engine");
 });
 
 // FOUNDERS
-app.get('/founders', (req, res) => {
-  res.render('founders');
+app.get("/founders", (req, res) => {
+  res.render("founders");
 });
 
 app.get("/download", (req, res) => {
