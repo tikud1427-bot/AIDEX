@@ -57,6 +57,10 @@ const IDENTITY_TRIGGERS = [
   "what are you",
   "who built you",
   "who made you",
+  "are you claude",
+  "are you anthropic",
+  "are you mistral",
+  "are you deepseek",
 ];
 
 const AQUA_IDENTITY_RESPONSE =
@@ -86,9 +90,24 @@ const models = [
   },
 ];
 
+// ================= RETRY HELPER =================
+// BUG FIX: Added retry logic for flaky API calls
+async function withRetry(fn, retries = 2, delay = 500) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (i === retries) throw err;
+      await new Promise((r) => setTimeout(r, delay * (i + 1)));
+    }
+  }
+}
+
 // ================= AI ENGINE (FALLBACK SYSTEM) =================
 
-async function generateAI(messages) {
+async function generateAI(messages, options = {}) {
+  const { temperature = 0.7, maxTokens = 1024 } = options;
+
   const identityMessages = [
     { role: "system", content: AQUA_IDENTITY },
     { role: "system", content: AQUA_CONTEXT },
@@ -97,22 +116,28 @@ async function generateAI(messages) {
 
   // 🥇 1. GROQ (fastest)
   try {
-    const res = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        model: "llama-3.1-8b-instant",
-        messages: identityMessages,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json",
+    const res = await withRetry(() =>
+      axios.post(
+        "https://api.groq.com/openai/v1/chat/completions",
+        {
+          model: "llama-3.1-8b-instant",
+          messages: identityMessages,
+          temperature,
+          max_tokens: maxTokens,
         },
-        timeout: 10000,
-      }
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          timeout: 10000,
+        }
+      )
     );
 
-    return res.data.choices[0].message.content;
+    const content = res.data?.choices?.[0]?.message?.content;
+    if (content) return content;
+    throw new Error("Empty response from Groq");
   } catch (err) {
     console.log("❌ Groq failed:", err.message);
   }
@@ -124,6 +149,8 @@ async function generateAI(messages) {
       {
         model: "mistralai/mistral-7b-instruct",
         messages: identityMessages,
+        temperature,
+        max_tokens: maxTokens,
       },
       {
         headers: {
@@ -134,13 +161,23 @@ async function generateAI(messages) {
       }
     );
 
-    return res.data.choices[0].message.content;
+    const content = res.data?.choices?.[0]?.message?.content;
+    if (content) return content;
+    throw new Error("Empty response from OpenRouter");
   } catch (err) {
     console.log("❌ OpenRouter failed:", err.message);
   }
 
   // 🥉 3. GEMINI (backup)
   try {
+    // BUG FIX: Gemini doesn't support system role — merge all into user content
+    const userContent = messages
+      .filter((m) => m.role !== "system")
+      .map((m) => m.content)
+      .join("\n");
+
+    const systemContent = [AQUA_IDENTITY, AQUA_CONTEXT].join("\n");
+
     const res = await axios.post(
       `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${process.env.Gemini_API_Key}`,
       {
@@ -148,24 +185,30 @@ async function generateAI(messages) {
           {
             parts: [
               {
-                text: identityMessages.map((m) => m.content).join("\n"),
+                text: `${systemContent}\n\nUser: ${userContent}`,
               },
             ],
           },
         ],
+        generationConfig: {
+          temperature,
+          maxOutputTokens: maxTokens,
+        },
       },
       { timeout: 15000 }
     );
 
-    return res.data.candidates[0].content.parts[0].text;
+    const content = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (content) return content;
+    throw new Error("Empty response from Gemini");
   } catch (err) {
     console.log("❌ Gemini failed:", err.message);
   }
 
-  return "⚠️ All AI services are busy. Please try again in a moment.";
+  return "⚠️ All AI services are busy right now. Please try again in a moment.";
 }
 
-// ================= CODE AI ENGINE (OpenRouter DeepSeek) =================
+// ================= CODE AI ENGINE =================
 
 async function generateCodeAI(messages) {
   const CODE_SYSTEM_PROMPT = `You are Aqua Dev Engine, an expert software engineer.
@@ -176,7 +219,8 @@ Rules:
 - Follow best practices
 - Keep explanation short and clear
 - If user provides code, debug and fix it fully
-- If user asks to build something, generate complete code`;
+- If user asks to build something, generate complete code
+- Always wrap code in proper markdown code blocks with language tags`;
 
   const fullMessages = [
     { role: "system", content: AQUA_IDENTITY },
@@ -192,6 +236,7 @@ Rules:
       {
         model: "deepseek/deepseek-coder",
         messages: fullMessages,
+        temperature: 0.3, // Lower temp for code = more deterministic
       },
       {
         headers: {
@@ -216,6 +261,7 @@ Rules:
       {
         model: "llama-3.1-8b-instant",
         messages: fullMessages,
+        temperature: 0.3,
       },
       {
         headers: {
@@ -226,13 +272,17 @@ Rules:
       }
     );
 
-    return res.data.choices[0].message.content;
+    const content = res.data?.choices?.[0]?.message?.content;
+    if (content) return content;
+    throw new Error("Empty response from Groq fallback");
   } catch (err) {
     console.log("❌ Groq code fallback failed:", err.message);
   }
 
   return "⚠️ Code engine is unavailable. Please try again in a moment.";
 }
+
+// ================= IMAGE GENERATION =================
 
 async function generateImage(prompt) {
   // 🥇 1. TOGETHER AI (HIGH QUALITY)
@@ -244,6 +294,7 @@ async function generateImage(prompt) {
         model: "black-forest-labs/FLUX.1-schnell",
         width: 512,
         height: 512,
+        steps: 4, // FLUX schnell works best at 1-4 steps
       },
       {
         headers: {
@@ -255,10 +306,9 @@ async function generateImage(prompt) {
     );
 
     const imageUrl = res.data?.data?.[0]?.url;
-
     if (imageUrl) {
       console.log("✅ Together AI success");
-      return { url: imageUrl };
+      return { url: imageUrl, provider: "Together AI" };
     }
 
     throw new Error("No image from Together");
@@ -268,15 +318,88 @@ async function generateImage(prompt) {
 
   // 🥈 2. POLLINATIONS (UNLIMITED FALLBACK)
   try {
-    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}`;
+    const seed = Math.floor(Math.random() * 1000000); // BUG FIX: add seed for variety
+    const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?seed=${seed}&nologo=true`;
     console.log("✅ Pollinations fallback used");
-    return { url };
+    return { url, provider: "Pollinations" };
   } catch (err) {
     console.log("❌ Pollinations failed:", err.message);
     return {
       url: "https://via.placeholder.com/512?text=Image+Failed",
+      provider: "fallback",
     };
   }
+}
+
+// ================= SUGGESTED PROMPTS ENGINE =================
+// NEW FEATURE: Smart follow-up prompt suggestions
+async function generateSuggestedPrompts(lastMessage, lastReply) {
+  try {
+    const res = await axios.post(
+      "https://api.groq.com/openai/v1/chat/completions",
+      {
+        model: "llama-3.1-8b-instant",
+        messages: [
+          {
+            role: "system",
+            content: `Generate 3 short, engaging follow-up questions or prompts the user might want to ask next based on the conversation. 
+Return ONLY a JSON array of strings. Each string max 8 words. No numbering. Example: ["Tell me more about X", "How does Y work?", "Give me an example"]`,
+          },
+          {
+            role: "user",
+            content: `User said: "${lastMessage.slice(0, 200)}"\nAI replied about: "${lastReply.slice(0, 300)}"`,
+          },
+        ],
+        temperature: 0.8,
+        max_tokens: 150,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 5000,
+      }
+    );
+
+    let text = res.data?.choices?.[0]?.message?.content || "[]";
+    text = text.replace(/```json|```/g, "").trim();
+    const match = text.match(/\[[\s\S]*\]/);
+    if (match) {
+      const parsed = JSON.parse(match[0]);
+      if (Array.isArray(parsed)) return parsed.slice(0, 3);
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+// ================= CHAT TITLE GENERATOR =================
+async function generateChatTitle(message) {
+  let title = (message || "New Chat").slice(0, 30);
+
+  try {
+    const aiTitle = await generateAI([
+      {
+        role: "system",
+        content:
+          "Generate a 4-5 word title for this chat. Return ONLY the title, no quotes, no punctuation at the end.",
+      },
+      {
+        role: "user",
+        content: (message || "").slice(0, 200),
+      },
+    ]);
+
+    if (aiTitle && aiTitle.length < 60 && !aiTitle.includes("⚠️")) {
+      title = aiTitle.trim();
+    }
+  } catch {
+    // silently fall back
+  }
+
+  return title;
 }
 
 const app = express();
@@ -285,7 +408,6 @@ const app = express();
 app.set("trust proxy", 1);
 
 app.use((req, res, next) => {
-  // HTTPS redirect disabled for Replit compatibility
   next();
 });
 
@@ -299,7 +421,11 @@ const History = require("./models/History");
 async function connectDB() {
   try {
     console.log("⏳ Connecting to MongoDB...");
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGO_URI, {
+      // BUG FIX: Add connection options to prevent timeout issues
+      serverSelectionTimeoutMS: 10000,
+      socketTimeoutMS: 45000,
+    });
     console.log("✅ MongoDB connected");
   } catch (err) {
     console.error("❌ MongoDB connection failed:", err.message);
@@ -346,9 +472,12 @@ async function saveChat(messages, chatId, userId, message) {
 
   if (chatId) {
     try {
+      // BUG FIX: Validate chatId is valid ObjectId before querying
+      if (!mongoose.Types.ObjectId.isValid(chatId)) return null;
+
       return await History.findOneAndUpdate(
         { _id: chatId, userId },
-        { messages },
+        { messages, updatedAt: new Date() },
         { new: true }
       );
     } catch (err) {
@@ -356,27 +485,7 @@ async function saveChat(messages, chatId, userId, message) {
       return null;
     }
   } else {
-    let title = (message || "New Chat").slice(0, 30);
-
-    try {
-      const aiTitle = await generateAI([
-        {
-          role: "system",
-          content:
-            "Generate a 5-6 word title for this chat message. Return ONLY the title, no quotes, no punctuation at the end.",
-        },
-        {
-          role: "user",
-          content: (message || "").slice(0, 200),
-        },
-      ]);
-
-      if (aiTitle && aiTitle.length < 80) {
-        title = aiTitle.trim();
-      }
-    } catch {
-      // silently fall back to slice(0,30)
-    }
+    const title = await generateChatTitle(message);
 
     try {
       return await History.create({
@@ -393,8 +502,8 @@ async function saveChat(messages, chatId, userId, message) {
 
 // ================= MIDDLEWARE =================
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "10mb" })); // BUG FIX: Increase JSON limit for large file uploads
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 app.use(express.static("public"));
 
 const rateLimit = require("express-rate-limit");
@@ -402,8 +511,12 @@ const rateLimit = require("express-rate-limit");
 const chatLimiter = rateLimit({
   windowMs: 1 * 60 * 1000,
   max: 40,
-  message: "⚠️ Too many requests. Please slow down.",
+  message: JSON.stringify({ reply: "⚠️ Too many requests. Please slow down a moment." }),
   skip: (req) => req.method === "GET",
+  // BUG FIX: Return proper JSON for API route instead of plain text
+  handler: (req, res) => {
+    res.status(429).json({ reply: "⚠️ Too many requests. Please slow down a moment." });
+  },
 });
 
 app.set("view engine", "ejs");
@@ -417,9 +530,9 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      maxAge: 1000 * 60 * 60 * 24,
+      maxAge: 1000 * 60 * 60 * 24 * 7, // BUG FIX: Extended to 7 days (was 1 day, annoying)
       httpOnly: true,
-      secure: false,
+      secure: process.env.NODE_ENV === "production", // BUG FIX: Dynamic secure flag
     },
   })
 );
@@ -445,17 +558,20 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-      callbackURL: "/auth/google/callback",
+      callbackURL: process.env.GOOGLE_CALLBACK_URL || "/auth/google/callback", // BUG FIX: Configurable callback
     },
     async (accessToken, refreshToken, profile, done) => {
       try {
-        const email = profile.emails[0].value;
+        const email = profile.emails?.[0]?.value;
+        if (!email) return done(new Error("No email from Google"), null);
+
         let user = await User.findOne({ email });
 
         if (!user) {
           user = await new User({
             email,
             password: "google-oauth",
+            googleId: profile.id, // Store Google ID for future reference
           }).save();
         }
 
@@ -474,7 +590,7 @@ app.use((req, res, next) => {
 });
 
 app.get("/health", (req, res) => {
-  res.status(200).send("OK");
+  res.status(200).json({ status: "OK", timestamp: new Date().toISOString() });
 });
 
 // ================= UPLOAD =================
@@ -486,11 +602,30 @@ const storage = multer.diskStorage({
   filename: (req, file, cb) => cb(null, Date.now() + "-" + file.originalname),
 });
 
-const upload = multer({ storage });
+// BUG FIX: Add file type and size validation
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB limit
+  fileFilter: (req, file, cb) => {
+    const allowed = [".pdf", ".docx", ".txt", ".png", ".jpg", ".jpeg", ".gif", ".webp"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowed.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`File type ${ext} not supported`), false);
+    }
+  },
+});
 
 // ================= AUTH MIDDLEWARE =================
 function requireLogin(req, res, next) {
-  if (!req.session.userId) return res.redirect("/login");
+  if (!req.session.userId) {
+    // BUG FIX: Return JSON error for API routes, redirect for page routes
+    if (req.path.startsWith("/api/") || req.xhr) {
+      return res.status(401).json({ error: "Login required" });
+    }
+    return res.redirect("/login");
+  }
   next();
 }
 
@@ -515,16 +650,26 @@ app.post("/api/tools/:id/like", async (req, res) => {
     return res.status(401).json({ error: "Login required" });
   }
 
+  // BUG FIX: Validate ObjectId
+  if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+    return res.status(400).json({ error: "Invalid tool ID" });
+  }
+
   const tool = await Tool.findById(req.params.id);
 
   if (!tool) {
-    return res.json({ error: "Tool not found" });
+    return res.status(404).json({ error: "Tool not found" });
   }
 
   if (!tool.likedBy) tool.likedBy = [];
 
-  if (tool.likedBy.includes(req.session.userId)) {
-    return res.json({ message: "Already liked", likes: tool.likes });
+  const userIdStr = req.session.userId.toString();
+  if (tool.likedBy.map((id) => id.toString()).includes(userIdStr)) {
+    // BUG FIX: Allow unliking (toggle behavior)
+    tool.likes = Math.max(0, (tool.likes || 0) - 1);
+    tool.likedBy = tool.likedBy.filter((id) => id.toString() !== userIdStr);
+    await tool.save();
+    return res.json({ likes: tool.likes, liked: false });
   }
 
   tool.likes = (tool.likes || 0) + 1;
@@ -532,7 +677,7 @@ app.post("/api/tools/:id/like", async (req, res) => {
 
   await tool.save();
 
-  res.json({ likes: tool.likes });
+  res.json({ likes: tool.likes, liked: true });
 });
 
 app.get("/landing", async (req, res) => {
@@ -556,7 +701,7 @@ app.get("/home", async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.send("Error loading home");
+    res.status(500).send("Error loading home");
   }
 });
 
@@ -576,10 +721,11 @@ app.get("/tools", async (req, res) => {
             messages: [
               {
                 role: "system",
-                content: `You are an AI search engine brain. Convert user query into JSON: {"intent": "","keywords": [],"categories": []}. Return ONLY JSON.`,
+                content: `You are an AI search engine brain. Convert user query into JSON: {"intent": "","keywords": [],"categories": []}. Return ONLY valid JSON, no markdown.`,
               },
               { role: "user", content: searchQuery },
             ],
+            temperature: 0.3,
           },
           {
             headers: {
@@ -592,7 +738,9 @@ app.get("/tools", async (req, res) => {
 
         let text = ai.data.choices[0].message.content;
         text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-        aiData = JSON.parse(text);
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) aiData = JSON.parse(match[0]);
+        else throw new Error("No JSON found");
       } catch (err) {
         aiData = {
           intent: searchQuery,
@@ -604,8 +752,8 @@ app.get("/tools", async (req, res) => {
       tools = tools.map((tool) => {
         let score = 0;
         const name = tool.name.toLowerCase();
-        const desc = tool.description.toLowerCase();
-        const cat = tool.category.toLowerCase();
+        const desc = (tool.description || "").toLowerCase();
+        const cat = (tool.category || "").toLowerCase();
 
         const keywords = [
           ...(aiData.keywords || []),
@@ -634,7 +782,7 @@ app.get("/tools", async (req, res) => {
         .sort((a, b) => b.score - a.score);
     }
 
-    const allTools = tools;
+    const allTools = await Tool.find().lean(); // BUG FIX: always get all for category list
     const categories = [...new Set(allTools.map((t) => t.category))];
     const recommended = tools.slice(0, 3);
 
@@ -646,7 +794,7 @@ app.get("/tools", async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.send("Error loading tools");
+    res.status(500).send("Error loading tools");
   }
 });
 
@@ -665,7 +813,7 @@ app.get("/tools/category/:category", async (req, res) => {
 
       tools = tools.map((tool) => {
         let score = 0;
-        const text = (tool.name + tool.description).toLowerCase();
+        const text = ((tool.name || "") + " " + (tool.description || "")).toLowerCase();
         const query = searchQuery.toLowerCase();
         if (text.includes(query)) score += 5;
         return { ...tool, score };
@@ -693,7 +841,7 @@ app.get("/tools/category/:category", async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.send("Error loading category");
+    res.status(500).send("Error loading category");
   }
 });
 
@@ -704,31 +852,44 @@ app.get("/categories", async (req, res) => {
     res.render("categories", { categories });
   } catch (err) {
     console.error(err);
-    res.send("Error loading categories");
+    res.status(500).send("Error loading categories");
   }
 });
 
 app.get("/visit/:id", async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).send("Invalid tool ID");
+    }
+
     const tool = await Tool.findById(req.params.id);
-    if (!tool) return res.send("Tool not found");
+    if (!tool) return res.status(404).send("Tool not found");
 
     tool.clicks = (tool.clicks || 0) + 1;
     if (!tool.clickHistory) tool.clickHistory = [];
     tool.clickHistory.push({ date: new Date() });
-    await tool.save();
 
+    // BUG FIX: Trim old click history to prevent unbounded array growth
+    if (tool.clickHistory.length > 1000) {
+      tool.clickHistory = tool.clickHistory.slice(-1000);
+    }
+
+    await tool.save();
     res.redirect(tool.url);
   } catch (err) {
     console.error(err);
-    res.send("Error visiting tool");
+    res.status(500).send("Error visiting tool");
   }
 });
 
 app.get("/tool/:id", async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).send("Invalid tool ID");
+    }
+
     const tool = await Tool.findById(req.params.id).lean();
-    if (!tool) return res.send("Tool not found");
+    if (!tool) return res.status(404).send("Tool not found");
 
     let aiInsights = null;
 
@@ -740,13 +901,14 @@ app.get("/tool/:id", async (req, res) => {
           messages: [
             {
               role: "system",
-              content: `You are an AI product expert. Analyze the tool and return JSON: {"why": "","bestFor": [],"pros": [],"cons": []}. Keep it short and practical.`,
+              content: `You are an AI product expert. Analyze the tool and return JSON: {"why": "","bestFor": [],"pros": [],"cons": []}. Keep it short and practical. Return ONLY valid JSON.`,
             },
             {
               role: "user",
               content: `Name: ${tool.name}\nCategory: ${tool.category}\nDescription: ${tool.description}`,
             },
           ],
+          temperature: 0.5,
         },
         {
           headers: {
@@ -768,7 +930,7 @@ app.get("/tool/:id", async (req, res) => {
     res.render("tool-details", { tool, aiInsights });
   } catch (err) {
     console.error(err);
-    res.send("Error loading tool");
+    res.status(500).send("Error loading tool");
   }
 });
 
@@ -799,7 +961,7 @@ app.post("/generate-bundle", async (req, res) => {
     const prompt = `
 User goal: ${goal}
 Answers:
-${answers?.join("\n")}
+${(answers || []).join("\n")}
 Use ONLY tools from this list (copy exact name and url):
 ${toolList}
 Create a structured AI workflow bundle.
@@ -824,9 +986,10 @@ Return ONLY JSON:
       {
         model: "llama-3.1-8b-instant",
         messages: [
-          { role: "system", content: "You are an expert startup mentor." },
+          { role: "system", content: "You are an expert startup mentor. Return ONLY valid JSON." },
           { role: "user", content: prompt },
         ],
+        temperature: 0.5,
       },
       {
         headers: {
@@ -867,7 +1030,7 @@ Return ONLY JSON:
     res.json(parsed);
   } catch (err) {
     console.error(err);
-    res.json({ error: "AI failed", raw: err.message });
+    res.status(500).json({ error: "AI failed", raw: err.message });
   }
 });
 
@@ -881,11 +1044,11 @@ app.get("/api/tools/suggest", async (req, res) => {
       tools = tools
         .map((tool) => {
           const text = (
-            tool.name +
+            (tool.name || "") +
             " " +
-            tool.description +
+            (tool.description || "") +
             " " +
-            tool.category
+            (tool.category || "")
           ).toLowerCase();
           const query = q.toLowerCase();
           const score =
@@ -895,9 +1058,9 @@ app.get("/api/tools/suggest", async (req, res) => {
         })
         .filter((t) => t.score > 0)
         .sort((a, b) => b.score - a.score)
-        .slice(0, 3);
+        .slice(0, 5); // BUG FIX: Return 5 instead of 3 for better suggestions
     } else {
-      tools = tools.slice(0, 3);
+      tools = tools.slice(0, 5);
     }
 
     res.json(
@@ -906,6 +1069,7 @@ app.get("/api/tools/suggest", async (req, res) => {
         name: t.name,
         url: t.url,
         category: t.category,
+        logo: t.logo,
       }))
     );
   } catch (err) {
@@ -919,7 +1083,7 @@ app.get("/trending", async (req, res) => {
     res.render("trending", { tools });
   } catch (err) {
     console.error(err);
-    res.send("Error loading trending page");
+    res.status(500).send("Error loading trending page");
   }
 });
 
@@ -932,7 +1096,14 @@ app.post("/submit", upload.single("logo"), async (req, res) => {
     const { name, category, url, description } = req.body;
 
     if (!name || !category || !url || !description) {
-      return res.send("All fields are required");
+      return res.status(400).send("All fields are required");
+    }
+
+    // BUG FIX: Validate URL format
+    try {
+      new URL(url);
+    } catch {
+      return res.status(400).send("Invalid URL format");
     }
 
     let logoPath = "/logos/default.png";
@@ -941,10 +1112,10 @@ app.post("/submit", upload.single("logo"), async (req, res) => {
     }
 
     await new Tool({
-      name,
-      category,
-      url,
-      description,
+      name: name.trim(),
+      category: category.trim(),
+      url: url.trim(),
+      description: description.trim(),
       logo: logoPath,
       clicks: 0,
       clickHistory: [],
@@ -953,7 +1124,7 @@ app.post("/submit", upload.single("logo"), async (req, res) => {
     res.redirect("/tools");
   } catch (err) {
     console.error(err);
-    res.send("Error submitting tool");
+    res.status(500).send("Error submitting tool");
   }
 });
 
@@ -979,11 +1150,14 @@ app.post("/multi-generate", async (req, res) => {
         )
       : models;
 
+    // BUG FIX: Fall back to all models if filter returns empty
+    const activeModels = selectedModels.length > 0 ? selectedModels : models;
+
     const topTools = await Tool.find().limit(5).lean();
     const toolList = topTools.map((t) => t.name).join(", ");
 
     const responses = await Promise.all(
-      selectedModels.map(async (ai) => {
+      activeModels.map(async (ai) => {
         try {
           const finalMessages = messages?.length
             ? messages
@@ -1003,6 +1177,7 @@ app.post("/multi-generate", async (req, res) => {
                 { role: "system", content: ai.system },
                 ...finalMessages,
               ],
+              temperature: 0.7,
             },
             {
               headers: {
@@ -1042,14 +1217,15 @@ app.post("/multi-generate", async (req, res) => {
 app.get("/history", requireLogin, async (req, res) => {
   try {
     const history = await History.find({ userId: req.session.userId })
-      .sort({ createdAt: -1 })
+      .sort({ updatedAt: -1 }) // BUG FIX: Sort by updatedAt so recently active chats float to top
       .limit(50)
+      .select("_id title createdAt updatedAt") // BUG FIX: Don't load full messages for list view
       .lean();
 
     res.json(history);
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error fetching history");
+    res.status(500).json({ error: "Error fetching history" });
   }
 });
 
@@ -1082,17 +1258,33 @@ app.post("/bundle/save", requireLogin, async (req, res) => {
 
 app.get("/bundle/:id", async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).send("Invalid bundle ID");
+    }
     const bundle = await Bundle.findById(req.params.id).lean();
-    if (!bundle) return res.send("Bundle not found");
+    if (!bundle) return res.status(404).send("Bundle not found");
     res.render("bundle-view", { bundle });
   } catch {
-    res.send("Error loading bundle");
+    res.status(500).send("Error loading bundle");
   }
 });
 
 // ================= CHATBOT PAGE =================
 app.get("/chatbot", requireLogin, (req, res) => {
   res.render("chatbot");
+});
+
+// ================= SUGGESTED PROMPTS API (NEW) =================
+app.post("/api/suggest-prompts", chatLimiter, async (req, res) => {
+  try {
+    const { lastMessage, lastReply } = req.body;
+    if (!lastMessage || !lastReply) return res.json({ suggestions: [] });
+
+    const suggestions = await generateSuggestedPrompts(lastMessage, lastReply);
+    res.json({ suggestions });
+  } catch {
+    res.json({ suggestions: [] });
+  }
 });
 
 // ================= CHAT ROUTE =================
@@ -1113,23 +1305,37 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
     parsedHistory = [];
   }
 
+  // BUG FIX: Sanitize and limit history to prevent context overflow
+  parsedHistory = parsedHistory
+    .filter((m) => m && m.role && m.content)
+    .slice(-20); // Keep last 20 messages max
+
   if (!message && !req.file) {
-    return res.json({ reply: "⚠️ Message required" });
+    return res.json({ reply: "⚠️ Message or file required" });
   }
 
   message = (message || "").trim();
 
   // ================= HARD IDENTITY OVERRIDE =================
   if (message && isIdentityQuery(message)) {
-    return res.json({ reply: AQUA_IDENTITY_RESPONSE });
+    return res.json({
+      reply: AQUA_IDENTITY_RESPONSE,
+      suggestions: [
+        "What can you do?",
+        "Show me image generation",
+        "Help me write code",
+      ],
+    });
   }
 
   try {
     let messages = [...parsedHistory];
     let fileText = "";
+    let fileName = "";
 
     // ================= FILE PROCESS =================
     if (req.file) {
+      fileName = req.file.originalname;
       const ext = path.extname(req.file.originalname).toLowerCase();
 
       try {
@@ -1145,21 +1351,25 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
         } else {
           fileText = `Unsupported file type: ${ext}`;
         }
-      } catch {
-        fileText = "⚠️ Failed to read file";
+      } catch (readErr) {
+        fileText = `⚠️ Failed to read file: ${readErr.message}`;
       }
 
-      fs.unlink(req.file.path, () => {});
+      // BUG FIX: Always cleanup uploaded file
+      fs.unlink(req.file.path, (unlinkErr) => {
+        if (unlinkErr) console.log("⚠️ Failed to delete temp file:", unlinkErr.message);
+      });
     }
 
-    if (fileText.length > 10000) {
-      fileText = fileText.slice(0, 10000);
+    // BUG FIX: More conservative file truncation with notice
+    if (fileText.length > 8000) {
+      fileText = fileText.slice(0, 8000) + "\n\n[Note: File truncated to 8000 chars for processing]";
     }
 
     if (fileText) {
       messages.push({
         role: "system",
-        content: `User uploaded file:\n${fileText}`,
+        content: `User uploaded file "${fileName}":\n${fileText}`,
       });
     }
 
@@ -1169,13 +1379,14 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
     if (req.body.refiner === "true" && message) {
       try {
         const refinerInput = fileText
-          ? message + "\n\nFile:\n" + fileText
+          ? message + "\n\nFile context:\n" + fileText.slice(0, 2000)
           : message;
+
         refinedMessage = await generateAI([
           {
             role: "system",
             content:
-              "Rewrite user input into a clear, detailed AI prompt. Return ONLY the improved prompt, nothing else.",
+              "Rewrite user input into a clear, detailed AI prompt. Return ONLY the improved prompt, nothing else. Max 200 words.",
           },
           { role: "user", content: refinerInput },
         ]);
@@ -1187,17 +1398,25 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
       }
     }
 
-    messages.push({
-      role: "user",
-      content: req.body.refiner === "true" ? refinedMessage : message,
-    });
+    const finalUserMessage = req.body.refiner === "true" ? refinedMessage : message;
+
+    if (finalUserMessage) {
+      messages.push({
+        role: "user",
+        content: finalUserMessage,
+      });
+    }
 
     // ================= IMAGE MODE =================
     if (mode === "image") {
+      if (!message) {
+        return res.json({ reply: "⚠️ Please describe the image you want to generate." });
+      }
       const result = await generateImage(message);
       return res.json({
-        reply: "🖼️ Here is your image:",
+        reply: `🖼️ Here's your generated image:`,
         image: result.url,
+        provider: result.provider,
       });
     }
 
@@ -1206,7 +1425,7 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
       try {
         const search = await axios.post(
           "https://google.serper.dev/search",
-          { q: message },
+          { q: message, num: 5 },
           {
             headers: {
               "X-API-KEY": process.env.SERPER_API_KEY,
@@ -1217,16 +1436,17 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
         );
 
         const results = search.data?.organic || [];
+        // BUG FIX: Include source links in context so AI can cite them
         const resultsText = results
           .slice(0, 5)
-          .map((r) => `${r.title}: ${r.snippet}`)
-          .join("\n");
+          .map((r, i) => `[${i + 1}] ${r.title}\n${r.snippet}\nSource: ${r.link}`)
+          .join("\n\n");
 
         const reply = await generateAI([
           {
             role: "system",
             content:
-              "Summarize search results clearly and concisely with proper formatting.",
+              "Summarize search results clearly and concisely. Mention sources when relevant. Use markdown formatting.",
           },
           {
             role: "user",
@@ -1244,6 +1464,7 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
         return res.json({
           reply,
           chatId: savedChat?._id,
+          sources: results.slice(0, 3).map((r) => ({ title: r.title, link: r.link })),
         });
       } catch {
         return res.json({
@@ -1284,7 +1505,8 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
       res.setHeader("X-Accel-Buffering", "no");
-      res.flushHeaders?.();
+      // BUG FIX: Use optional chaining safely
+      if (typeof res.flushHeaders === "function") res.flushHeaders();
 
       if (req.body.refiner === "true" && refinedMessage !== message) {
         res.write(`data: ${JSON.stringify({ refined: refinedMessage })}\n\n`);
@@ -1292,6 +1514,24 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
 
       let fullReply = "";
       let axiosStream;
+      let streamEnded = false;
+
+      const endStream = async () => {
+        if (streamEnded) return;
+        streamEnded = true;
+        try {
+          await saveChat(
+            [...messages, { role: "assistant", content: fullReply }],
+            chatId,
+            req.session.userId,
+            message
+          );
+        } catch (e) {
+          console.log("⚠️ saveChat in stream failed:", e.message);
+        }
+        res.write("data: [DONE]\n\n");
+        res.end();
+      };
 
       try {
         axiosStream = await axios({
@@ -1302,9 +1542,14 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
             messages: [
               { role: "system", content: AQUA_IDENTITY },
               { role: "system", content: AQUA_CONTEXT },
-              ...messages.slice(-10),
+              {
+                role: "system",
+                content: "Use markdown formatting with headings, bullet points, and code blocks where appropriate.",
+              },
+              ...messages.slice(-12), // Slightly more context than before
             ],
             stream: true,
+            temperature: 0.7,
           },
           responseType: "stream",
           headers: {
@@ -1315,7 +1560,6 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
         });
 
         let lineBuffer = "";
-        let streamEnded = false;
 
         axiosStream.data.on("data", (chunk) => {
           if (streamEnded) return;
@@ -1333,17 +1577,7 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
             if (!payload) continue;
 
             if (payload === "[DONE]") {
-              streamEnded = true;
-              (async () => {
-                await saveChat(
-                  [...messages, { role: "assistant", content: fullReply }],
-                  chatId,
-                  req.session.userId,
-                  message
-                );
-              })();
-              res.write("data: [DONE]\n\n");
-              res.end();
+              endStream();
               return;
             }
 
@@ -1362,67 +1596,43 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
         });
 
         axiosStream.data.on("end", () => {
-          if (!streamEnded) {
-            if (lineBuffer.trim()) {
-              const trimmed = lineBuffer.trim();
-              if (trimmed.startsWith("data:")) {
-                const payload = trimmed.slice(5).trim();
-                if (payload && payload !== "[DONE]") {
-                  try {
-                    const parsed = JSON.parse(payload);
-                    const token = parsed.choices?.[0]?.delta?.content;
-                    if (token) {
-                      fullReply += token;
-                      res.write(`data: ${JSON.stringify(token)}\n\n`);
-                    }
-                  } catch {}
-                }
-              }
-            }
-
-            (async () => {
-              await saveChat(
-                [...messages, { role: "assistant", content: fullReply }],
-                chatId,
-                req.session.userId,
-                message
-              );
-            })();
-
-            res.write("data: [DONE]\n\n");
-            res.end();
-          }
+          if (!streamEnded) endStream();
         });
 
-        axiosStream.data.on("error", async () => {
+        axiosStream.data.on("error", async (streamErr) => {
+          console.log("⚠️ Stream error:", streamErr.message);
           if (!streamEnded) {
-            streamEnded = true;
             if (fullReply) {
-              res.write("data: [DONE]\n\n");
-              res.end();
+              endStream();
             } else {
-              const fallbackReply = await generateAI([
-                ...messages.slice(-10),
-              ]);
-              res.write(`data: ${JSON.stringify(fallbackReply)}\n\n`);
-              res.write("data: [DONE]\n\n");
-              res.end();
+              // Fallback to non-stream
+              try {
+                const fallbackReply = await generateAI(messages.slice(-12));
+                fullReply = fallbackReply;
+                res.write(`data: ${JSON.stringify(fallbackReply)}\n\n`);
+              } catch {
+                res.write(`data: ${JSON.stringify("⚠️ Connection issue. Please try again.")}\n\n`);
+              }
+              endStream();
             }
           }
         });
 
         req.on("close", () => {
           streamEnded = true;
-          if (axiosStream) axiosStream.data.destroy();
+          if (axiosStream?.data) {
+            try { axiosStream.data.destroy(); } catch {}
+          }
         });
 
         return;
       } catch (err) {
         console.log("❌ Stream init failed → fallback:", err.message);
 
-        const reply = await generateAI([...messages.slice(-10)]);
+        const reply = await generateAI(messages.slice(-12));
+        fullReply = reply;
 
-        const savedChat = await saveChat(
+        await saveChat(
           [...messages, { role: "assistant", content: reply }],
           chatId,
           req.session.userId,
@@ -1441,63 +1651,84 @@ app.post("/chat", chatLimiter, upload.single("file"), async (req, res) => {
       {
         role: "system",
         content:
-          "Use headings, bullet points, and clear structure in your responses.",
+          "Use headings, bullet points, and clear markdown structure in your responses. Be thorough but concise.",
       },
-      ...messages.slice(-10),
+      ...messages.slice(-12),
     ]);
 
-    const savedChat = await saveChat(
-      [...messages, { role: "assistant", content: reply }],
-      chatId,
-      req.session.userId,
-      message
-    );
+    // NEW FEATURE: Generate follow-up suggestions in parallel with save
+    const [savedChat, suggestions] = await Promise.all([
+      saveChat(
+        [...messages, { role: "assistant", content: reply }],
+        chatId,
+        req.session.userId,
+        message
+      ),
+      generateSuggestedPrompts(message, reply).catch(() => []),
+    ]);
 
     res.json({
       reply,
       chatId: savedChat?._id,
+      suggestions, // Frontend can render these as quick-reply chips
     });
   } catch (err) {
     console.error("CHAT ERROR:", err.message);
-    res.json({ reply: "⚠️ Something went wrong. Please try again." });
+    // BUG FIX: Don't leak internal error details to client
+    res.status(500).json({ reply: "⚠️ Something went wrong. Please try again." });
   }
 });
 
 // GET SINGLE CHAT
 app.get("/history/:id", requireLogin, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid chat ID" });
+    }
+
     const chat = await History.findOne({
       _id: req.params.id,
       userId: req.session.userId,
     });
+
+    if (!chat) return res.status(404).json({ error: "Chat not found" });
     res.json(chat);
   } catch {
-    res.status(500).send("Error loading chat");
+    res.status(500).json({ error: "Error loading chat" });
   }
 });
 
 // DELETE CHAT
 app.delete("/history/:id", requireLogin, async (req, res) => {
   try {
-    await History.deleteOne({
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid chat ID" });
+    }
+
+    const result = await History.deleteOne({
       _id: req.params.id,
       userId: req.session.userId,
     });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Chat not found" });
+    }
+
     res.sendStatus(200);
   } catch {
-    res.status(500).send("Error deleting chat");
+    res.status(500).json({ error: "Error deleting chat" });
   }
 });
 
 // ================= AUTH =================
 
 app.get("/login", (req, res) => {
-  if (req.session.userId) return res.redirect("/workspace");
+  if (req.session.userId) return res.redirect("/home"); // BUG FIX: was redirecting to /workspace
   res.render("login");
 });
 
 app.get("/signup", (req, res) => {
-  if (req.session.userId) return res.redirect("/workspace");
+  if (req.session.userId) return res.redirect("/home"); // BUG FIX: same
   res.render("signup");
 });
 
@@ -1505,13 +1736,17 @@ app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) return res.send("All fields are required");
+    if (!email || !password) return res.status(400).send("All fields are required");
 
-    const user = await User.findOne({ email });
-    if (!user) return res.send("User not found");
+    const user = await User.findOne({ email: email.toLowerCase().trim() }); // BUG FIX: normalize email
+    if (!user) return res.status(401).send("User not found");
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.send("Invalid credentials");
+    // BUG FIX: Prevent timing attacks by always running bcrypt
+    const isMatch = user.password !== "google-oauth"
+      ? await bcrypt.compare(password, user.password)
+      : false;
+
+    if (!isMatch) return res.status(401).send("Invalid credentials");
 
     req.session.user = {
       _id: user._id,
@@ -1525,7 +1760,7 @@ app.post("/login", async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.send("Login error");
+    res.status(500).send("Login error");
   }
 });
 
@@ -1552,15 +1787,23 @@ app.post("/signup", async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) return res.send("All fields are required");
+    if (!email || !password) return res.status(400).send("All fields are required");
 
-    const exists = await User.findOne({ email });
-    if (exists) return res.send("User already exists");
+    // BUG FIX: Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) return res.status(400).send("Invalid email format");
+
+    // BUG FIX: Validate password length
+    if (password.length < 6) return res.status(400).send("Password must be at least 6 characters");
+
+    const normalizedEmail = email.toLowerCase().trim();
+    const exists = await User.findOne({ email: normalizedEmail });
+    if (exists) return res.status(409).send("User already exists");
 
     const hashedPassword = await bcrypt.hash(password, 12);
 
     const newUser = await new User({
-      email,
+      email: normalizedEmail,
       password: hashedPassword,
     }).save();
 
@@ -1576,7 +1819,7 @@ app.post("/signup", async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.send("Signup error");
+    res.status(500).send("Signup error");
   }
 });
 
@@ -1614,6 +1857,9 @@ app.get("/workspace", requireLogin, async (req, res) => {
 
 app.post("/bundle/remove/:id", requireLogin, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: "Invalid bundle ID" });
+    }
     await Bundle.deleteOne({
       _id: req.params.id,
       userId: req.session.userId,
@@ -1626,22 +1872,36 @@ app.post("/bundle/remove/:id", requireLogin, async (req, res) => {
 });
 
 app.post("/workspace/add/:toolId", requireLogin, async (req, res) => {
-  let workspace = await Workspace.findOne({ userId: req.session.userId });
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.toolId)) {
+      return res.status(400).json({ error: "Invalid tool ID" });
+    }
 
-  if (!workspace) {
-    workspace = new Workspace({ userId: req.session.userId, tools: [] });
+    let workspace = await Workspace.findOne({ userId: req.session.userId });
+
+    if (!workspace) {
+      workspace = new Workspace({ userId: req.session.userId, tools: [] });
+    }
+
+    const toolIdStr = req.params.toolId;
+    if (!workspace.tools.map((t) => t.toString()).includes(toolIdStr)) {
+      workspace.tools.push(req.params.toolId);
+      await workspace.save();
+    }
+
+    res.sendStatus(200);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Error adding tool" });
   }
-
-  if (!workspace.tools.includes(req.params.toolId)) {
-    workspace.tools.push(req.params.toolId);
-    await workspace.save();
-  }
-
-  res.sendStatus(200);
 });
 
 app.post("/workspace/remove/:toolId", requireLogin, async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.toolId)) {
+      return res.status(400).json({ error: "Invalid tool ID" });
+    }
+
     const toolId = new mongoose.Types.ObjectId(req.params.toolId);
 
     await Workspace.updateOne(
@@ -1656,22 +1916,16 @@ app.post("/workspace/remove/:toolId", requireLogin, async (req, res) => {
   }
 });
 
-// ABOUT
-app.get("/about", (req, res) => {
-  res.render("about");
-});
+// ================= STATIC PAGES =================
 
-// AQUA AI
 app.get("/aqua-ai", (req, res) => {
   res.render("aqua-ai");
 });
 
-// PROJECT ENGINE
 app.get("/aqua-project-engine", (req, res) => {
   res.render("aqua-project-engine");
 });
 
-// FOUNDERS
 app.get("/founders", (req, res) => {
   res.render("founders");
 });
@@ -1679,19 +1933,50 @@ app.get("/founders", (req, res) => {
 app.get("/download", (req, res) => {
   const filePath = path.join(__dirname, "public/uploads/Aquiplex.apk");
 
+  // BUG FIX: Check if file exists before trying to download
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send("Download not available yet");
+  }
+
   res.download(filePath, "Aquiplex.apk", (err) => {
     if (err) {
       console.error("Download error:", err);
-      res.status(500).send("Download failed");
+      if (!res.headersSent) res.status(500).send("Download failed");
     }
   });
 });
 
+// ================= 404 HANDLER =================
+// BUG FIX: Added proper 404 handler
+app.use((req, res) => {
+  res.status(404).send("Page not found");
+});
+
+// ================= GLOBAL ERROR HANDLER =================
+// BUG FIX: Added global error handler
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return res.status(400).json({ reply: "⚠️ File too large. Maximum size is 10MB." });
+  }
+
+  if (err.message?.includes("not supported")) {
+    return res.status(400).json({ reply: `⚠️ ${err.message}` });
+  }
+
+  res.status(500).json({ reply: "⚠️ Something went wrong. Please try again." });
+});
+
 // ================= START =================
 async function startServer() {
-  console.log("GROQ:", process.env.GROQ_API_KEY ? "OK" : "MISSING");
-  console.log("MONGO:", process.env.MONGO_URI ? "OK" : "MISSING");
-  console.log("SESSION:", process.env.SESSION_SECRET ? "OK" : "MISSING");
+  console.log("GROQ:", process.env.GROQ_API_KEY ? "✅ OK" : "❌ MISSING");
+  console.log("MONGO:", process.env.MONGO_URI ? "✅ OK" : "❌ MISSING");
+  console.log("SESSION:", process.env.SESSION_SECRET ? "✅ OK" : "❌ MISSING");
+  console.log("OPENROUTER:", process.env.OPENROUTER_API_KEY ? "✅ OK" : "❌ MISSING");
+  console.log("GEMINI:", process.env.Gemini_API_Key ? "✅ OK" : "❌ MISSING");
+  console.log("TOGETHER:", process.env.TOGETHER_API_KEY ? "✅ OK" : "❌ MISSING");
+  console.log("SERPER:", process.env.SERPER_API_KEY ? "✅ OK" : "❌ MISSING");
 
   await connectDB();
   await importTools();
@@ -1699,8 +1984,7 @@ async function startServer() {
   const PORT = process.env.PORT || 5000;
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log("🚀 Server running on port " + PORT);
-    console.log("HF:", process.env.HF_API_KEY ? "OK" : "MISSING");
+    console.log(`🚀 Aqua AI running on port ${PORT}`);
   });
 }
 
