@@ -56,6 +56,7 @@ const axios      = require("axios");
 const passport   = require("passport");
 const GoogleStrategy = require("passport-google-oauth20").Strategy;
 const executionRoutes = require("./execution-engine.routes");
+const workspaceRoutes = require("./workspace.routes");
 
 // ── NEW: Service imports ─────────────────────────────────────────────────────
 // [FIX-2] [FIX-5] Import upgraded service modules
@@ -651,6 +652,7 @@ function redirectIfLoggedIn(req, res, next) {
 }
 
 executionRoutes(app, requireLogin, generateAI);
+app.use("/workspace", requireLogin, workspaceRoutes);
 
 // ================= UPLOAD =================
 const uploadDir = path.join(__dirname, "public/uploads");
@@ -1619,56 +1621,28 @@ app.get("/logout", (req, res) => {
 
 // ================= WORKSPACE =================
 app.get("/workspace", requireLogin, async (req, res) => {
-  let workspace = await Workspace.findOne({ userId: req.session.userId }).populate("tools").lean();
-  if (!workspace) {
-    workspace = await new Workspace({ userId: req.session.userId, tools: [] }).save();
-  }
-  const bundles = await Bundle.find({ userId: req.session.userId }).sort({ createdAt: -1 }).lean();
-  res.render("workspace", { workspace, bundles });
-});
-
-app.post("/bundle/remove/:id", requireLogin, async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id))
-      return res.status(400).json({ error: "Invalid bundle ID" });
-    await Bundle.deleteOne({ _id: req.params.id, userId: req.session.userId });
-    res.sendStatus(200);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Error removing bundle");
-  }
-});
+    const Workspace = require("./models/Workspace");
+    const Bundle    = require("./models/Bundle");
 
-app.post("/workspace/add/:toolId", requireLogin, async (req, res) => {
-  try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.toolId))
-      return res.status(400).json({ error: "Invalid tool ID" });
+    let ws = await Workspace.findOne({ userId: req.session.userId })
+              .populate("tools")
+              .lean();
 
-    let workspace = await Workspace.findOne({ userId: req.session.userId });
-    if (!workspace) workspace = new Workspace({ userId: req.session.userId, tools: [] });
-
-    const toolIdStr = req.params.toolId;
-    if (!workspace.tools.map((t) => t.toString()).includes(toolIdStr)) {
-      workspace.tools.push(req.params.toolId);
-      await workspace.save();
+    if (!ws) {
+      ws = await new Workspace({ userId: req.session.userId }).save();
+      ws = ws.toObject();
     }
-    res.sendStatus(200);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Error adding tool" });
-  }
-});
 
-app.post("/workspace/remove/:toolId", requireLogin, async (req, res) => {
-  try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.toolId))
-      return res.status(400).json({ error: "Invalid tool ID" });
-    const toolId = new mongoose.Types.ObjectId(req.params.toolId);
-    await Workspace.updateOne({ userId: req.session.userId }, { $pull: { tools: toolId } });
-    res.sendStatus(200);
+    const bundles = await Bundle.find({ userId: req.session.userId })
+                      .sort({ updatedAt: -1 })
+                      .lean();
+
+    res.render("workspace", { workspace: ws, bundles });
+
   } catch (err) {
     console.error(err);
-    res.status(500).send("Error removing tool");
+    res.status(500).send("Error loading workspace");
   }
 });
 
