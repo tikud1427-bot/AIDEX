@@ -326,10 +326,23 @@ async function getUserMemory(userId, currentMessage = "") {
       const frequencyScore = Math.min(1, (m.frequency || 1) / 10);
 
       // Composite score
+      // 🔥 NEW: context relevance boost
+      let relevanceScore = 0;
+
+      if (currentMessage && m.value) {
+        const msg = currentMessage.toLowerCase();
+        const val = m.value.toLowerCase();
+
+        if (msg.includes(val)) relevanceScore = 1;
+        else if (val.split(" ").some(word => msg.includes(word))) relevanceScore = 0.5;
+      }
+
+      // 🧠 FINAL SCORE (UPGRADED)
       const score =
-        (m.importance || 0.5) * 0.5 +
-        recencyScore * 0.3 +
-        frequencyScore * 0.2;
+        (m.importance || 0.5) * 0.4 +
+        recencyScore * 0.25 +
+        frequencyScore * 0.15 +
+        relevanceScore * 0.2;
 
       return { ...m, _score: score };
     });

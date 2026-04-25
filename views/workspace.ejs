@@ -21,6 +21,7 @@
   .wp-feed-preview { color: #c0c0c0; }
   .wp-output-content { color: #dcdcdc; }
 </style>
+  <script src="/socket.io/socket.io.js"></script>
 </head>
 
 <body>
@@ -46,7 +47,7 @@
       </div>
       <div style="display:flex; gap:10px; margin-left:20px;">
 
-        <button class="wp-btn wp-btn-ghost" onclick="goToBundles()">
+            <button class="wp-btn wp-btn-ghost" onclick="goToBundles()">
           ← Bundles
         </button>
 
@@ -55,7 +56,21 @@
         <button class="wp-btn wp-btn-ghost" onclick="deleteCurrentBundle()">
           Delete
         </button>
+        <button class="wp-btn wp-btn-run" onclick="autoRunSteps()">⚡ AUTO</button>
 
+      </div>
+      <div id="copilot" style="
+        position:fixed;
+        bottom:20px;
+        right:20px;
+        background:#111;
+        border:1px solid #333;
+        padding:10px;
+        border-radius:8px;
+        font-size:12px;
+        cursor:pointer;
+      ">
+      ⚡ AI
       </div>
     </div>
   </div>
@@ -396,6 +411,7 @@ async function selectBundle(bundle) {
   } catch (_) {}
 
   STATE.bundle       = bundle;
+  window.currentBundle = bundle; // ← ADD THIS
   STATE.selectedStep = null;
 
   document.getElementById("wsWelcome").style.display = "none";
@@ -925,7 +941,7 @@ async function removeTool(id) {
   if (!confirm("Remove this tool?")) return;
 
   try {
-    const res = await fetch("/tool/" + id, { method: "DELETE" });
+    const res = await fetch("/workspace/tool/" + id, { method: "DELETE" });
     if (!res.ok) throw new Error("Remove failed");
 
     // Remove from sidebar without full reload
@@ -1056,6 +1072,134 @@ function toast(msg, type = "info") {
   if (page) page.appendChild(el);
   _toastTimer = setTimeout(() => el.remove(), 3200);
 }
+  // ═══════════════════════════════════════════
+  // REALTIME SYNC (GOD MODE)
+  // ═══════════════════════════════════════════
+  let socket;
+
+  function initRealtime() {
+    try {
+      socket = io();
+
+      socket.on("connect", () => {
+        console.log("⚡ Realtime connected");
+      });
+
+      socket.on("bundle:update", (data) => {
+        if (!STATE.bundle) return;
+        if (String(data.bundleId) !== String(STATE.bundle._id)) return;
+
+        // Refetch latest bundle state
+        fetch("/workspace/bundle/" + STATE.bundle._id)
+          .then(res => res.json())
+          .then(d => {
+            if (d.bundle) {
+              STATE.bundle = d.bundle;
+              renderExecPanel(d.bundle);
+              renderMemoryPanel(d.bundle);
+              renderInsightPanel(d.bundle);
+            }
+          });
+      });
+
+    } catch (e) {
+      console.warn("Realtime init failed");
+    }
+  }
+
+  // call it
+  initRealtime();
+  // ═══════════════════════════════════════════
+  // AUTO REFRESH FALLBACK
+  // ═══════════════════════════════════════════
+  setInterval(async () => {
+    if (!STATE.bundle || STATE.loading) return;
+
+    try {
+      const res = await fetch("/workspace/bundle/" + STATE.bundle._id);
+      const data = await res.json();
+
+      if (data.bundle) {
+        STATE.bundle = data.bundle;
+        renderExecPanel(data.bundle);
+      }
+    } catch {}
+  }, 8000);
+  // ═══════════════════════════════════════════
+  // COMMAND PALETTE (CTRL + K)
+  // ═══════════════════════════════════════════
+  document.addEventListener("keydown", (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      e.preventDefault();
+      openCommandPalette();
+    }
+  });
+
+  function openCommandPalette() {
+    const cmd = prompt(
+  `⚡ COMMANDS:
+  1. run
+  2. pause
+  3. resume
+  4. delete
+
+  Type command:`);
+
+    if (!cmd) return;
+
+    const b = STATE.bundle;
+    if (!b) return;
+
+    if (cmd === "run") runCurrentBundle();
+    if (cmd === "pause") pauseCurrentBundle();
+    if (cmd === "resume") resumeCurrentBundle();
+    if (cmd === "delete") deleteCurrentBundle();
+  }
+  // ═══════════════════════════════════════════
+  // AUTO STEP EXECUTION
+  // ═══════════════════════════════════════════
+  async function autoRunSteps() {
+    const b = STATE.bundle;
+    if (!b || !b.steps) return;
+
+    for (let i = 0; i < b.steps.length; i++) {
+
+      const latest = STATE.bundle; // always fresh state
+      const progress = Array.isArray(latest.progress) ? latest.progress : [];
+      const prog = progress.find(p => p && p.step === i);
+
+      if (prog && prog.status === "completed") continue;
+
+      await markStepDone(i);
+
+      // small delay so UI updates smoothly
+      await new Promise(r => setTimeout(r, 800));
+    }
+
+    toast("✅ All steps completed", "success");
+  }
+  
+ 
+  document.getElementById("copilot").onclick = async () => {
+    const input = prompt("Ask AI about this bundle:");
+
+    if (!input) return;
+
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({
+        message: input,
+        history: [],
+      })
+    });
+
+    const data = await res.json();
+    alert(data.reply);
+  };
+  
 </script>
+  
+ 
 </body>
 </html>

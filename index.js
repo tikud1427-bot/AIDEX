@@ -1019,7 +1019,7 @@ app.delete("/bundle/:id", requireLogin, async (req, res) => {
 });
 
 // REMOVE TOOL FROM WORKSPACE (SAFE ADD)
-app.delete("/tool/:id", requireLogin, async (req, res) => {
+app.delete("/workspace/tool/:id", requireLogin, async (req, res) => {
   try {
     await Workspace.updateOne(
       { userId: req.session.userId },
@@ -1093,6 +1093,41 @@ app.post("/submit", upload.single("logo"), async (req, res) => {
 
 app.get("/about", (req, res) => res.render("about"));
 
+const { runBundle } = require("./services/execution.service");
+
+app.post("/bundle/:id/run", requireLogin, async (req, res) => {
+  try {
+    const bundle = await runBundle(req.params.id, generateAI);
+    res.json({ success: true, bundle });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+const { executeCommand } = require("./services/command.service");
+
+app.post("/command", requireLogin, (req, res) => {
+  const { command, payload } = req.body;
+  const result = executeCommand(command, payload);
+  res.json(result);
+});
+//
+// RUN SINGLE STEP
+app.post("/bundle/:id/step/:step", requireLogin, async (req, res) => {
+  try {
+    const { completeStep } = require("./services/workspace.service");
+
+    const result = await completeStep(
+      req.session.userId,
+      req.params.id,
+      parseInt(req.params.step)
+    );
+
+    res.json(result);
+  } catch (err) {
+    console.error("Step error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
 // ================= MULTI-GENERATE =================
 app.post("/multi-generate", async (req, res) => {
   const { prompt, messages, aiType } = req.body;
@@ -1767,9 +1802,25 @@ async function startServer() {
   await importTools();
 
   const PORT = process.env.PORT || 5000;
-  app.listen(PORT, "0.0.0.0", () => {
+  const http = require("http");
+  const server = http.createServer(app);
+
+  const io = require("socket.io")(server, {
+    cors: { origin: "*" }
+  });
+  app.set("io", io);
+
+  io.on("connection", (socket) => {
+    console.log("⚡ client connected");
+
+    socket.on("bundle:run", (bundleId) => {
+      socket.broadcast.emit("bundle:update", { bundleId });
+    });
+  });
+
+  server.listen(PORT, "0.0.0.0", () => {
     console.log(`🚀 Aqua AI running on port ${PORT}`);
   });
-}
+  } // ← THIS WAS MISSING
 
-startServer();
+  startServer();
