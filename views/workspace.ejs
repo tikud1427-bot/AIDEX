@@ -11,332 +11,175 @@
 
 <style>
 /* ═══════════════════════════════════════════════════════
-   ACCORDION FIX — core rules that override workspace.css
-   The body element uses CSS transitions on max-height.
-   overflow must be HIDDEN during both open AND close.
-   We use data-state="open|closed" as source of truth.
+   ACCORDION — max-height transition engine
 ═══════════════════════════════════════════════════════ */
 .aq-step-body {
   max-height: 0;
   overflow: hidden;
-  /* Smooth, natural easing for expand/collapse */
   transition: max-height 0.32s cubic-bezier(0.4, 0, 0.2, 1);
   will-change: max-height;
 }
+.aq-step-body[data-state="open"]    { overflow: hidden; }
+.aq-step-body[data-state="settled"] { max-height: none !important; overflow: visible; }
 
-/* When a body is "expanding" we set a px value and keep overflow hidden */
-.aq-step-body[data-state="open"] {
-  /* max-height is set inline via JS scrollHeight */
-  overflow: hidden;
-}
+/* Spinner */
+@keyframes aq-spin { to { transform: rotate(360deg); } }
+.aq-mini-spinner, .aq-spinner { animation: aq-spin 0.75s linear infinite; }
 
-/* After transition ends, if still open, let content breathe */
-.aq-step-body[data-state="settled"] {
-  max-height: none !important;
-  overflow: visible;
-}
-
-/* Spinner micro-animation */
-@keyframes aq-spin {
-  to { transform: rotate(360deg); }
-}
-.aq-mini-spinner,
-.aq-spinner {
-  animation: aq-spin 0.75s linear infinite;
-}
-
-/* Feed item entrance */
+/* Feed entrance */
 @keyframes feedIn {
   from { opacity: 0; transform: translateY(-6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.aq-feed-item-new.visible {
-  animation: feedIn 0.24s ease forwards;
-}
+.aq-feed-item-new.visible { animation: feedIn 0.24s ease forwards; }
 
-/* Right section fade */
-.aq-right-section {
-  transition: opacity 0.18s ease;
-}
+.aq-right-section { transition: opacity 0.18s ease; }
+.aq-loading-bar   { transition: opacity 0.2s ease; }
 
-/* Loading bar */
-.aq-loading-bar { transition: opacity 0.2s ease; }
-
-/* ═══ SITE BUILDER STYLES ═══════════════════════════════════════════════════ */
+/* ═══ SITE BUILDER ═══════════════════════════════════════ */
 .aq-site-list-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px 6px;
-  border-bottom: 1px solid #1e293b;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px 6px; border-bottom: 1px solid #1e293b;
 }
 .aq-site-list-title { font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em; color: #64748b; text-transform: uppercase; }
 
-/* Sidebar site item rows */
 .aq-site-item {
-  padding: 10px 14px;
-  border-bottom: 1px solid #0f172a;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  transition: background 0.15s;
+  padding: 10px 14px; border-bottom: 1px solid #0f172a; cursor: pointer;
+  display: flex; align-items: center; gap: 10px; transition: background 0.15s;
 }
-.aq-site-item:hover { background: #0f172a; }
+.aq-site-item:hover  { background: #0f172a; }
 .aq-site-item.active { background: #1e293b; }
-.aq-site-item-icon { font-size: 1rem; flex-shrink: 0; }
-.aq-site-item-info { flex: 1; min-width: 0; }
-.aq-site-item-name { font-size: 0.78rem; font-weight: 600; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.aq-site-item-meta { font-size: 0.62rem; color: #475569; margin-top: 2px; }
-.aq-site-item-del { background: none; border: none; color: #475569; cursor: pointer; padding: 4px; font-size: 0.8rem; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; }
+.aq-site-item-icon   { font-size: 1rem; flex-shrink: 0; }
+.aq-site-item-info   { flex: 1; min-width: 0; }
+.aq-site-item-name   { font-size: 0.78rem; font-weight: 600; color: #e2e8f0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aq-site-item-meta   { font-size: 0.62rem; color: #475569; margin-top: 2px; }
+.aq-site-item-del    { background: none; border: none; color: #475569; cursor: pointer; padding: 4px; font-size: 0.8rem; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; }
 .aq-site-item:hover .aq-site-item-del { opacity: 1; }
 .aq-site-item-del:hover { color: #f87171; }
 
-/* Site Builder Panel */
-.aq-site-builder {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  overflow: hidden;
-  background: #020617;
-}
-.aq-sb-header {
-  padding: 16px 20px 14px;
-  border-bottom: 1px solid #1e293b;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.aq-sb-title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-.aq-sb-title {
-  font-size: 1rem;
-  font-weight: 700;
-  color: #f1f5f9;
-  letter-spacing: -0.01em;
-}
-.aq-sb-subtitle {
-  font-size: 0.7rem;
-  color: #475569;
-  margin-top: 2px;
-  font-family: 'IBM Plex Mono', monospace;
-}
-.aq-sb-generate-bar,
-.aq-sb-edit-bar {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.aq-sb-input {
-  flex: 1;
-  padding: 10px 14px;
-  background: #0f172a;
-  border: 1px solid #1e293b;
-  border-radius: 8px;
-  color: #f1f5f9;
-  font-size: 0.84rem;
-  outline: none;
-  transition: border-color 0.2s;
-  font-family: inherit;
-}
-.aq-sb-input:focus { border-color: #38bdf8; }
-.aq-sb-input::placeholder { color: #334155; }
-.aq-sb-file-select {
-  padding: 9px 10px;
-  background: #0f172a;
-  border: 1px solid #1e293b;
-  border-radius: 8px;
-  color: #94a3b8;
-  font-size: 0.75rem;
-  outline: none;
-  cursor: pointer;
-  font-family: 'IBM Plex Mono', monospace;
-  min-width: 100px;
-}
-.aq-btn-run {
-  background: linear-gradient(135deg, #0ea5e9, #6366f1);
-  color: #fff;
-  border: none;
-  white-space: nowrap;
-}
-.aq-btn-run:hover { opacity: 0.88; }
-.aq-btn-run:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Builder shell */
+.aq-site-builder { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: #020617; }
 
-/* Body: file tree + preview */
-.aq-sb-body {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-  min-height: 0;
+.aq-sb-header {
+  padding: 16px 20px 14px; border-bottom: 1px solid #1e293b;
+  flex-shrink: 0; display: flex; flex-direction: column; gap: 10px;
 }
-.aq-sb-filetree {
-  width: 180px;
-  flex-shrink: 0;
-  border-right: 1px solid #1e293b;
-  overflow-y: auto;
-  background: #050e1a;
+.aq-sb-title-row  { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.aq-sb-title      { font-size: 1rem; font-weight: 700; color: #f1f5f9; letter-spacing: -0.01em; }
+.aq-sb-subtitle   { font-size: 0.7rem; color: #475569; margin-top: 2px; font-family: 'IBM Plex Mono', monospace; }
+
+/* Suggestion chips */
+.aq-sb-suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 0 2px; }
+.aq-sb-chip {
+  padding: 5px 12px; border-radius: 20px; font-size: 0.7rem; font-weight: 600; cursor: pointer;
+  background: #0f172a; border: 1px solid #1e293b; color: #94a3b8;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  font-family: inherit; white-space: nowrap;
 }
+.aq-sb-chip:hover { border-color: #38bdf8; color: #38bdf8; background: rgba(56,189,248,0.06); }
+
+.aq-sb-generate-bar,
+.aq-sb-edit-bar { display: flex; gap: 8px; align-items: center; }
+
+.aq-sb-input {
+  flex: 1; padding: 10px 14px; background: #0f172a; border: 1px solid #1e293b;
+  border-radius: 8px; color: #f1f5f9; font-size: 0.84rem; outline: none;
+  transition: border-color 0.2s; font-family: inherit;
+}
+.aq-sb-input:focus        { border-color: #38bdf8; }
+.aq-sb-input::placeholder { color: #334155; }
+
+.aq-sb-file-select {
+  padding: 9px 10px; background: #0f172a; border: 1px solid #1e293b;
+  border-radius: 8px; color: #94a3b8; font-size: 0.75rem; outline: none; cursor: pointer;
+  font-family: 'IBM Plex Mono', monospace; min-width: 100px;
+}
+
+.aq-btn-run { background: linear-gradient(135deg, #0ea5e9, #6366f1); color: #fff; border: none; white-space: nowrap; }
+.aq-btn-run:hover     { opacity: 0.88; }
+.aq-btn-run:disabled  { opacity: 0.5; cursor: not-allowed; }
+
+/* Builder body */
+.aq-sb-body { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+
+.aq-sb-filetree { width: 180px; flex-shrink: 0; border-right: 1px solid #1e293b; overflow-y: auto; background: #050e1a; }
 .aq-sb-filetree-header {
-  padding: 8px 12px;
-  font-size: 0.62rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #334155;
-  border-bottom: 1px solid #1e293b;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
+  padding: 8px 12px; font-size: 0.62rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.1em; color: #334155; border-bottom: 1px solid #1e293b;
+  display: flex; justify-content: space-between; align-items: center;
 }
 .aq-sb-file-item {
-  padding: 8px 12px;
-  font-size: 0.75rem;
-  font-family: 'IBM Plex Mono', monospace;
-  color: #94a3b8;
-  cursor: pointer;
-  border-bottom: 1px solid #0a1628;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: background 0.12s, color 0.12s;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding: 8px 12px; font-size: 0.75rem; font-family: 'IBM Plex Mono', monospace;
+  color: #94a3b8; cursor: pointer; border-bottom: 1px solid #0a1628;
+  display: flex; align-items: center; gap: 6px; transition: background 0.12s, color 0.12s;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.aq-sb-file-item:hover { background: #0f172a; color: #e2e8f0; }
+.aq-sb-file-item:hover  { background: #0f172a; color: #e2e8f0; }
 .aq-sb-file-item.active { background: #1e293b; color: #38bdf8; }
 .aq-sb-file-icon { font-size: 0.8rem; flex-shrink: 0; }
 
 /* Preview panel */
-.aq-sb-preview-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  overflow: hidden;
-}
+.aq-sb-preview-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 .aq-sb-preview-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 14px;
-  background: #0a1628;
-  border-bottom: 1px solid #1e293b;
-  flex-shrink: 0;
+  display: flex; align-items: center; gap: 10px; padding: 8px 14px;
+  background: #0a1628; border-bottom: 1px solid #1e293b; flex-shrink: 0;
 }
-.aq-sb-preview-dots {
-  display: flex;
-  gap: 5px;
-}
-.aq-sb-preview-dots span {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-}
-.aq-sb-preview-url {
-  flex: 1;
-  font-size: 0.72rem;
-  font-family: 'IBM Plex Mono', monospace;
-  color: #475569;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.aq-sb-iframe-wrap {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-}
-.aq-sb-iframe {
-  width: 100%;
-  height: 100%;
-  border: none;
-  background: #fff;
-}
+.aq-sb-preview-dots { display: flex; gap: 5px; }
+.aq-sb-preview-dots span { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.aq-sb-preview-url { flex: 1; font-size: 0.72rem; font-family: 'IBM Plex Mono', monospace; color: #475569; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.aq-sb-iframe-wrap { flex: 1; position: relative; overflow: hidden; }
+.aq-sb-iframe      { width: 100%; height: 100%; border: none; background: #fff; }
 .aq-sb-preview-loading {
-  position: absolute;
-  inset: 0;
-  background: rgba(2,6,23,0.92);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  font-size: 0.85rem;
-  color: #94a3b8;
+  position: absolute; inset: 0; background: rgba(2,6,23,0.92);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px; font-size: 0.85rem; color: #94a3b8;
 }
 
 /* Empty state */
 .aq-sb-empty {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 24px;
-  text-align: center;
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 40px 24px; text-align: center; position: relative;
 }
-.aq-sb-empty-icon {
-  font-size: 2.5rem;
-  margin-bottom: 12px;
-  opacity: 0.5;
-}
-.aq-sb-empty-title {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: #e2e8f0;
-  margin-bottom: 8px;
-}
-.aq-sb-empty-sub {
-  font-size: 0.82rem;
-  color: #475569;
-  max-width: 360px;
-  line-height: 1.5;
-  margin-bottom: 22px;
-}
-.aq-sb-empty-examples {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: center;
-}
+.aq-sb-empty-icon  { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.5; }
+.aq-sb-empty-title { font-size: 1.1rem; font-weight: 700; color: #e2e8f0; margin-bottom: 8px; }
+.aq-sb-empty-sub   { font-size: 0.82rem; color: #475569; max-width: 360px; line-height: 1.5; margin-bottom: 22px; }
+.aq-sb-empty-examples { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
 .aq-sb-empty-examples span {
-  padding: 6px 14px;
-  background: #0f172a;
-  border: 1px solid #1e293b;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  color: #94a3b8;
-  cursor: pointer;
+  padding: 6px 14px; background: #0f172a; border: 1px solid #1e293b;
+  border-radius: 20px; font-size: 0.75rem; color: #94a3b8; cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
-.aq-sb-empty-examples span:hover {
-  border-color: #38bdf8;
-  color: #38bdf8;
+.aq-sb-empty-examples span:hover { border-color: #38bdf8; color: #38bdf8; }
+
+/* Retry button — floats top-right of empty state */
+.aq-sb-retry-btn {
+  display: none; /* shown via JS after first failed attempt */
+  position: absolute; top: 16px; right: 16px;
+  background: #0f172a; border: 1px solid #1e293b; color: #94a3b8;
+  border-radius: 6px; padding: 6px 12px; font-size: 0.72rem; cursor: pointer;
+  font-family: inherit; transition: border-color 0.15s, color 0.15s;
 }
+.aq-sb-retry-btn:hover { border-color: #38bdf8; color: #38bdf8; }
+.aq-sb-retry-btn.visible { display: block; }
 
-/* Generating overlay spinner animation (reuse aq-spin) */
-@keyframes aq-spin { to { transform: rotate(360deg); } }
-
+/* Intent badge — shown briefly inside generate bar after detection */
+.aq-sb-intent-badge {
+  display: none; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 12px; font-size: 0.68rem; font-weight: 600;
+  background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.2); color: #38bdf8;
+  font-family: 'IBM Plex Mono', monospace; white-space: nowrap; flex-shrink: 0;
+}
+.aq-sb-intent-badge.visible { display: flex; }
 </style>
 </head>
 <body>
 
 <%- include('partials/nav') %>
 
-<!-- Top loading bar (thin progress indicator) -->
 <div class="aq-loading-bar" id="aqLoadingBar"></div>
-
-<!-- Toast root -->
 <div id="aq-toast-root"></div>
 
-<!-- ═══════════ STEP RUN MODAL ═══════════ -->
+<!-- ═══════════════ STEP RUN MODAL ═══════════════ -->
 <div class="aq-modal-backdrop" id="aqRunModal">
   <div class="aq-modal">
     <div class="aq-modal-hdr">
@@ -359,7 +202,7 @@
   </div>
 </div>
 
-<!-- ═══════════ COMMAND PALETTE ═══════════ -->
+<!-- ═══════════════ COMMAND PALETTE ═══════════════ -->
 <div class="aq-palette-backdrop" id="aqPalette" onclick="closePalette(event)">
   <div class="aq-palette">
     <input class="aq-palette-input" id="aqPaletteInput" placeholder="Type a command…"
@@ -368,7 +211,7 @@
   </div>
 </div>
 
-<!-- ═══════════ CONFIRM MODAL ═══════════ -->
+<!-- ═══════════════ CONFIRM MODAL ═══════════════ -->
 <div class="aq-confirm-backdrop" id="aqConfirm">
   <div class="aq-confirm-box">
     <div class="aq-confirm-title" id="aqConfirmTitle">Are you sure?</div>
@@ -385,7 +228,7 @@
 
 <div class="aq-workspace">
 
-  <!-- ═══════════ TOPBAR ═══════════ -->
+  <!-- ═══════════════ TOPBAR ═══════════════ -->
   <div class="aq-topbar">
     <button class="aq-menu-btn" id="menuBtn" onclick="openSidebar()" aria-label="Open menu">☰</button>
     <div class="aq-logo">AQUI<span class="aq-logo-sep">PLEX</span></div>
@@ -404,7 +247,7 @@
     </div>
   </div>
 
-  <!-- ═══════════ BODY ═══════════ -->
+  <!-- ═══════════════ BODY ═══════════════ -->
   <div class="aq-body">
 
     <!-- LEFT SIDEBAR -->
@@ -471,10 +314,8 @@
                  class="aq-tool-logo" alt="<%= tool.name %>"/>
             <span class="aq-tool-name"><%= tool.name %></span>
             <div class="aq-tool-btns">
-              <!-- FIX: use tool.url safely -->
               <button class="aq-tool-btn"
                 onclick="launchTool('<%= (tool.url || '').replace(/'/g, "\\'") %>')">OPEN</button>
-              <!-- FIX: route is /workspace/tools/:id — matches DELETE handler -->
               <button class="aq-tool-btn rm"
                 onclick="removeTool('<%= tool._id %>')">RM</button>
             </div>
@@ -488,17 +329,19 @@
           </div>
         <% } %>
       </div>
+
       <!-- SITES LIST -->
       <div class="aq-sidebar-list" id="leftSiteList" style="display:none;">
         <div class="aq-site-list-header">
           <span class="aq-site-list-title">AI Site Projects</span>
-          <button class="aq-btn aq-btn-sm" onclick="openSiteBuilder()" style="font-size:0.65rem;padding:4px 10px;">+ NEW</button>
+          <button class="aq-btn aq-btn-sm" onclick="openSiteBuilder()"
+                  style="font-size:0.65rem;padding:4px 10px;">+ NEW</button>
         </div>
         <div id="sidebarSiteItems">
           <div class="aq-empty" style="margin-top:8px;">
-            <span class="aq-empty-icon">&#127760;</span>
+            <span class="aq-empty-icon">🌐</span>
             No sites yet.<br/>
-            <button onclick="openSiteBuilder()" style="background:none;border:none;color:#38bdf8;cursor:pointer;font-size:0.8rem;margin-top:6px;">Build one &#8594;</button>
+            <button onclick="openSiteBuilder()" style="background:none;border:none;color:#38bdf8;cursor:pointer;font-size:0.8rem;margin-top:6px;">Build one →</button>
           </div>
         </div>
       </div>
@@ -507,36 +350,54 @@
     <!-- MAIN -->
     <div class="aq-main">
 
-      <!-- SITE BUILDER PANEL -->
+      <!-- ═══ SITE BUILDER PANEL ═══ -->
       <div class="aq-site-builder" id="wsSiteBuilder" style="display:none;">
+
         <div class="aq-sb-header">
           <div class="aq-sb-title-row">
             <div>
-              <div class="aq-sb-title">&#127760; AI Site Builder</div>
+              <div class="aq-sb-title">🌐 AI Site Builder</div>
               <div class="aq-sb-subtitle" id="sbProjectName">No project loaded</div>
             </div>
             <div class="aq-sb-actions">
-              <button class="aq-btn aq-btn-sm" onclick="closeSiteBuilder()" title="Back to bundles">&#10005; CLOSE</button>
+              <button class="aq-btn aq-btn-sm" onclick="closeSiteBuilder()" title="Back to bundles">✕ CLOSE</button>
             </div>
           </div>
+
+          <!-- Suggestion chips — map directly to intent_service intents -->
+          <div class="aq-sb-suggestions" id="sbSuggestions">
+            <button class="aq-sb-chip" onclick="setSbPromptAndFocus('Build a scientific calculator')">🔬 Calculator</button>
+            <button class="aq-sb-chip" onclick="setSbPromptAndFocus('Create a developer portfolio website')">💼 Portfolio</button>
+            <button class="aq-sb-chip" onclick="setSbPromptAndFocus('Make a SaaS landing page for a project management tool')">🚀 Landing Page</button>
+            <button class="aq-sb-chip" onclick="setSbPromptAndFocus('Build a blog homepage with featured posts')">📝 Blog</button>
+            <button class="aq-sb-chip" onclick="setSbPromptAndFocus('Create a contact form with validation')">📬 Contact Form</button>
+            <button class="aq-sb-chip" onclick="setSbPromptAndFocus('Build an analytics dashboard with charts')">📊 Dashboard</button>
+          </div>
+
+          <!-- Generate bar (new project) -->
           <div class="aq-sb-generate-bar" id="sbGenerateBar">
             <input class="aq-sb-input" id="sbPromptInput"
-                   placeholder="Describe the website you want to build&#8230; e.g. &#39;A portfolio for a UX designer&#39;"
-                   onkeydown="if(event.key===&#39;Enter&#39;)generateSite()"/>
+                   placeholder="Describe the website you want to build… e.g. 'A portfolio for a UX designer'"
+                   onkeydown="if(event.key==='Enter')generateSite()"/>
+            <span class="aq-sb-intent-badge" id="sbIntentBadge"></span>
             <button class="aq-btn aq-btn-run" id="sbGenerateBtn" onclick="generateSite()">
-              <span id="sbGenerateBtnText">&#9889; BUILD SITE</span>
+              <span id="sbGenerateBtnText">⚡ BUILD SITE</span>
             </button>
           </div>
+
+          <!-- Edit bar (existing project) -->
           <div class="aq-sb-edit-bar" id="sbEditBar" style="display:none;">
             <input class="aq-sb-input" id="sbCommandInput"
-                   placeholder="Command: &#39;Change background to black&#39;, &#39;Add a contact form&#39;&#8230;"
-                   onkeydown="if(event.key===&#39;Enter&#39;)editSite()"/>
+                   placeholder="Command: 'Change background to black', 'Add a contact form'…"
+                   onkeydown="if(event.key==='Enter')editSite()"/>
             <select class="aq-sb-file-select" id="sbFileSelect" title="File to edit"></select>
             <button class="aq-btn aq-btn-sm" id="sbEditBtn" onclick="editSite()">
-              <span id="sbEditBtnText">&#9998; EDIT</span>
+              <span id="sbEditBtnText">✎ EDIT</span>
             </button>
           </div>
         </div>
+
+        <!-- File tree + Preview -->
         <div class="aq-sb-body" id="sbBody" style="display:none;">
           <div class="aq-sb-filetree">
             <div class="aq-sb-filetree-header">
@@ -553,28 +414,38 @@
                 <span style="background:#28c940;"></span>
               </div>
               <div class="aq-sb-preview-url" id="sbPreviewUrl"></div>
-              <button class="aq-btn aq-btn-sm" onclick="refreshPreview()" title="Reload preview" style="padding:3px 9px;font-size:0.65rem;">&#8635;</button>
+              <button class="aq-btn aq-btn-sm" onclick="refreshPreview()"
+                      title="Reload preview" style="padding:3px 9px;font-size:0.65rem;">⟳</button>
             </div>
             <div class="aq-sb-iframe-wrap">
-              <iframe id="sbPreviewFrame" class="aq-sb-iframe" sandbox="allow-scripts allow-same-origin" title="Site Preview"></iframe>
+              <iframe id="sbPreviewFrame" class="aq-sb-iframe"
+                      sandbox="allow-scripts allow-same-origin" title="Site Preview"></iframe>
               <div class="aq-sb-preview-loading" id="sbPreviewLoading" style="display:none;">
                 <div class="aq-spinner"></div>
-                <span>Generating site&#8230;</span>
+                <span id="sbLoadingMsg">Generating site…</span>
               </div>
             </div>
           </div>
         </div>
+
+        <!-- Empty state (shown by default) -->
         <div class="aq-sb-empty" id="sbEmpty">
-          <div class="aq-sb-empty-icon">&#127760;</div>
+          <!-- Retry button: hidden until a generation attempt has been made -->
+          <button class="aq-sb-retry-btn" id="sbRetryBtn" onclick="retrySiteGeneration()">↺ Retry</button>
+
+          <div class="aq-sb-empty-icon">🌐</div>
           <div class="aq-sb-empty-title">AI Website Execution Engine</div>
-          <div class="aq-sb-empty-sub">Describe a website above and Aqua AI will generate, write, and run it live.</div>
+          <div class="aq-sb-empty-sub">Describe a website above and Aqua AI will generate, write, and run it live — no external dependencies.</div>
           <div class="aq-sb-empty-examples">
-            <span onclick="setSbPrompt(&#39;A stunning portfolio for a UI/UX designer&#39;)">&#10022; UI/UX Portfolio</span>
-            <span onclick="setSbPrompt(&#39;A SaaS landing page for an AI writing tool&#39;)">&#10022; SaaS Landing Page</span>
-            <span onclick="setSbPrompt(&#39;A minimal blog for a travel photographer&#39;)">&#10022; Travel Blog</span>
-            <span onclick="setSbPrompt(&#39;A dark-themed personal resume website&#39;)">&#10022; Resume Site</span>
+            <span onclick="setSbPromptAndFocus('A stunning portfolio for a UI/UX designer')">✦ UI/UX Portfolio</span>
+            <span onclick="setSbPromptAndFocus('A SaaS landing page for an AI writing tool')">✦ SaaS Landing Page</span>
+            <span onclick="setSbPromptAndFocus('A minimal blog for a travel photographer')">✦ Travel Blog</span>
+            <span onclick="setSbPromptAndFocus('A dark-themed personal resume website')">✦ Resume Site</span>
+            <span onclick="setSbPromptAndFocus('A scientific calculator with history')">✦ Calculator</span>
+            <span onclick="setSbPromptAndFocus('An analytics dashboard with charts')">✦ Dashboard</span>
           </div>
         </div>
+
       </div><!-- /wsSiteBuilder -->
 
       <!-- WELCOME STATE -->
@@ -613,7 +484,6 @@
       <!-- EXEC VIEW -->
       <div class="aq-exec" id="wsExec" style="display:none;">
 
-        <!-- Header -->
         <div class="aq-exec-hdr">
           <div class="aq-exec-hdr-top">
             <div style="flex:1;min-width:0;">
@@ -630,47 +500,26 @@
             </div>
           </div>
 
-          <!-- Stats row -->
           <div class="aq-stats-row">
-            <div class="aq-stat">
-              <div class="aq-stat-val c-accent"  id="statSteps">—</div>
-              <div class="aq-stat-lbl">Steps</div>
-            </div>
-            <div class="aq-stat">
-              <div class="aq-stat-val c-green"   id="statDone">—</div>
-              <div class="aq-stat-lbl">Done</div>
-            </div>
-            <div class="aq-stat">
-              <div class="aq-stat-val"            id="statPct">—</div>
-              <div class="aq-stat-lbl">Pct</div>
-            </div>
-            <div class="aq-stat">
-              <div class="aq-stat-val c-amber"   id="statStatus">—</div>
-              <div class="aq-stat-lbl">Status</div>
-            </div>
-            <div class="aq-stat">
-              <div class="aq-stat-val c-purple"  id="statConfidence">—</div>
-              <div class="aq-stat-lbl">Conf</div>
-            </div>
+            <div class="aq-stat"><div class="aq-stat-val c-accent"  id="statSteps">—</div><div class="aq-stat-lbl">Steps</div></div>
+            <div class="aq-stat"><div class="aq-stat-val c-green"   id="statDone">—</div><div class="aq-stat-lbl">Done</div></div>
+            <div class="aq-stat"><div class="aq-stat-val"            id="statPct">—</div><div class="aq-stat-lbl">Pct</div></div>
+            <div class="aq-stat"><div class="aq-stat-val c-amber"   id="statStatus">—</div><div class="aq-stat-lbl">Status</div></div>
+            <div class="aq-stat"><div class="aq-stat-val c-purple"  id="statConfidence">—</div><div class="aq-stat-lbl">Conf</div></div>
           </div>
 
-          <!-- Animated progress bar -->
           <div class="aq-progress-track">
             <div class="aq-progress-fill" id="mainProgressFill" style="width:0%"></div>
             <div class="aq-progress-glow" id="mainProgressGlow" style="left:0%"></div>
           </div>
         </div>
 
-        <!-- Content grid -->
         <div class="aq-exec-content">
-
-          <!-- Steps panel -->
           <div class="aq-steps-panel">
-            <div class="aq-timeline" id="execTimeline"></div>
+            <div class="aq-timeline"    id="execTimeline"></div>
             <div class="aq-steps-scroll" id="execSteps"></div>
           </div>
 
-          <!-- Right panel -->
           <div class="aq-right-panel">
             <div class="aq-right-tabs">
               <button class="aq-right-tab active" data-tab="outputs"  onclick="switchRightTab('outputs',  this)">OUTPUTS</button>
@@ -678,13 +527,9 @@
               <button class="aq-right-tab"         data-tab="insights" onclick="switchRightTab('insights', this)">INSIGHTS</button>
             </div>
             <div class="aq-right-body">
-
               <div class="aq-right-section active" id="rtab-outputs">
-                <div id="outputFeed">
-                  <div class="aq-empty">Run a bundle step to see outputs.</div>
-                </div>
+                <div id="outputFeed"><div class="aq-empty">Run a bundle step to see outputs.</div></div>
               </div>
-
               <div class="aq-right-section" id="rtab-memory">
                 <div class="aq-mem-hdr">Bundle Memory <span id="memBundleCount">0 keys</span></div>
                 <div id="memBundleEntries"></div>
@@ -694,40 +539,30 @@
                 <div class="aq-mem-hdr" style="margin-top:14px;">Workspace Memory <span id="memWsCount">0 keys</span></div>
                 <div id="memWsEntries"></div>
               </div>
-
               <div class="aq-right-section" id="rtab-insights">
-                <div id="insightList">
-                  <div class="aq-empty">Insights from step outputs appear here.</div>
-                </div>
+                <div id="insightList"><div class="aq-empty">Insights from step outputs appear here.</div></div>
               </div>
-
             </div>
           </div>
-
         </div>
       </div><!-- /wsExec -->
 
     </div><!-- /aq-main -->
-
   </div><!-- /aq-body -->
 
   <!-- MOBILE BOTTOM NAV -->
   <div class="aq-bottom-nav">
     <button class="aq-bottom-tab active" id="mnavBundles" onclick="mobileNav('bundles')">
-      <span class="icon">📦</span>
-      <span>Bundles</span>
+      <span class="icon">📦</span><span>Bundles</span>
     </button>
     <button class="aq-bottom-tab" id="mnavSteps" onclick="mobileNav('steps')">
-      <span class="icon">⚡</span>
-      <span>Steps</span>
+      <span class="icon">⚡</span><span>Steps</span>
     </button>
     <button class="aq-bottom-tab" id="mnavOutputs" onclick="mobileNav('outputs')">
-      <span class="icon">📤</span>
-      <span>Outputs</span>
+      <span class="icon">📤</span><span>Outputs</span>
     </button>
     <button class="aq-bottom-tab" id="mnavCmd" onclick="openPalette()">
-      <span class="icon">⌘</span>
-      <span>Commands</span>
+      <span class="icon">⌘</span><span>Commands</span>
     </button>
   </div>
 
@@ -740,63 +575,56 @@
 
 /* ═══════════════════════════════════════════════════════
    GLOBAL STATE
-   Single source of truth for all UI and data.
 ═══════════════════════════════════════════════════════ */
 const STATE = {
-  bundle:       null,   // current loaded bundle object
-  wsMemory:     {},     // workspace-level memory (flat object)
-  pinnedIds:    [],     // array of pinned bundle id strings
-  selectedStep: null,   // currently focused step index
-  openSteps:    new Set(), // set of step indices that are open
-  loading:      false,  // global loading flag
-  lastBundleId: null,   // for retry logic
-  stepRunning:  new Set(), // set of step indices actively running
-  // FIX: track all known bundles (SSR + dynamically fetched)
+  bundle:       null,
+  wsMemory:     {},
+  pinnedIds:    [],
+  selectedStep: null,
+  openSteps:    new Set(),
+  loading:      false,
+  lastBundleId: null,
+  stepRunning:  new Set(),
   allBundles:   [],
 };
 
-// Inject SSR bundle list — kept in sync with dynamic fetches
 const _ejsBundles = <%- JSON.stringify(bundles || []) %>;
 STATE.allBundles = _ejsBundles.slice();
 
 /* ═══════════════════════════════════════════════════════
    LOADING / ERROR UI
 ═══════════════════════════════════════════════════════ */
-function showLoading()  {
-  document.getElementById("aqLoadingBar").classList.add("visible");
-  STATE.loading = true;
-}
-function hideLoading()  {
-  document.getElementById("aqLoadingBar").classList.remove("visible");
-  STATE.loading = false;
-}
+function showLoading()  { document.getElementById("aqLoadingBar").classList.add("visible");    STATE.loading = true; }
+function hideLoading()  { document.getElementById("aqLoadingBar").classList.remove("visible"); STATE.loading = false; }
 
 function showBundleLoading() {
-  document.getElementById("wsWelcome").style.display = "none";
-  document.getElementById("wsLoading").style.display = "flex";
-  document.getElementById("wsExec").style.display    = "none";
-  document.getElementById("wsError").style.display   = "none";
+  document.getElementById("wsWelcome").style.display     = "none";
+  document.getElementById("wsLoading").style.display     = "flex";
+  document.getElementById("wsExec").style.display        = "none";
+  document.getElementById("wsError").style.display       = "none";
+  document.getElementById("wsSiteBuilder").style.display = "none";
 }
 function showBundleError(msg) {
-  document.getElementById("wsLoading").style.display = "none";
-  document.getElementById("wsError").style.display   = "flex";
-  document.getElementById("wsErrorMsg").textContent  = msg || "Failed to load bundle.";
+  document.getElementById("wsLoading").style.display  = "none";
+  document.getElementById("wsError").style.display    = "flex";
+  document.getElementById("wsErrorMsg").textContent   = msg || "Failed to load bundle.";
 }
 function showBundleExec() {
-  document.getElementById("wsLoading").style.display = "none";
-  document.getElementById("wsError").style.display   = "none";
-  document.getElementById("wsWelcome").style.display = "none";
-  document.getElementById("wsExec").style.display    = "flex";
+  document.getElementById("wsLoading").style.display     = "none";
+  document.getElementById("wsError").style.display       = "none";
+  document.getElementById("wsWelcome").style.display     = "none";
+  document.getElementById("wsSiteBuilder").style.display = "none";
+  document.getElementById("wsExec").style.display        = "flex";
 }
 function showWelcome() {
-  document.getElementById("wsWelcome").style.display = "";
-  document.getElementById("wsLoading").style.display = "none";
-  document.getElementById("wsExec").style.display    = "none";
-  document.getElementById("wsError").style.display   = "none";
+  document.getElementById("wsWelcome").style.display     = "";
+  document.getElementById("wsLoading").style.display     = "none";
+  document.getElementById("wsExec").style.display        = "none";
+  document.getElementById("wsError").style.display       = "none";
+  document.getElementById("wsSiteBuilder").style.display = "none";
 }
 function retryLoad() {
   if (STATE.lastBundleId) {
-    // FIX: search allBundles not just SSR list
     const b = STATE.allBundles.find(x => String(x._id) === String(STATE.lastBundleId));
     if (b) selectBundle(b);
   }
@@ -806,7 +634,6 @@ function retryLoad() {
    CONFIRM DIALOG
 ═══════════════════════════════════════════════════════ */
 let _confirmResolve = null;
-
 function showConfirm(title, msg, okLabel = "Confirm") {
   return new Promise(resolve => {
     _confirmResolve = resolve;
@@ -838,14 +665,12 @@ function showRunModalOutput(content) {
   document.getElementById("runModalFooter").style.display    = "flex";
   document.getElementById("runModalOutputContent").innerHTML = formatOutput(content);
 }
-function closeRunModal() {
-  document.getElementById("aqRunModal").classList.remove("open");
-}
+function closeRunModal() { document.getElementById("aqRunModal").classList.remove("open"); }
 
 /* ═══════════════════════════════════════════════════════
    SIDEBAR DRAWER
 ═══════════════════════════════════════════════════════ */
-function openSidebar() {
+function openSidebar()  {
   document.getElementById("aqSidebar").classList.add("open");
   document.getElementById("drawerOverlay").classList.add("open");
 }
@@ -874,7 +699,7 @@ function mobileNav(tab) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   INIT — Page load
+   INIT
 ═══════════════════════════════════════════════════════ */
 window.addEventListener("DOMContentLoaded", async () => {
   initBundleSwitcher();
@@ -883,21 +708,15 @@ window.addEventListener("DOMContentLoaded", async () => {
     if (!res.ok) throw new Error("State load failed: " + res.status);
     const data = await res.json();
 
-    // Hydrate workspace memory
     const rawMem   = (data.workspace && data.workspace.workspaceMemory) || {};
     STATE.wsMemory = rawMem instanceof Map ? Object.fromEntries(rawMem) : rawMem;
-
-    // Hydrate pinned list
     STATE.pinnedIds = (data.workspace && data.workspace.pinnedBundleIds) || [];
 
-    // Render WS memory section
     renderWsMemory();
 
-    // Hydrate output feed with recent history
     const recentOutputs = data.workspace && data.workspace.recentOutputs;
     if (recentOutputs && recentOutputs.length) renderOutputFeed(recentOutputs);
 
-    // FIX: merge server bundles into allBundles for accurate searches
     if (data.bundles && data.bundles.length) {
       data.bundles.forEach(sb => {
         const idx = STATE.allBundles.findIndex(b => String(b._id) === String(sb._id));
@@ -906,7 +725,6 @@ window.addEventListener("DOMContentLoaded", async () => {
       });
     }
 
-    // Auto-select last open bundle or first active
     const lastId  = data.workspace && data.workspace.lastOpenBundleId;
     const bundles = data.bundles || STATE.allBundles;
 
@@ -920,10 +738,13 @@ window.addEventListener("DOMContentLoaded", async () => {
   } catch (e) {
     console.warn("[AQ] State init failed:", e.message);
   }
+
+  // Load site list for SITES tab
+  await loadSiteList();
 });
 
 /* ═══════════════════════════════════════════════════════
-   BUNDLE SWITCHER (topbar dropdown)
+   BUNDLE SWITCHER
 ═══════════════════════════════════════════════════════ */
 function initBundleSwitcher() {
   const sw = document.getElementById("bundleSwitcher");
@@ -936,7 +757,6 @@ function initBundleSwitcher() {
     if (saved) sw.value = saved;
     sw.onchange = () => {
       const id    = sw.value;
-      // FIX: search full allBundles list
       const found = STATE.allBundles.find(b => String(b._id) === id);
       if (found) { localStorage.setItem("aq_activeBundle", id); selectBundle(found); }
     };
@@ -945,12 +765,20 @@ function initBundleSwitcher() {
 
 /* ═══════════════════════════════════════════════════════
    TAB SWITCHES
+   FIX: Single definition handles bundles + tools + sites.
+        No re-declaration further down.
 ═══════════════════════════════════════════════════════ */
 function switchLeftTab(tab, btn) {
   document.querySelectorAll(".aq-sidebar-tab").forEach(b => b.classList.remove("active"));
-  btn.classList.add("active");
-  document.getElementById("leftBundleList").style.display = tab === "bundles" ? "" : "none";
-  document.getElementById("leftToolList").style.display   = tab === "tools"   ? "" : "none";
+  if (btn) btn.classList.add("active");
+
+  const bundleList = document.getElementById("leftBundleList");
+  const toolList   = document.getElementById("leftToolList");
+  const siteList   = document.getElementById("leftSiteList");
+
+  if (bundleList) bundleList.style.display = tab === "bundles" ? "" : "none";
+  if (toolList)   toolList.style.display   = tab === "tools"   ? "" : "none";
+  if (siteList)   siteList.style.display   = tab === "sites"   ? "" : "none";
 }
 
 function switchRightTab(tab, btn) {
@@ -968,9 +796,7 @@ function switchRightTab(tab, btn) {
   if (section) {
     section.classList.add("active");
     section.style.opacity = "0";
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => { section.style.opacity = "1"; });
-    });
+    requestAnimationFrame(() => requestAnimationFrame(() => { section.style.opacity = "1"; }));
   }
 }
 
@@ -984,12 +810,10 @@ async function selectBundle(bundle) {
   STATE.openSteps.clear();
   STATE.stepRunning.clear();
 
-  // Highlight sidebar row
   document.querySelectorAll(".aq-bundle-item").forEach(r => r.classList.remove("selected"));
   const row = document.getElementById("brow-" + bundle._id);
   if (row) row.classList.add("selected");
 
-  // Sync switcher
   const sw = document.getElementById("bundleSwitcher");
   if (sw) sw.value = bundle._id;
   localStorage.setItem("aq_activeBundle", bundle._id);
@@ -998,7 +822,6 @@ async function selectBundle(bundle) {
   showLoading();
 
   try {
-    // Always fetch fresh from server so data is accurate
     const res = await fetch("/workspace/bundle/" + bundle._id);
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
@@ -1013,12 +836,10 @@ async function selectBundle(bundle) {
   STATE.bundle       = bundle;
   STATE.selectedStep = null;
 
-  // FIX: merge into allBundles so retry and switcher work correctly
   const idx = STATE.allBundles.findIndex(b => String(b._id) === String(bundle._id));
   if (idx !== -1) STATE.allBundles[idx] = bundle;
   else            STATE.allBundles.push(bundle);
 
-  // Default open: current step (or first pending step)
   const currentStep = bundle.currentStep || 0;
   STATE.openSteps.add(currentStep);
 
@@ -1033,9 +854,7 @@ async function selectBundle(bundle) {
 }
 
 async function selectBundleById(id) {
-  // FIX: use allBundles (includes dynamically fetched) not just SSR _ejsBundles
   const bundle = STATE.allBundles.find(b => String(b._id) === String(id));
-  // If not found locally, still attempt to select with a stub (selectBundle fetches fresh anyway)
   if (bundle) await selectBundle(bundle);
   else        await selectBundle({ _id: id });
 }
@@ -1105,14 +924,7 @@ function renderTimeline(steps, progress, currentStep) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   STEP CARDS — PRODUCTION ACCORDION
-
-   FIX STRATEGY:
-   1. Render all cards with max-height:0 (closed by default)
-   2. After DOM paint, open the steps in STATE.openSteps
-   3. Use data-state attribute to track open/closing/settled
-   4. Never use max-height:none during animation — only after transition ends
-   5. Single RAF to batch DOM reads before writes
+   STEP CARDS — ACCORDION
 ═══════════════════════════════════════════════════════ */
 function renderStepCards(steps, progress, outputs, currentStep) {
   const container = document.getElementById("execSteps");
@@ -1199,8 +1011,6 @@ function renderStepCards(steps, progress, outputs, currentStep) {
         <button class="aq-step-act-btn rerun" onclick="event.stopPropagation();rerunStep(${i})">↺ Re-run</button>`;
     }
 
-    // All bodies start closed (max-height:0, data-state="closed")
-    // JS will open STATE.openSteps after paint
     return `
       <div class="aq-step-card ${cardCls}" id="scard-${i}" data-step="${i}">
         <div class="aq-step-hdr" onclick="toggleCard(${i})">
@@ -1222,34 +1032,22 @@ function renderStepCards(steps, progress, outputs, currentStep) {
       </div>`;
   }).join("");
 
-  // FIX: After full DOM paint, open all steps in STATE.openSteps.
-  // Use double-RAF to ensure layout has calculated scrollHeights.
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
-      STATE.openSteps.forEach(idx => _openCard(idx, /* animate= */ false));
+      STATE.openSteps.forEach(idx => _openCard(idx, false));
     });
   });
 }
 
 /* ═══════════════════════════════════════════════════════
-   ACCORDION ENGINE — Perfect expand/collapse
-
-   RULES:
-   - Only one step open at a time (close others before opening new)
-   - During animation: overflow=hidden, max-height=px value
-   - After animation settles (open): max-height=none, overflow=visible
-     This is critical so dynamic content (outputs) renders without clipping
-   - On close: snap max-height back to px first, then animate to 0
-     This is needed because max-height=none cannot animate to 0
+   ACCORDION ENGINE
 ═══════════════════════════════════════════════════════ */
 function toggleCard(idx) {
   if (STATE.openSteps.has(idx)) {
     _closeCard(idx);
   } else {
-    // Close all other open cards first (single-open accordion)
-    const others = Array.from(STATE.openSteps).filter(i => i !== idx);
-    others.forEach(i => _closeCard(i));
-    _openCard(idx, /* animate= */ true);
+    Array.from(STATE.openSteps).filter(i => i !== idx).forEach(i => _closeCard(i));
+    _openCard(idx, true);
   }
 }
 
@@ -1262,30 +1060,21 @@ function _openCard(idx, animate = true) {
   STATE.openSteps.add(idx);
   if (toggle) toggle.classList.add("open");
 
-  // Measure content height while element is still in DOM
   body.style.overflow  = "hidden";
-  body.style.maxHeight = "0";  // reset before measuring
+  body.style.maxHeight = "0";
   body.setAttribute("data-state", "open");
 
-  // Get actual scroll height after potential content change
-  const targetH = inner.scrollHeight + 40; // 40px padding buffer
+  const targetH = inner.scrollHeight + 40;
 
   if (animate) {
-    // Trigger transition by setting target height
-    // Use requestAnimationFrame to ensure browser registers the 0 → targetH change
-    requestAnimationFrame(() => {
-      body.style.maxHeight = targetH + "px";
-    });
+    requestAnimationFrame(() => { body.style.maxHeight = targetH + "px"; });
   } else {
-    // No animation — snap open immediately
     body.style.maxHeight = targetH + "px";
   }
 
-  // After transition: remove cap so content (outputs) can grow freely
   const onTransitionEnd = (e) => {
     if (e.propertyName !== "max-height") return;
     body.removeEventListener("transitionend", onTransitionEnd);
-    // Only settle if still open (user might have closed during animation)
     if (STATE.openSteps.has(idx)) {
       body.style.maxHeight = "none";
       body.style.overflow  = "visible";
@@ -1295,7 +1084,6 @@ function _openCard(idx, animate = true) {
   body.addEventListener("transitionend", onTransitionEnd);
 
   if (!animate) {
-    // No transition fires — settle immediately
     body.style.maxHeight = "none";
     body.style.overflow  = "visible";
     body.setAttribute("data-state", "settled");
@@ -1311,19 +1099,13 @@ function _closeCard(idx) {
   if (toggle) toggle.classList.remove("open");
   body.setAttribute("data-state", "closed");
 
-  // FIX: If max-height is "none" (settled state), we MUST snap to a px value first
-  // before animating to 0. CSS cannot transition from "none" to a number.
   if (body.style.maxHeight === "none" || body.style.maxHeight === "") {
     const inner = document.getElementById("sbody-inner-" + idx);
     const h     = inner ? inner.scrollHeight + 40 : 200;
     body.style.overflow  = "hidden";
     body.style.maxHeight = h + "px";
-
-    // Force layout recalc, then animate to 0
-    body.getBoundingClientRect(); // triggers reflow
-    requestAnimationFrame(() => {
-      body.style.maxHeight = "0";
-    });
+    body.getBoundingClientRect();
+    requestAnimationFrame(() => { body.style.maxHeight = "0"; });
   } else {
     body.style.overflow  = "hidden";
     body.style.maxHeight = "0";
@@ -1332,19 +1114,13 @@ function _closeCard(idx) {
   if (STATE.selectedStep === idx) STATE.selectedStep = null;
 }
 
-/* FIX: After dynamic content updates (output rendered), recalculate open card height */
 function _recalcOpenCard(idx) {
   if (!STATE.openSteps.has(idx)) return;
   const body  = document.getElementById("sbody-" + idx);
   const inner = document.getElementById("sbody-inner-" + idx);
   if (!body || !inner) return;
-
-  // If already settled (no max-height cap), nothing to do — content expands naturally
   if (body.getAttribute("data-state") === "settled") return;
-
-  // Still mid-animation — update target height
-  const targetH = inner.scrollHeight + 40;
-  body.style.maxHeight = targetH + "px";
+  body.style.maxHeight = (inner.scrollHeight + 40) + "px";
 }
 
 function jumpToStep(idx) {
@@ -1352,31 +1128,23 @@ function jumpToStep(idx) {
   const card = document.getElementById("scard-" + idx);
   if (!card) return;
   card.scrollIntoView({ behavior: "smooth", block: "center" });
-  if (!STATE.openSteps.has(idx)) {
-    setTimeout(() => toggleCard(idx), 180);
-  }
+  if (!STATE.openSteps.has(idx)) setTimeout(() => toggleCard(idx), 180);
 }
 
 /* ═══════════════════════════════════════════════════════
-   RUN STEP (Execution Engine)
-   FIX: POST to /workspace/step/:bundleId/:stepIndex (correct route)
-   FIX: Keep card open post-run; recalc height after output appears
+   RUN STEP
 ═══════════════════════════════════════════════════════ */
 async function runStep(stepIndex) {
   const b = STATE.bundle;
   if (!b || STATE.stepRunning.has(stepIndex)) return;
 
   const stepTitle = (b.steps && b.steps[stepIndex] && b.steps[stepIndex].title) || ("Step " + (stepIndex + 1));
-
   STATE.stepRunning.add(stepIndex);
   openRunModal(`▶ ${stepTitle}`);
-
-  // Show running state immediately — optimistic UI
   _patchStepCardRunning(stepIndex, true);
 
   try {
-    // FIX: Correct route — POST /workspace/step/:bundleId/:stepIndex
-    const res  = await fetch(`/workspace/step/${b._id}/${stepIndex}`, {
+    const res = await fetch(`/workspace/step/${b._id}/${stepIndex}`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ title: stepTitle }),
@@ -1390,27 +1158,19 @@ async function runStep(stepIndex) {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
-    // Update state
     STATE.bundle = data.bundle;
-    if (data.workspace && data.workspace.workspaceMemory) {
-      STATE.wsMemory = data.workspace.workspaceMemory;
-    }
+    if (data.workspace && data.workspace.workspaceMemory) STATE.wsMemory = data.workspace.workspaceMemory;
 
     STATE.stepRunning.delete(stepIndex);
-    // Keep card open to show fresh output
     STATE.openSteps.add(stepIndex);
 
-    // Full re-render (updates all panels + step cards)
     renderExecPanel(data.bundle);
     renderMemoryPanel(data.bundle);
     renderInsightPanel(data.bundle);
     updateBundleRowProgress(b._id, data.bundle);
 
-    // FIX: recalc open card height AFTER re-render adds the output block
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        _openCard(stepIndex, false); // re-settle with new content height
-      });
+      requestAnimationFrame(() => { _openCard(stepIndex, false); });
     });
 
     const output = data.output || (data.bundle.outputs || []).find(o => o && o.stepIndex === stepIndex);
@@ -1429,28 +1189,21 @@ async function runStep(stepIndex) {
     toast("Error running step: " + e.message, "error");
     console.error("[AQ] runStep error:", e);
     closeRunModal();
-    // Re-render to restore non-running state
     if (STATE.bundle) renderExecPanel(STATE.bundle);
   }
 }
 
-/* Optimistic patch — update only the specific step card during run, avoiding full re-render */
 function _patchStepCardRunning(stepIndex, isRunning) {
   const card = document.getElementById("scard-" + stepIndex);
   if (!card) return;
-
   const badge = card.querySelector(".aq-badge");
   const num   = card.querySelector(".aq-step-num");
   const btn   = card.querySelector(".aq-step-act-btn.run-step");
-
   if (badge) { badge.className = "aq-badge wb-running"; badge.textContent = "RUNNING…"; }
   if (num)   { num.innerHTML   = `<div class="aq-mini-spinner"></div>`; }
   if (btn)   { btn.disabled    = isRunning; btn.innerHTML = isRunning ? '<div class="aq-mini-spinner"></div> Running…' : '▶ Run Step'; }
-
-  // Show loading output block
   const inner = document.getElementById("sbody-inner-" + stepIndex);
   if (inner && isRunning) {
-    // Remove existing empty-inline placeholder and add spinner
     const emptyEl = inner.querySelector(".aq-empty-inline");
     if (emptyEl) {
       emptyEl.outerHTML = `
@@ -1461,28 +1214,22 @@ function _patchStepCardRunning(stepIndex, isRunning) {
           </div>
         </div>`;
     }
-    // Recalculate open card height to fit new loading block
     _recalcOpenCard(stepIndex);
   }
 }
 
 /* ═══════════════════════════════════════════════════════
-   AUTO RUN ALL STEPS
+   AUTO RUN
 ═══════════════════════════════════════════════════════ */
 async function autoRunSteps() {
   const b = STATE.bundle;
   if (!b || !b.steps) { toast("Select a bundle first", "info"); return; }
-  const ok = await showConfirm(
-    "Auto-Run All Steps",
-    `Auto-run all ${b.steps.length} steps sequentially?`,
-    "▶ Auto Run"
-  );
+  const ok = await showConfirm("Auto-Run All Steps", `Auto-run all ${b.steps.length} steps sequentially?`, "▶ Auto Run");
   if (!ok) return;
-
   for (let i = 0; i < b.steps.length; i++) {
-    const latest   = STATE.bundle;
+    const latest = STATE.bundle;
     const progress = Array.isArray(latest.progress) ? latest.progress : [];
-    const prog     = progress.find(p => p && p.step === i);
+    const prog = progress.find(p => p && p.step === i);
     if (prog && prog.status === "completed") continue;
     await markStepDone(i);
     await new Promise(r => setTimeout(r, 600));
@@ -1492,7 +1239,6 @@ async function autoRunSteps() {
 
 /* ═══════════════════════════════════════════════════════
    MARK STEP DONE
-   FIX: Same route as runStep — /workspace/step/:bundleId/:stepIndex
 ═══════════════════════════════════════════════════════ */
 async function markStepDone(stepIndex) {
   const b = STATE.bundle;
@@ -1507,32 +1253,23 @@ async function markStepDone(stepIndex) {
     });
     const data = await res.json();
     if (data.error) { toast(data.error, "error"); return; }
-
     STATE.bundle = data.bundle;
     if (data.workspace && data.workspace.workspaceMemory) STATE.wsMemory = data.workspace.workspaceMemory;
-
     STATE.openSteps.add(stepIndex);
     renderExecPanel(data.bundle);
     renderMemoryPanel(data.bundle);
     renderInsightPanel(data.bundle);
     updateBundleRowProgress(b._id, data.bundle);
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => _openCard(stepIndex, false));
-    });
-
+    requestAnimationFrame(() => requestAnimationFrame(() => _openCard(stepIndex, false)));
     if (data.output) prependOutputFeed(data.bundle.title || "Bundle", data.output.stepIndex, data.output.stepTitle, data.output.content);
-
     if (data.bundle.status === "completed") toast("🎉 Bundle complete!", "success");
     else toast(`Step ${stepIndex + 1} complete ✓`, "success");
-  } catch (e) {
-    toast("Error marking step", "error");
-    console.error(e);
-  } finally { hideLoading(); }
+  } catch (e) { toast("Error marking step", "error"); console.error(e); }
+  finally { hideLoading(); }
 }
 
 /* ═══════════════════════════════════════════════════════
-   RE-RUN STEP (local state reset — no backend call)
+   RE-RUN STEP
 ═══════════════════════════════════════════════════════ */
 function rerunStep(stepIndex) {
   const b = STATE.bundle;
@@ -1541,9 +1278,7 @@ function rerunStep(stepIndex) {
     const entry = b.progress.find(p => p && p.step === stepIndex);
     if (entry) entry.status = "pending";
   }
-  if (Array.isArray(b.outputs)) {
-    b.outputs = b.outputs.filter(o => o && o.stepIndex !== stepIndex);
-  }
+  if (Array.isArray(b.outputs)) b.outputs = b.outputs.filter(o => o && o.stepIndex !== stepIndex);
   STATE.openSteps.add(stepIndex);
   renderExecPanel(b);
   toast(`Step ${stepIndex + 1} reset — click Run Step`, "info");
@@ -1612,14 +1347,10 @@ async function _togglePin(id) {
   try {
     const res  = await fetch(`/workspace/${endpoint}/${id}`, { method: "POST" });
     const data = await res.json();
-    // Update local pinned state from server response
     if (data.pinnedBundleIds) STATE.pinnedIds = data.pinnedBundleIds;
     else if (!isPinned)       STATE.pinnedIds.push(id);
     else                      STATE.pinnedIds = STATE.pinnedIds.filter(x => String(x) !== String(id));
-
     if (STATE.bundle && String(STATE.bundle._id) === String(id)) updatePinBtn(id);
-
-    // Update sidebar row button label
     const rowEl = document.getElementById("brow-" + id);
     if (rowEl) {
       const pinBtn = rowEl.querySelector(".aq-bundle-act-btn.pin");
@@ -1651,16 +1382,11 @@ async function _doDeleteBundle(id) {
   try {
     const res = await fetch("/bundle/" + id, { method: "DELETE" });
     if (!res.ok) throw new Error("Delete failed: " + res.status);
-
-    // Remove from DOM
     const rowEl = document.getElementById("brow-" + id);
     if (rowEl) rowEl.remove();
     const sw = document.getElementById("bundleSwitcher");
     if (sw) { const opt = sw.querySelector(`option[value="${id}"]`); if (opt) opt.remove(); }
-
-    // Remove from local state
     STATE.allBundles = STATE.allBundles.filter(b => String(b._id) !== String(id));
-
     if (STATE.bundle && String(STATE.bundle._id) === String(id)) {
       STATE.bundle = null;
       localStorage.removeItem("aq_activeBundle");
@@ -1668,15 +1394,12 @@ async function _doDeleteBundle(id) {
       updateBreadcrumb("Overview");
     }
     toast("Bundle deleted", "info");
-  } catch (e) {
-    toast("Failed to delete bundle", "error");
-    console.error(e);
-  } finally { hideLoading(); }
+  } catch (e) { toast("Failed to delete bundle", "error"); console.error(e); }
+  finally { hideLoading(); }
 }
 
 /* ═══════════════════════════════════════════════════════
    TOOL ACTIONS
-   FIX: Use /workspace/tools/:id (DELETE) — NOT /tool/:id
 ═══════════════════════════════════════════════════════ */
 async function removeTool(id) {
   if (!id) return;
@@ -1684,16 +1407,13 @@ async function removeTool(id) {
   if (!ok) return;
   showLoading();
   try {
-    // FIX: canonical route is DELETE /workspace/tools/:id
     const res = await fetch(`/workspace/tools/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error("Remove failed: " + res.status);
     const el = document.getElementById("trow-" + id);
     if (el) el.remove();
     toast("Tool removed", "info");
-  } catch (e) {
-    toast("Failed to remove tool", "error");
-    console.error(e);
-  } finally { hideLoading(); }
+  } catch (e) { toast("Failed to remove tool", "error"); console.error(e); }
+  finally { hideLoading(); }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1737,7 +1457,7 @@ function renderWsMemory() {
 
 function renderInsightPanel(b) {
   const outputs = Array.isArray(b.outputs) ? b.outputs : [];
-  const all     = [];
+  const all = [];
   outputs.forEach(o => {
     (o && o.keyInsights ? o.keyInsights : []).forEach(k => {
       if (k) all.push({ text: k, confidence: o.confidenceScore || 0 });
@@ -1756,10 +1476,7 @@ function renderInsightPanel(b) {
 
 function renderOutputFeed(outputs) {
   const feed = document.getElementById("outputFeed");
-  if (!outputs || !outputs.length) {
-    feed.innerHTML = `<div class="aq-empty">No outputs yet.</div>`;
-    return;
-  }
+  if (!outputs || !outputs.length) { feed.innerHTML = `<div class="aq-empty">No outputs yet.</div>`; return; }
   feed.innerHTML = outputs.map(o => `
     <div class="aq-feed-item">
       <div class="aq-feed-meta">
@@ -1789,15 +1506,11 @@ function prependOutputFeed(bundleTitle, stepIndex, stepTitle, content) {
 /* ═══════════════════════════════════════════════════════
    DOM HELPERS
 ═══════════════════════════════════════════════════════ */
-function updateBreadcrumb(title) {
-  document.getElementById("topBreadcrumb").textContent = title || "Bundle";
-}
-
+function updateBreadcrumb(title) { document.getElementById("topBreadcrumb").textContent = title || "Bundle"; }
 function updatePinBtn(id) {
   const el = document.getElementById("btnPin");
   if (el) el.textContent = STATE.pinnedIds.some(p => String(p) === String(id)) ? "★ PIN" : "☆ PIN";
 }
-
 function updateBundleRowDot(id, status) {
   const row = document.getElementById("brow-" + id);
   if (!row) return;
@@ -1809,7 +1522,6 @@ function updateBundleRowDot(id, status) {
     status === "completed" ? "aq-dot-completed" : "aq-dot-draft"
   );
 }
-
 function updateBundleRowProgress(id, bundle) {
   const row  = document.getElementById("brow-" + id);
   if (!row) return;
@@ -1823,7 +1535,6 @@ function updateBundleRowProgress(id, bundle) {
   if (pctEl) pctEl.textContent = pct + "%";
   updateBundleRowDot(id, bundle.status);
 }
-
 function launchTool(url) {
   if (!url) return;
   if (!url.startsWith("http")) url = "https://" + url;
@@ -1841,7 +1552,6 @@ function esc(str) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
-
 function formatOutput(text) {
   if (!text) return "";
   return esc(text)
@@ -1878,6 +1588,7 @@ const PALETTE_COMMANDS = [
   { label: "☆ Pin / Unpin",         hint: "PI", action: () => pinCurrentBundle() },
   { label: "⌫ Delete Bundle",       hint: "D",  action: () => deleteCurrentBundle() },
   { label: "☰ Open Bundles",        hint: "B",  action: () => openSidebar() },
+  { label: "🌐 Open Site Builder",   hint: "S",  action: () => openSiteBuilder() },
   { label: "← Go to Bundles",       hint: "G",  action: () => { window.location.href = "/bundles"; } },
 ];
 
@@ -1913,7 +1624,6 @@ function paletteKeydown(e) {
   if (e.key === "Escape") document.getElementById("aqPalette").classList.remove("open");
 }
 
-/* Global keyboard shortcuts */
 document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
     e.preventDefault(); openPalette();
@@ -1927,8 +1637,6 @@ document.addEventListener("keydown", e => {
 
 /* ═══════════════════════════════════════════════════════
    REALTIME (socket.io)
-   FIX: on bundle:update, fetch fresh + re-render
-   Preserves open step state across real-time updates
 ═══════════════════════════════════════════════════════ */
 (function initRealtime() {
   if (typeof io === "undefined") return;
@@ -1942,26 +1650,21 @@ document.addEventListener("keydown", e => {
         .then(d => {
           if (!d.bundle) return;
           STATE.bundle = d.bundle;
-          // FIX: preserve open steps across real-time re-renders
           renderExecPanel(d.bundle);
           renderMemoryPanel(d.bundle);
           renderInsightPanel(d.bundle);
         }).catch(() => {});
     });
-  } catch { /* socket.io not configured — polling fallback active */ }
+  } catch { /* socket not configured */ }
 })();
 
-/* ═══════════════════════════════════════════════════════
-   POLLING FALLBACK (every 10s when socket not available)
-   Only runs if bundle is selected and not currently loading
-═══════════════════════════════════════════════════════ */
+/* Polling fallback (10s) */
 setInterval(async () => {
   if (!STATE.bundle || STATE.loading || STATE.stepRunning.size > 0) return;
   try {
     const res  = await fetch("/workspace/bundle/" + STATE.bundle._id);
     const data = await res.json();
     if (!data.bundle) return;
-    // FIX: Only re-render if data actually changed (check completionPercent)
     const prevDone = (STATE.bundle.progress || []).filter(p => p && p.status === "completed").length;
     const nextDone = (data.bundle.progress || []).filter(p => p && p.status === "completed").length;
     if (nextDone !== prevDone || data.bundle.status !== STATE.bundle.status) {
@@ -1973,33 +1676,81 @@ setInterval(async () => {
 
 /* ═══════════════════════════════════════════════════════
    SITE BUILDER ENGINE
-   State, API calls, and UI management for the AI website
-   execution engine embedded inside the workspace.
+   Compatible with:
+   - intent_service.js  → detectByKeyword() maps the INTENT_MAP
+   - ai_service.js      → POST /workspace/project/generate
+   - templates/calculator.js, portfolio.js, landing.js
+     → served by backend; we just show what the server returns
 ═══════════════════════════════════════════════════════ */
 
 const SB = {
-  projectId:   null,   // current project UUID
-  projectName: null,   // display name
-  files:       [],     // list of filenames
-  activeFile:  null,   // currently previewed file
-  busy:        false,  // prevent concurrent AI calls
+  projectId:      null,
+  projectName:    null,
+  files:          [],
+  activeFile:     null,
+  busy:           false,
+  lastPrompt:     null,   // stored for retry
+  detectedIntent: null,   // e.g. "calculator", "portfolio", "landing_page"
 };
+
+// ── Intent keyword map (mirrors intent_service.js INTENT_MAP) ────────────────
+// Used client-side ONLY for instant badge feedback. The server's intent_service
+// is the authoritative classifier — this is purely a UX hint.
+const SB_INTENT_KEYWORDS = {
+  calculator: ["calculator","calc","calculate","math","arithmetic","bmi","tip calculator","loan","mortgage","converter","percentage","interest","tax"],
+  portfolio:  ["portfolio","personal site","personal website","about me","resume","cv","my work","showcase","developer portfolio","designer portfolio","freelancer","hire me"],
+  dashboard:  ["dashboard","admin panel","analytics","metrics","stats","statistics","control panel","management","monitor","overview panel","data panel"],
+  blog:       ["blog","article","post","news","newsletter","magazine","editorial","writing","journal"],
+  form:       ["form","contact form","sign up","signup","registration","survey","quiz","questionnaire","feedback form","application form","booking form"],
+  landing_page: ["landing","landing page","saas","startup","product page","marketing","sales page","waitlist","coming soon","app landing","hero","promo"],
+};
+
+const SB_INTENT_LABELS = {
+  calculator:   "🔬 Calculator",
+  portfolio:    "💼 Portfolio",
+  dashboard:    "📊 Dashboard",
+  blog:         "📝 Blog",
+  form:         "📬 Form",
+  landing_page: "🚀 Landing Page",
+};
+
+function _detectIntentClient(prompt) {
+  if (!prompt) return null;
+  const lower = prompt.toLowerCase();
+  for (const [intent, keywords] of Object.entries(SB_INTENT_KEYWORDS)) {
+    for (const kw of keywords) {
+      if (lower.includes(kw)) return intent;
+    }
+  }
+  return null;
+}
+
+function _showIntentBadge(intent) {
+  const badge = document.getElementById("sbIntentBadge");
+  if (!badge) return;
+  if (intent && SB_INTENT_LABELS[intent]) {
+    badge.textContent = SB_INTENT_LABELS[intent];
+    badge.classList.add("visible");
+  } else {
+    badge.classList.remove("visible");
+  }
+}
 
 // ── Open / Close ──────────────────────────────────────────────────────────────
 
 function openSiteBuilder() {
   // Switch sidebar to SITES tab
-  document.querySelectorAll(".aq-sidebar-tab").forEach(t => t.classList.remove("active"));
-  const sitesTab = Array.from(document.querySelectorAll(".aq-sidebar-tab")).find(t => t.textContent.trim() === "SITES");
-  if (sitesTab) sitesTab.classList.add("active");
+  const sitesTab = Array.from(document.querySelectorAll(".aq-sidebar-tab"))
+    .find(t => t.textContent.trim() === "SITES");
   switchLeftTab("sites", sitesTab);
 
-  // Show site builder, hide others
   document.getElementById("wsWelcome").style.display     = "none";
   document.getElementById("wsLoading").style.display     = "none";
   document.getElementById("wsExec").style.display        = "none";
   document.getElementById("wsError").style.display       = "none";
   document.getElementById("wsSiteBuilder").style.display = "flex";
+
+  updateBreadcrumb("Site Builder");
 }
 
 function closeSiteBuilder() {
@@ -2007,40 +1758,23 @@ function closeSiteBuilder() {
   showWelcome();
 }
 
-// ── Sidebar: left tab switch override ────────────────────────────────────────
-// Patch switchLeftTab to handle the new "sites" tab
-
-const _originalSwitchLeftTab = typeof switchLeftTab === "function" ? switchLeftTab : null;
-function switchLeftTab(tab, btn) {
-  // Update tab button active states
-  document.querySelectorAll(".aq-sidebar-tab").forEach(t => t.classList.remove("active"));
-  if (btn) btn.classList.add("active");
-
-  // Hide/show sidebar panels
-  const bundleList = document.getElementById("leftBundleList");
-  const toolList   = document.getElementById("leftToolList");
-  const siteList   = document.getElementById("leftSiteList");
-
-  if (bundleList) bundleList.style.display = tab === "bundles" ? "" : "none";
-  if (toolList)   toolList.style.display   = tab === "tools"   ? "" : "none";
-  if (siteList)   siteList.style.display   = tab === "sites"   ? "" : "none";
-}
-
-// ── Load project list into sidebar ───────────────────────────────────────────
+// ── Load site list into SITES tab ─────────────────────────────────────────────
 
 async function loadSiteList() {
   try {
     const res  = await fetch("/workspace/project/list");
+    if (!res.ok) return; // silently skip if route not set up yet
     const data = await res.json();
     if (!data.success) return;
 
     const container = document.getElementById("sidebarSiteItems");
     if (!data.projects || data.projects.length === 0) {
-      container.innerHTML = `<div class="aq-empty" style="margin-top:8px;">
-        <span class="aq-empty-icon">&#127760;</span>
-        No sites yet.<br/>
-        <button onclick="openSiteBuilder()" style="background:none;border:none;color:#38bdf8;cursor:pointer;font-size:0.8rem;margin-top:6px;">Build one &#8594;</button>
-      </div>`;
+      container.innerHTML = `
+        <div class="aq-empty" style="margin-top:8px;">
+          <span class="aq-empty-icon">🌐</span>
+          No sites yet.<br/>
+          <button onclick="openSiteBuilder()" style="background:none;border:none;color:#38bdf8;cursor:pointer;font-size:0.8rem;margin-top:6px;">Build one →</button>
+        </div>`;
       return;
     }
 
@@ -2048,23 +1782,22 @@ async function loadSiteList() {
       <div class="aq-site-item ${SB.projectId === p.projectId ? 'active' : ''}"
            id="srow-${p.projectId}"
            onclick="loadExistingProject('${p.projectId}', '${esc(p.name)}')">
-        <span class="aq-site-item-icon">&#127760;</span>
+        <span class="aq-site-item-icon">🌐</span>
         <div class="aq-site-item-info">
           <div class="aq-site-item-name">${esc(p.name)}</div>
-          <div class="aq-site-item-meta">${p.files.length} file${p.files.length !== 1 ? 's' : ''}</div>
+          <div class="aq-site-item-meta">${p.files ? p.files.length : 0} file${(!p.files || p.files.length !== 1) ? 's' : ''}</div>
         </div>
-        <button class="aq-site-item-del" onclick="event.stopPropagation();deleteSite('${p.projectId}')" title="Delete">&#10005;</button>
+        <button class="aq-site-item-del" onclick="event.stopPropagation();deleteSite('${p.projectId}')" title="Delete">✕</button>
       </div>`).join("");
   } catch (err) {
     console.warn("[SB] loadSiteList:", err.message);
   }
 }
 
-// ── Load an existing project into the builder ─────────────────────────────────
+// ── Load existing project ──────────────────────────────────────────────────────
 
 async function loadExistingProject(projectId, name) {
   openSiteBuilder();
-
   SB.projectId   = projectId;
   SB.projectName = name;
   document.getElementById("sbProjectName").textContent = name;
@@ -2072,14 +1805,12 @@ async function loadExistingProject(projectId, name) {
   try {
     const res  = await fetch(`/workspace/project/${projectId}/files`);
     const data = await res.json();
-    if (!data.success) throw new Error(data.error);
+    if (!data.success) throw new Error(data.error || "Failed to load project files");
     SB.files = data.files;
     renderFileTree(data.files);
     showEditBar();
-    // Load index.html by default
     const indexFile = data.files.find(f => f === "index.html") || data.files[0];
     if (indexFile) loadFilePreview(indexFile);
-    // Highlight sidebar row
     document.querySelectorAll(".aq-site-item").forEach(el => el.classList.remove("active"));
     const row = document.getElementById("srow-" + projectId);
     if (row) row.classList.add("active");
@@ -2088,64 +1819,90 @@ async function loadExistingProject(projectId, name) {
   }
 }
 
-// ── Generate a new site ───────────────────────────────────────────────────────
+// ── Generate new site ─────────────────────────────────────────────────────────
+// Flow: create project → POST /workspace/project/generate (hits ai_service + templates)
+// The backend's intent_service.js selects the right template automatically.
 
 async function generateSite() {
   if (SB.busy) return;
   const prompt = document.getElementById("sbPromptInput").value.trim();
   if (!prompt) { toast("Please describe the website first", "error"); return; }
 
+  SB.lastPrompt     = prompt;
+  SB.detectedIntent = _detectIntentClient(prompt);
+  _showIntentBadge(SB.detectedIntent);
+
   SB.busy = true;
-  setBtnLoading("sbGenerateBtn", "sbGenerateBtnText", "&#9889; Generating&#8230;", true);
-  showGeneratingOverlay(true);
+  setBtnLoading("sbGenerateBtn", "sbGenerateBtnText", "⚡ Generating…", true);
+  showGeneratingOverlay(true, "Detecting site type…");
+
+  // Hide retry button while generating
+  const retryBtn = document.getElementById("sbRetryBtn");
+  if (retryBtn) retryBtn.classList.remove("visible");
+
   document.getElementById("sbEmpty").style.display = "none";
 
   try {
-    // 1. Create project
+    // 1. Create project record
     const name      = prompt.slice(0, 40);
     const createRes = await fetch("/workspace/project/create", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ name }),
     });
+    if (!createRes.ok) throw new Error("HTTP " + createRes.status);
     const createData = await createRes.json();
-    if (!createData.success) throw new Error(createData.error);
+    if (!createData.success) throw new Error(createData.error || "Project creation failed");
 
     SB.projectId   = createData.projectId;
     SB.projectName = createData.name;
     document.getElementById("sbProjectName").textContent = createData.name;
 
-    // 2. Generate files
+    showGeneratingOverlay(true, "Building site with AI…");
+
+    // 2. Generate files — backend runs intent_service → template or ai_service
     const genRes = await fetch("/workspace/project/generate", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ projectId: SB.projectId, prompt }),
     });
+    if (!genRes.ok) throw new Error("HTTP " + genRes.status);
     const genData = await genRes.json();
-    if (!genData.success) throw new Error(genData.error);
+    if (!genData.success) throw new Error(genData.error || "Generation failed");
 
     SB.files = genData.files;
     renderFileTree(genData.files);
     showEditBar();
     loadFilePreview("index.html");
     showGeneratingOverlay(false);
-    document.getElementById("sbBody").style.display = "flex";
 
-    // Refresh sidebar
     await loadSiteList();
-    toast("Site generated! (" + genData.files.length + " files)", "success");
+    _showIntentBadge(null); // clear badge after success
+    toast(`Site generated! (${genData.files.length} files)`, "success");
 
   } catch (err) {
     showGeneratingOverlay(false);
     document.getElementById("sbEmpty").style.display = "flex";
+    // Show retry button after a failed attempt
+    if (retryBtn) retryBtn.classList.add("visible");
+    _showIntentBadge(null);
     toast("Generation failed: " + err.message, "error");
+    console.error("[SB] generateSite:", err);
   } finally {
     SB.busy = false;
-    setBtnLoading("sbGenerateBtn", "sbGenerateBtnText", "&#9889; BUILD SITE", false);
+    setBtnLoading("sbGenerateBtn", "sbGenerateBtnText", "⚡ BUILD SITE", false);
   }
 }
 
-// ── Edit the site via natural language ────────────────────────────────────────
+// ── Retry last generation ─────────────────────────────────────────────────────
+
+function retrySiteGeneration() {
+  if (!SB.lastPrompt) return;
+  document.getElementById("sbPromptInput").value = SB.lastPrompt;
+  generateSite();
+}
+
+// ── Edit existing site ────────────────────────────────────────────────────────
 
 async function editSite() {
   if (SB.busy || !SB.projectId) return;
@@ -2154,8 +1911,8 @@ async function editSite() {
   if (!command) { toast("Please enter an edit command", "error"); return; }
 
   SB.busy = true;
-  setBtnLoading("sbEditBtn", "sbEditBtnText", "Editing&#8230;", true);
-  showGeneratingOverlay(true);
+  setBtnLoading("sbEditBtn", "sbEditBtnText", "Editing…", true);
+  showGeneratingOverlay(true, "Applying edit…");
 
   try {
     const res = await fetch("/workspace/project/edit", {
@@ -2163,24 +1920,23 @@ async function editSite() {
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ projectId: SB.projectId, command, filename }),
     });
+    if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
-    if (!data.success) throw new Error(data.error);
-
-    // Reload the preview
+    if (!data.success) throw new Error(data.error || "Edit failed");
     loadFilePreview(filename);
     document.getElementById("sbCommandInput").value = "";
     toast("Edit applied to " + filename, "success");
-
   } catch (err) {
     toast("Edit failed: " + err.message, "error");
+    console.error("[SB] editSite:", err);
   } finally {
     SB.busy = false;
     showGeneratingOverlay(false);
-    setBtnLoading("sbEditBtn", "sbEditBtnText", "&#9998; EDIT", false);
+    setBtnLoading("sbEditBtn", "sbEditBtnText", "✎ EDIT", false);
   }
 }
 
-// ── Delete a site project ─────────────────────────────────────────────────────
+// ── Delete site ───────────────────────────────────────────────────────────────
 
 async function deleteSite(projectId) {
   const confirmed = await showConfirm("Delete Site", "This will permanently delete the project and all its files.", "Delete");
@@ -2188,16 +1944,20 @@ async function deleteSite(projectId) {
   try {
     const res = await fetch(`/workspace/project/${projectId}`, { method: "DELETE" });
     const data = await res.json();
-    if (!data.success) throw new Error(data.error);
+    if (!data.success) throw new Error(data.error || "Delete failed");
     if (SB.projectId === projectId) {
-      SB.projectId = null;
-      SB.files = [];
-      document.getElementById("sbBody").style.display  = "none";
-      document.getElementById("sbEmpty").style.display = "flex";
-      document.getElementById("sbEditBar").style.display    = "none";
+      SB.projectId   = null;
+      SB.projectName = null;
+      SB.files       = [];
+      SB.lastPrompt  = null;
+      document.getElementById("sbBody").style.display      = "none";
+      document.getElementById("sbEmpty").style.display     = "flex";
+      document.getElementById("sbEditBar").style.display   = "none";
       document.getElementById("sbGenerateBar").style.display = "";
-      document.getElementById("sbProjectName").textContent  = "No project loaded";
+      document.getElementById("sbProjectName").textContent = "No project loaded";
       document.getElementById("sbPreviewFrame").src = "about:blank";
+      const retryBtn = document.getElementById("sbRetryBtn");
+      if (retryBtn) retryBtn.classList.remove("visible");
     }
     await loadSiteList();
     toast("Project deleted", "success");
@@ -2206,52 +1966,46 @@ async function deleteSite(projectId) {
   }
 }
 
-// ── Preview helpers ───────────────────────────────────────────────────────────
+// ── Preview ───────────────────────────────────────────────────────────────────
 
 function loadFilePreview(filename) {
   if (!SB.projectId || !filename) return;
   SB.activeFile = filename;
-
   const url   = `/workspace/project/${SB.projectId}/${filename}`;
   const frame = document.getElementById("sbPreviewFrame");
   const urlEl = document.getElementById("sbPreviewUrl");
-
-  frame.src = url + "?v=" + Date.now(); // cache bust
+  frame.src = url + "?v=" + Date.now();
   if (urlEl) urlEl.textContent = url;
-
-  // Highlight active file in tree
   document.querySelectorAll(".aq-sb-file-item").forEach(el => {
     el.classList.toggle("active", el.dataset.filename === filename);
   });
-
-  // Update file select
   const sel = document.getElementById("sbFileSelect");
   if (sel) sel.value = filename;
 }
 
-function refreshPreview() {
-  if (SB.activeFile) loadFilePreview(SB.activeFile);
-}
+function refreshPreview() { if (SB.activeFile) loadFilePreview(SB.activeFile); }
 
-// ── File tree rendering ───────────────────────────────────────────────────────
+// ── File tree ─────────────────────────────────────────────────────────────────
 
 function renderFileTree(files) {
   const list = document.getElementById("sbFileList");
   const cnt  = document.getElementById("sbFileCount");
   if (cnt) cnt.textContent = files.length + " files";
 
-  const iconMap = { ".html": "&#128196;", ".css": "&#127912;", ".js": "&#9881;", ".json": "&#128202;", ".svg": "&#128444;", ".png": "&#128444;", ".jpg": "&#128444;" };
+  const iconMap = {
+    ".html": "📄", ".css": "🎨", ".js": "⚙️",
+    ".json": "📊", ".svg": "🖼️", ".png": "🖼️", ".jpg": "🖼️",
+  };
   const ext = f => { const i = f.lastIndexOf("."); return i !== -1 ? f.slice(i) : ""; };
 
   list.innerHTML = files.map(f => `
     <div class="aq-sb-file-item ${f === SB.activeFile ? 'active' : ''}"
          data-filename="${esc(f)}"
          onclick="loadFilePreview('${esc(f)}')">
-      <span class="aq-sb-file-icon">${iconMap[ext(f)] || "&#128196;"}</span>
+      <span class="aq-sb-file-icon">${iconMap[ext(f)] || "📄"}</span>
       ${esc(f)}
     </div>`).join("");
 
-  // Sync select dropdown
   const sel = document.getElementById("sbFileSelect");
   if (sel) {
     sel.innerHTML = files.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join("");
@@ -2268,28 +2022,43 @@ function showEditBar() {
   document.getElementById("sbEmpty").style.display       = "none";
 }
 
-function showGeneratingOverlay(show) {
-  const el = document.getElementById("sbPreviewLoading");
-  if (el) el.style.display = show ? "flex" : "none";
+function showGeneratingOverlay(show, msg) {
+  const el    = document.getElementById("sbPreviewLoading");
+  const msgEl = document.getElementById("sbLoadingMsg");
+  if (el)    el.style.display = show ? "flex" : "none";
+  if (msgEl && msg) msgEl.textContent = msg;
 }
 
 function setBtnLoading(btnId, textId, label, disabled) {
   const btn  = document.getElementById(btnId);
   const span = document.getElementById(textId);
-  if (btn)  btn.disabled      = disabled;
-  if (span) span.innerHTML    = label;
+  if (btn)  btn.disabled   = disabled;
+  if (span) span.innerHTML = label;
 }
 
-function setSbPrompt(text) {
+// ── Prompt helpers (used by suggestion chips + empty state examples) ──────────
+
+/**
+ * Set prompt input and move focus to it.
+ * Also shows a client-side intent badge immediately.
+ * FIX: was missing in original — caused ReferenceError on chip clicks.
+ */
+function setSbPromptAndFocus(text) {
   const input = document.getElementById("sbPromptInput");
-  if (input) { input.value = text; input.focus(); }
+  if (input) {
+    input.value = text;
+    input.focus();
+    // Show intent badge immediately as UX feedback
+    const intent = _detectIntentClient(text);
+    _showIntentBadge(intent);
+  }
 }
+
+/** Legacy alias — kept for any other callers. */
+function setSbPrompt(text) { setSbPromptAndFocus(text); }
 
 // ── Init: load site list on page load ────────────────────────────────────────
-
-(async function sbInit() {
-  await loadSiteList();
-})();
+// Called from DOMContentLoaded above; also available as a standalone call.
 
 </script>
 </body>

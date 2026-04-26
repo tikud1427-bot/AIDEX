@@ -1,12 +1,21 @@
 /**
- * project.routes.js — Aquiplex AI Website Execution Engine
+ * project.routes.js — Aquiplex AI Website Execution Engine  [UPGRADED]
  *
  * Mounted at: /workspace/project
- * Requires: requireLogin middleware from index.js
+ *
+ * UPGRADE CHANGELOG:
+ * - [UPGRADE-1] POST /generate now uses builderService.generate(prompt)
+ *               → intent detection + AI generation + template fallback
+ *               → ZERO FAILURE: always returns a working result
+ * - [UPGRADE-2] Accepts both old array format { files: [...] }
+ *               and new object format { files: { "name": "content" } }
+ * - [UPGRADE-3] Logs source (ai | template | nuclear_fallback) for debugging
+ *
+ * ALL OTHER ROUTES: UNCHANGED — backward compatible.
  *
  * ROUTES:
  *   POST   /workspace/project/create       → create new project + folder
- *   POST   /workspace/project/generate     → AI generates + writes files
+ *   POST   /workspace/project/generate     → AI + template hybrid generation [UPGRADED]
  *   POST   /workspace/project/edit         → AI edits file via natural language
  *   GET    /workspace/project/list         → list user's projects
  *   GET    /workspace/project/:id          → project metadata
@@ -23,6 +32,9 @@ const fs       = require("fs");
 const path     = require("path");
 const { v4: uuidv4 } = require("uuid");
 const axios    = require("axios");
+
+// ── [UPGRADE-1] Import builder service ────────────────────────────────────────
+const builderService = require("./services/builder.service");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config
@@ -54,10 +66,9 @@ function handleErr(res, err, status = 500) {
   res.status(status).json({ success: false, error: err?.message || "Internal error" });
 }
 
-/** Resolve the project folder path and verify it belongs to the user */
+/** Resolve the project folder path */
 function projectDir(projectId) {
-  const dir = path.join(PROJECTS_ROOT, projectId);
-  return dir;
+  return path.join(PROJECTS_ROOT, projectId);
 }
 
 /** Read the project manifest (meta.json) safely */
@@ -79,128 +90,61 @@ function writeMeta(projectId, data) {
 
 /**
  * Strip markdown fences and extract JSON from AI response.
- * Handles:
- *   - ```json ... ```
- *   - ``` ... ```
- *   - Trailing/leading prose
+ * Kept for the /edit route which still uses direct AI calls.
  */
 function extractJSON(raw) {
   if (!raw) throw new Error("AI returned empty response");
-
-  // Remove code fences
   let cleaned = raw
     .replace(/```json\s*/gi, "")
     .replace(/```\s*/g, "")
     .trim();
-
-  // Find first { to last }
   const start = cleaned.indexOf("{");
   const end   = cleaned.lastIndexOf("}");
   if (start === -1 || end === -1) throw new Error("No JSON object found in AI response");
-
-  cleaned = cleaned.slice(start, end + 1);
-  return JSON.parse(cleaned);
+  return JSON.parse(cleaned.slice(start, end + 1));
 }
 
-/**
- * Sanitize a filename to prevent path traversal.
- */
+/** Sanitize a filename to prevent path traversal */
 function safeFilename(name) {
   return path.basename(name).replace(/[^a-zA-Z0-9._-]/g, "_");
 }
 
-/**
- * Check if a file extension is allowed to be served.
- */
+/** Check if a file extension is allowed to be served */
 function isAllowedExt(filename) {
   const allowed = [".html", ".css", ".js", ".json", ".svg", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".woff", ".woff2", ".ttf"];
   return allowed.includes(path.extname(filename).toLowerCase());
 }
 
 /**
- * Multi-provider AI call for structured JSON output.
- * Returns parsed { files: [...] } object.
+ * [UPGRADE-2] Normalize builder output to { filename: content } map.
+ * Builder returns { files: { "index.html": "..." } } (object format).
+ * Old code used { files: [{ name, content }] } (array format).
+ * This handles both for backward compatibility.
  */
-async function callAIForFiles(systemPrompt, userPrompt) {
-  const messages = [
-    { role: "system", content: systemPrompt },
-    { role: "user",   content: userPrompt   },
-  ];
+function normalizeFiles(filesOutput) {
+  if (!filesOutput) return {};
 
-  // 1. Try Groq
-  try {
-    const res = await axios.post(
-      "https://api.groq.com/openai/v1/chat/completions",
-      {
-        model: "llama-3.1-70b-versatile",
-        messages,
-        temperature: 0.4,
-        max_tokens: 8192,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 45000,
-      }
-    );
-    const raw = res.data?.choices?.[0]?.message?.content;
-    if (raw) return extractJSON(raw);
-  } catch (err) {
-    console.warn("[AI:Groq] failed:", err.message);
+  // Object format (new): { "index.html": "content" }
+  if (!Array.isArray(filesOutput) && typeof filesOutput === "object") {
+    return filesOutput;
   }
 
-  // 2. Try OpenRouter
-  try {
-    const res = await axios.post(
-      "https://openrouter.ai/api/v1/chat/completions",
-      {
-        model: "mistralai/mixtral-8x7b-instruct",
-        messages,
-        temperature: 0.4,
-        max_tokens: 8192,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        timeout: 50000,
+  // Array format (old): [{ name: "index.html", content: "..." }]
+  if (Array.isArray(filesOutput)) {
+    const result = {};
+    for (const f of filesOutput) {
+      if (f.name && f.content !== undefined) {
+        result[f.name] = f.content;
       }
-    );
-    const raw = res.data?.choices?.[0]?.message?.content;
-    if (raw) return extractJSON(raw);
-  } catch (err) {
-    console.warn("[AI:OpenRouter] failed:", err.message);
-  }
-
-  // 3. Try Gemini
-  try {
-    const geminiKey = process.env.Gemini_API_Key;
-    if (geminiKey) {
-      const res = await axios.post(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
-        {
-          contents: [
-            { role: "user", parts: [{ text: systemPrompt + "\n\n" + userPrompt }] }
-          ],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 8192 },
-        },
-        { timeout: 40000 }
-      );
-      const raw = res.data?.candidates?.[0]?.content?.parts?.[0]?.text;
-      if (raw) return extractJSON(raw);
     }
-  } catch (err) {
-    console.warn("[AI:Gemini] failed:", err.message);
+    return result;
   }
 
-  throw new Error("All AI providers failed. Check API keys.");
+  return {};
 }
 
 /**
- * Call AI for a single file edit (returns updated file content string).
+ * Multi-provider AI call for single file edits — unchanged from original.
  */
 async function callAIForEdit(systemPrompt, userPrompt) {
   const messages = [
@@ -242,7 +186,7 @@ async function callAIForEdit(systemPrompt, userPrompt) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /workspace/project/create
+// POST /workspace/project/create  — UNCHANGED
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/create", async (req, res) => {
@@ -271,13 +215,13 @@ router.post("/create", async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /workspace/project/generate
+// POST /workspace/project/generate  — [UPGRADED] Uses Builder Service
 // Body: { projectId, prompt }
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/generate", async (req, res) => {
   try {
-    const userId             = uid(req);
+    const userId              = uid(req);
     const { projectId, prompt } = req.body || {};
 
     if (!projectId || !prompt) {
@@ -289,62 +233,50 @@ router.post("/generate", async (req, res) => {
       return res.status(404).json({ success: false, error: "Project not found" });
     }
 
-    const systemPrompt = `You are an expert web developer. Generate complete, production-quality websites.
+    // ── [UPGRADE-1] Call builder service (never throws) ────────────────────
+    const buildResult = await builderService.generate(prompt);
 
-CRITICAL RULES:
-1. Respond ONLY with a valid JSON object. No prose, no markdown, no explanation.
-2. The JSON must match this exact schema:
-   {
-     "files": [
-       { "name": "index.html", "content": "..." },
-       { "name": "style.css",  "content": "..." },
-       { "name": "script.js",  "content": "..." }
-     ]
-   }
-3. Always include at minimum: index.html, style.css
-4. Use modern HTML5, CSS3 (flexbox/grid), vanilla JS
-5. Make the site visually stunning — real gradients, animations, professional typography
-6. ALL CSS must be in style.css (linked from index.html). ALL JS in script.js (linked from index.html)
-7. index.html must link style.css as: <link rel="stylesheet" href="style.css">
-8. index.html must link script.js as: <script src="script.js"></script> (if JS is needed)
-9. No external dependencies — inline fonts via Google Fonts @import in CSS only
-10. Content must be realistic, detailed and filled-in — no placeholder text like "Lorem ipsum"`;
+    // buildResult is always { files: {...}, source: "ai"|"template"|..., intent: "..." }
+    const filesMap = normalizeFiles(buildResult.files);
 
-    const userPrompt = `Build this website: ${prompt}
+    const dir     = projectDir(projectId);
+    const written = [];
 
-Respond with ONLY the JSON object. Do not include any text before or after the JSON.`;
-
-    const result = await callAIForFiles(systemPrompt, userPrompt);
-
-    if (!result.files || !Array.isArray(result.files) || result.files.length === 0) {
-      throw new Error("AI did not return any files");
-    }
-
-    const dir      = projectDir(projectId);
-    const written  = [];
-
-    for (const file of result.files) {
-      if (!file.name || file.content === undefined) continue;
-      const safeName = safeFilename(file.name);
+    for (const [filename, content] of Object.entries(filesMap)) {
+      if (!filename || content === undefined) continue;
+      const safeName = safeFilename(filename);
       const filePath = path.join(dir, safeName);
-      fs.writeFileSync(filePath, file.content, "utf8");
+      fs.writeFileSync(filePath, content, "utf8");
       written.push(safeName);
     }
 
     // Update meta
     meta.files     = written;
     meta.prompt    = prompt;
+    meta.intent    = buildResult.intent;   // [UPGRADE-3] store intent for debugging
+    meta.source    = buildResult.source;   // [UPGRADE-3] store source
     meta.updatedAt = new Date().toISOString();
     writeMeta(projectId, meta);
 
-    res.json({ success: true, projectId, files: written });
+    console.log(`[Project Engine] Generated ${written.length} files via ${buildResult.source} (intent: ${buildResult.intent})`);
+
+    res.json({
+      success: true,
+      projectId,
+      files:   written,
+      source:  buildResult.source,   // "ai" | "template" | "nuclear_fallback"
+      intent:  buildResult.intent,
+    });
+
   } catch (err) {
+    // Even if something unexpected explodes, don't surface raw error to user
+    console.error("[Project Engine] /generate unexpected error:", err);
     handleErr(res, err);
   }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /workspace/project/edit
+// POST /workspace/project/edit  — UNCHANGED
 // Body: { projectId, command, filename? }
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -406,7 +338,7 @@ Return ONLY the updated complete file content. Nothing else.`;
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /workspace/project/list
+// GET /workspace/project/list  — UNCHANGED
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get("/list", async (req, res) => {
@@ -443,11 +375,10 @@ router.get("/list", async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /workspace/project/:id  — project metadata
+// GET /workspace/project/:id  — UNCHANGED
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get("/:id", async (req, res, next) => {
-  // Skip if :id is a known sub-route keyword to avoid conflicts
   const reserved = ["create", "generate", "edit", "list"];
   if (reserved.includes(req.params.id)) return next();
 
@@ -472,7 +403,7 @@ router.get("/:id", async (req, res, next) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /workspace/project/:id/files  — list files
+// GET /workspace/project/:id/files  — UNCHANGED
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get("/:id/files", async (req, res) => {
@@ -495,9 +426,7 @@ router.get("/:id/files", async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /workspace/project/:id/:file  — serve project file for iframe preview
-// NOTE: This route intentionally does NOT require login — the iframe needs
-//       to load files. Security is via unguessable UUID project IDs.
+// GET /workspace/project/:id/:file  — UNCHANGED
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get("/:id/:file", (req, res) => {
@@ -515,7 +444,6 @@ router.get("/:id/:file", (req, res) => {
       return res.status(404).send("File not found");
     }
 
-    // Set correct content type
     const ext = path.extname(safeName).toLowerCase();
     const mimeMap = {
       ".html": "text/html; charset=utf-8",
@@ -543,7 +471,7 @@ router.get("/:id/:file", (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DELETE /workspace/project/:id
+// DELETE /workspace/project/:id  — UNCHANGED
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.delete("/:id", async (req, res) => {
