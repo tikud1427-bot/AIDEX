@@ -16,7 +16,24 @@
    overflow must be HIDDEN during both open AND close.
    We use data-state="open|closed" as source of truth.
 ═══════════════════════════════════════════════════════ */
-.aq-step-body {
+  /* 🔥 FIX: Make steps clickable on desktop */
+  .aq-steps-panel {
+    position: relative;
+    z-index: 10;
+  }
+
+  .aq-step-card {
+    position: relative;
+    z-index: 11;
+  }
+
+  .aq-step-hdr {
+    position: relative;
+    z-index: 12;
+    cursor: pointer;
+  }
+  
+  .aq-step-body {
   max-height: 0;
   overflow: hidden;
   /* Smooth, natural easing for expand/collapse */
@@ -61,6 +78,8 @@
 
 /* Loading bar */
 .aq-loading-bar { transition: opacity 0.2s ease; }
+ 
+  
 </style>
 </head>
 <body>
