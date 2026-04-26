@@ -8,18 +8,72 @@
 <link rel="stylesheet" href="/css/workspace.css">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,400;0,500;0,600;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <script src="/socket.io/socket.io.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════════════
+   ACCORDION FIX — core rules that override workspace.css
+   The body element uses CSS transitions on max-height.
+   overflow must be HIDDEN during both open AND close.
+   We use data-state="open|closed" as source of truth.
+═══════════════════════════════════════════════════════ */
+.aq-step-body {
+  max-height: 0;
+  overflow: hidden;
+  /* Smooth, natural easing for expand/collapse */
+  transition: max-height 0.32s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: max-height;
+}
+
+/* When a body is "expanding" we set a px value and keep overflow hidden */
+.aq-step-body[data-state="open"] {
+  /* max-height is set inline via JS scrollHeight */
+  overflow: hidden;
+}
+
+/* After transition ends, if still open, let content breathe */
+.aq-step-body[data-state="settled"] {
+  max-height: none !important;
+  overflow: visible;
+}
+
+/* Spinner micro-animation */
+@keyframes aq-spin {
+  to { transform: rotate(360deg); }
+}
+.aq-mini-spinner,
+.aq-spinner {
+  animation: aq-spin 0.75s linear infinite;
+}
+
+/* Feed item entrance */
+@keyframes feedIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.aq-feed-item-new.visible {
+  animation: feedIn 0.24s ease forwards;
+}
+
+/* Right section fade */
+.aq-right-section {
+  transition: opacity 0.18s ease;
+}
+
+/* Loading bar */
+.aq-loading-bar { transition: opacity 0.2s ease; }
+</style>
 </head>
 <body>
 
 <%- include('partials/nav') %>
 
-<!-- Loading bar -->
+<!-- Top loading bar (thin progress indicator) -->
 <div class="aq-loading-bar" id="aqLoadingBar"></div>
 
 <!-- Toast root -->
 <div id="aq-toast-root"></div>
 
-<!-- Step Run Modal -->
+<!-- ═══════════ STEP RUN MODAL ═══════════ -->
 <div class="aq-modal-backdrop" id="aqRunModal">
   <div class="aq-modal">
     <div class="aq-modal-hdr">
@@ -42,7 +96,7 @@
   </div>
 </div>
 
-<!-- Command Palette -->
+<!-- ═══════════ COMMAND PALETTE ═══════════ -->
 <div class="aq-palette-backdrop" id="aqPalette" onclick="closePalette(event)">
   <div class="aq-palette">
     <input class="aq-palette-input" id="aqPaletteInput" placeholder="Type a command…"
@@ -51,7 +105,7 @@
   </div>
 </div>
 
-<!-- Confirm Modal -->
+<!-- ═══════════ CONFIRM MODAL ═══════════ -->
 <div class="aq-confirm-backdrop" id="aqConfirm">
   <div class="aq-confirm-box">
     <div class="aq-confirm-title" id="aqConfirmTitle">Are you sure?</div>
@@ -63,7 +117,7 @@
   </div>
 </div>
 
-<!-- Drawer overlay -->
+<!-- Drawer overlay (mobile) -->
 <div class="aq-drawer-overlay" id="drawerOverlay" onclick="closeSidebar()"></div>
 
 <div class="aq-workspace">
@@ -153,8 +207,10 @@
                  class="aq-tool-logo" alt="<%= tool.name %>"/>
             <span class="aq-tool-name"><%= tool.name %></span>
             <div class="aq-tool-btns">
+              <!-- FIX: use tool.url safely -->
               <button class="aq-tool-btn"
-                onclick="launchTool('<%= (tool.url || '').replace(/'/g, '') %>')">OPEN</button>
+                onclick="launchTool('<%= (tool.url || '').replace(/'/g, "\\'") %>')">OPEN</button>
+              <!-- FIX: route is /workspace/tools/:id — matches DELETE handler -->
               <button class="aq-tool-btn rm"
                 onclick="removeTool('<%= tool._id %>')">RM</button>
             </div>
@@ -168,12 +224,12 @@
           </div>
         <% } %>
       </div>
-    </div>
+    </div><!-- /aq-sidebar -->
 
     <!-- MAIN -->
     <div class="aq-main">
 
-      <!-- WELCOME -->
+      <!-- WELCOME STATE -->
       <div class="aq-welcome" id="wsWelcome">
         <div class="aq-welcome-glyph">⚡</div>
         <h2>Execution Control</h2>
@@ -185,7 +241,7 @@
         <div class="aq-welcome-hint">Press ⌘K for commands</div>
       </div>
 
-      <!-- LOADING STATE -->
+      <!-- LOADING STATE (skeleton) -->
       <div id="wsLoading" style="display:none;" class="aq-welcome">
         <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:320px;">
           <div class="aq-skeleton" style="height:18px;width:60%;"></div>
@@ -285,7 +341,7 @@
                 <div class="aq-mem-hdr">Bundle Memory <span id="memBundleCount">0 keys</span></div>
                 <div id="memBundleEntries"></div>
                 <div class="aq-mem-hdr" style="margin-top:14px;">Context Summary</div>
-                <div class="aq-context-box" id="memContextBox"   style="display:none;"></div>
+                <div class="aq-context-box" id="memContextBox"    style="display:none;"></div>
                 <div class="aq-empty"        id="memContextEmpty" style="padding:6px 0;font-size:0.64rem;">No context summary yet.</div>
                 <div class="aq-mem-hdr" style="margin-top:14px;">Workspace Memory <span id="memWsCount">0 keys</span></div>
                 <div id="memWsEntries"></div>
@@ -335,26 +391,37 @@
 "use strict";
 
 /* ═══════════════════════════════════════════════════════
-   STATE
+   GLOBAL STATE
+   Single source of truth for all UI and data.
 ═══════════════════════════════════════════════════════ */
 const STATE = {
-  bundle:         null,
-  wsMemory:       {},
-  pinnedIds:      [],
-  selectedStep:   null,
-  openSteps:      new Set(),
-  loading:        false,
-  lastBundleId:   null,
-  stepRunning:    new Set(),
+  bundle:       null,   // current loaded bundle object
+  wsMemory:     {},     // workspace-level memory (flat object)
+  pinnedIds:    [],     // array of pinned bundle id strings
+  selectedStep: null,   // currently focused step index
+  openSteps:    new Set(), // set of step indices that are open
+  loading:      false,  // global loading flag
+  lastBundleId: null,   // for retry logic
+  stepRunning:  new Set(), // set of step indices actively running
+  // FIX: track all known bundles (SSR + dynamically fetched)
+  allBundles:   [],
 };
 
+// Inject SSR bundle list — kept in sync with dynamic fetches
 const _ejsBundles = <%- JSON.stringify(bundles || []) %>;
+STATE.allBundles = _ejsBundles.slice();
 
 /* ═══════════════════════════════════════════════════════
    LOADING / ERROR UI
 ═══════════════════════════════════════════════════════ */
-function showLoading()  { document.getElementById("aqLoadingBar").classList.add("visible"); STATE.loading = true; }
-function hideLoading()  { document.getElementById("aqLoadingBar").classList.remove("visible"); STATE.loading = false; }
+function showLoading()  {
+  document.getElementById("aqLoadingBar").classList.add("visible");
+  STATE.loading = true;
+}
+function hideLoading()  {
+  document.getElementById("aqLoadingBar").classList.remove("visible");
+  STATE.loading = false;
+}
 
 function showBundleLoading() {
   document.getElementById("wsWelcome").style.display = "none";
@@ -381,7 +448,8 @@ function showWelcome() {
 }
 function retryLoad() {
   if (STATE.lastBundleId) {
-    const b = _ejsBundles.find(x => String(x._id) === String(STATE.lastBundleId));
+    // FIX: search allBundles not just SSR list
+    const b = STATE.allBundles.find(x => String(x._id) === String(STATE.lastBundleId));
     if (b) selectBundle(b);
   }
 }
@@ -390,6 +458,7 @@ function retryLoad() {
    CONFIRM DIALOG
 ═══════════════════════════════════════════════════════ */
 let _confirmResolve = null;
+
 function showConfirm(title, msg, okLabel = "Confirm") {
   return new Promise(resolve => {
     _confirmResolve = resolve;
@@ -416,9 +485,9 @@ function openRunModal(title) {
   document.getElementById("aqRunModal").classList.add("open");
 }
 function showRunModalOutput(content) {
-  document.getElementById("runModalSpinner").style.display  = "none";
-  document.getElementById("runModalOutput").style.display   = "block";
-  document.getElementById("runModalFooter").style.display   = "flex";
+  document.getElementById("runModalSpinner").style.display   = "none";
+  document.getElementById("runModalOutput").style.display    = "block";
+  document.getElementById("runModalFooter").style.display    = "flex";
   document.getElementById("runModalOutputContent").innerHTML = formatOutput(content);
 }
 function closeRunModal() {
@@ -457,35 +526,56 @@ function mobileNav(tab) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   INIT
+   INIT — Page load
 ═══════════════════════════════════════════════════════ */
 window.addEventListener("DOMContentLoaded", async () => {
   initBundleSwitcher();
   try {
     const res  = await fetch("/workspace/state");
-    if (!res.ok) throw new Error("State load failed");
+    if (!res.ok) throw new Error("State load failed: " + res.status);
     const data = await res.json();
-    const rawMem       = (data.workspace && data.workspace.workspaceMemory) || {};
-    STATE.wsMemory     = rawMem instanceof Map ? Object.fromEntries(rawMem) : rawMem;
-    STATE.pinnedIds    = (data.workspace && data.workspace.pinnedBundleIds) || [];
+
+    // Hydrate workspace memory
+    const rawMem   = (data.workspace && data.workspace.workspaceMemory) || {};
+    STATE.wsMemory = rawMem instanceof Map ? Object.fromEntries(rawMem) : rawMem;
+
+    // Hydrate pinned list
+    STATE.pinnedIds = (data.workspace && data.workspace.pinnedBundleIds) || [];
+
+    // Render WS memory section
     renderWsMemory();
+
+    // Hydrate output feed with recent history
     const recentOutputs = data.workspace && data.workspace.recentOutputs;
     if (recentOutputs && recentOutputs.length) renderOutputFeed(recentOutputs);
+
+    // FIX: merge server bundles into allBundles for accurate searches
+    if (data.bundles && data.bundles.length) {
+      data.bundles.forEach(sb => {
+        const idx = STATE.allBundles.findIndex(b => String(b._id) === String(sb._id));
+        if (idx !== -1) STATE.allBundles[idx] = sb;
+        else            STATE.allBundles.push(sb);
+      });
+    }
+
+    // Auto-select last open bundle or first active
     const lastId  = data.workspace && data.workspace.lastOpenBundleId;
-    const bundles = data.bundles || _ejsBundles;
+    const bundles = data.bundles || STATE.allBundles;
+
     if (lastId) {
       const b = bundles.find(x => String(x._id) === String(lastId));
       if (b) { await selectBundle(b); return; }
     }
     const active = bundles.find(b => b.status === "active");
     if (active) await selectBundle(active);
+
   } catch (e) {
     console.warn("[AQ] State init failed:", e.message);
   }
 });
 
 /* ═══════════════════════════════════════════════════════
-   BUNDLE SWITCHER
+   BUNDLE SWITCHER (topbar dropdown)
 ═══════════════════════════════════════════════════════ */
 function initBundleSwitcher() {
   const sw = document.getElementById("bundleSwitcher");
@@ -498,7 +588,8 @@ function initBundleSwitcher() {
     if (saved) sw.value = saved;
     sw.onchange = () => {
       const id    = sw.value;
-      const found = _ejsBundles.find(b => String(b._id) === id);
+      // FIX: search full allBundles list
+      const found = STATE.allBundles.find(b => String(b._id) === id);
       if (found) { localStorage.setItem("aq_activeBundle", id); selectBundle(found); }
     };
   }
@@ -528,9 +619,9 @@ function switchRightTab(tab, btn) {
   const section = document.getElementById("rtab-" + tab);
   if (section) {
     section.classList.add("active");
-    section.style.opacity = 0;
+    section.style.opacity = "0";
     requestAnimationFrame(() => {
-      requestAnimationFrame(() => { section.style.opacity = 1; });
+      requestAnimationFrame(() => { section.style.opacity = "1"; });
     });
   }
 }
@@ -540,13 +631,17 @@ function switchRightTab(tab, btn) {
 ═══════════════════════════════════════════════════════ */
 async function selectBundle(bundle) {
   if (!bundle || !bundle._id) return;
+
   STATE.lastBundleId = bundle._id;
   STATE.openSteps.clear();
+  STATE.stepRunning.clear();
 
+  // Highlight sidebar row
   document.querySelectorAll(".aq-bundle-item").forEach(r => r.classList.remove("selected"));
   const row = document.getElementById("brow-" + bundle._id);
   if (row) row.classList.add("selected");
 
+  // Sync switcher
   const sw = document.getElementById("bundleSwitcher");
   if (sw) sw.value = bundle._id;
   localStorage.setItem("aq_activeBundle", bundle._id);
@@ -555,6 +650,7 @@ async function selectBundle(bundle) {
   showLoading();
 
   try {
+    // Always fetch fresh from server so data is accurate
     const res = await fetch("/workspace/bundle/" + bundle._id);
     if (!res.ok) throw new Error("HTTP " + res.status);
     const data = await res.json();
@@ -569,7 +665,12 @@ async function selectBundle(bundle) {
   STATE.bundle       = bundle;
   STATE.selectedStep = null;
 
-  // Open current step by default
+  // FIX: merge into allBundles so retry and switcher work correctly
+  const idx = STATE.allBundles.findIndex(b => String(b._id) === String(bundle._id));
+  if (idx !== -1) STATE.allBundles[idx] = bundle;
+  else            STATE.allBundles.push(bundle);
+
+  // Default open: current step (or first pending step)
   const currentStep = bundle.currentStep || 0;
   STATE.openSteps.add(currentStep);
 
@@ -584,8 +685,11 @@ async function selectBundle(bundle) {
 }
 
 async function selectBundleById(id) {
-  const bundle = _ejsBundles.find(b => String(b._id) === String(id));
+  // FIX: use allBundles (includes dynamically fetched) not just SSR _ejsBundles
+  const bundle = STATE.allBundles.find(b => String(b._id) === String(id));
+  // If not found locally, still attempt to select with a stub (selectBundle fetches fresh anyway)
   if (bundle) await selectBundle(bundle);
+  else        await selectBundle({ _id: id });
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -636,14 +740,14 @@ function renderTimeline(steps, progress, currentStep) {
   if (!steps.length) { tl.innerHTML = ""; return; }
 
   tl.innerHTML = steps.map((step, i) => {
-    const prog    = progress.find(p => p && p.step === i);
-    const status  = prog ? prog.status : (i === currentStep ? "in-progress" : "pending");
-    const dotCls  = status === "completed"   ? "done"
-                  : status === "in-progress" ? "running"
-                  : i === currentStep        ? "running" : "";
-    const icon    = status === "completed"   ? "✓"
-                  : status === "in-progress" ? "…" : (i + 1);
-    const lineCls = status === "completed"   ? "done" : "";
+    const prog   = progress.find(p => p && p.step === i);
+    const status = prog ? prog.status : (i === currentStep ? "in-progress" : "pending");
+    const dotCls = status === "completed"   ? "done"
+                 : status === "in-progress" ? "running"
+                 : i === currentStep        ? "running" : "";
+    const icon   = status === "completed"   ? "✓"
+                 : status === "in-progress" ? "…" : (i + 1);
+    const lineCls = status === "completed" ? "done" : "";
     const conn    = i < steps.length - 1 ? `<div class="aq-tl-line ${lineCls}"></div>` : "";
     return `
       <div class="aq-tl-step" title="${esc(step.title || 'Step '+(i+1))}" onclick="jumpToStep(${i})">
@@ -653,7 +757,14 @@ function renderTimeline(steps, progress, currentStep) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   STEP CARDS — PERFECT ACCORDION
+   STEP CARDS — PRODUCTION ACCORDION
+
+   FIX STRATEGY:
+   1. Render all cards with max-height:0 (closed by default)
+   2. After DOM paint, open the steps in STATE.openSteps
+   3. Use data-state attribute to track open/closing/settled
+   4. Never use max-height:none during animation — only after transition ends
+   5. Single RAF to batch DOM reads before writes
 ═══════════════════════════════════════════════════════ */
 function renderStepCards(steps, progress, outputs, currentStep) {
   const container = document.getElementById("execSteps");
@@ -663,9 +774,9 @@ function renderStepCards(steps, progress, outputs, currentStep) {
   }
 
   container.innerHTML = steps.map((step, i) => {
-    const prog    = progress.find(p => p && p.step === i) || {};
-    const status  = prog.status || (i === currentStep ? "in-progress" : "pending");
-    const output  = outputs.find(o => o && o.stepIndex === i);
+    const prog      = progress.find(p => p && p.step === i) || {};
+    const status    = prog.status || (i === currentStep ? "in-progress" : "pending");
+    const output    = outputs.find(o => o && o.stepIndex === i);
     const isRunning = STATE.stepRunning.has(i);
 
     const cardCls  = status === "completed"   ? "done"
@@ -684,8 +795,8 @@ function renderStepCards(steps, progress, outputs, currentStep) {
     const numIcon  = status === "completed"   ? "✓"
                    : isRunning               ? `<div class="aq-mini-spinner"></div>` : (i + 1);
 
-    const resources = step.resources || step.tools || [];
-    const toolsHtml = resources.length
+    const resources  = step.resources || step.tools || [];
+    const toolsHtml  = resources.length
       ? `<div class="aq-tool-chips">${resources.map(r =>
           typeof r === "string"
             ? `<span class="aq-tool-chip">🔗 ${esc(r)}</span>`
@@ -740,8 +851,8 @@ function renderStepCards(steps, progress, outputs, currentStep) {
         <button class="aq-step-act-btn rerun" onclick="event.stopPropagation();rerunStep(${i})">↺ Re-run</button>`;
     }
 
-    const isOpen = STATE.openSteps.has(i);
-
+    // All bodies start closed (max-height:0, data-state="closed")
+    // JS will open STATE.openSteps after paint
     return `
       <div class="aq-step-card ${cardCls}" id="scard-${i}" data-step="${i}">
         <div class="aq-step-hdr" onclick="toggleCard(${i})">
@@ -751,9 +862,9 @@ function renderStepCards(steps, progress, outputs, currentStep) {
             <div class="aq-step-desc">${esc(step.description || '')}</div>
           </div>
           <span class="aq-badge ${badgeCls}">${badgeTxt}</span>
-          <span class="aq-step-toggle ${isOpen ? 'open' : ''}">▾</span>
+          <span class="aq-step-toggle">▾</span>
         </div>
-        <div class="aq-step-body" id="sbody-${i}" style="max-height:${isOpen ? 'none' : '0'};">
+        <div class="aq-step-body" id="sbody-${i}" data-state="closed">
           <div class="aq-step-body-inner" id="sbody-inner-${i}">
             ${toolsHtml}
             ${outputHtml}
@@ -763,77 +874,145 @@ function renderStepCards(steps, progress, outputs, currentStep) {
       </div>`;
   }).join("");
 
-  // Apply correct open heights after DOM paint
+  // FIX: After full DOM paint, open all steps in STATE.openSteps.
+  // Use double-RAF to ensure layout has calculated scrollHeights.
   requestAnimationFrame(() => {
-    STATE.openSteps.forEach(idx => {
-      _applyOpenHeight(idx);
+    requestAnimationFrame(() => {
+      STATE.openSteps.forEach(idx => _openCard(idx, /* animate= */ false));
     });
   });
 }
 
 /* ═══════════════════════════════════════════════════════
-   PERFECT ACCORDION
+   ACCORDION ENGINE — Perfect expand/collapse
+
+   RULES:
+   - Only one step open at a time (close others before opening new)
+   - During animation: overflow=hidden, max-height=px value
+   - After animation settles (open): max-height=none, overflow=visible
+     This is critical so dynamic content (outputs) renders without clipping
+   - On close: snap max-height back to px first, then animate to 0
+     This is needed because max-height=none cannot animate to 0
 ═══════════════════════════════════════════════════════ */
 function toggleCard(idx) {
+  if (STATE.openSteps.has(idx)) {
+    _closeCard(idx);
+  } else {
+    // Close all other open cards first (single-open accordion)
+    const others = Array.from(STATE.openSteps).filter(i => i !== idx);
+    others.forEach(i => _closeCard(i));
+    _openCard(idx, /* animate= */ true);
+  }
+}
+
+function _openCard(idx, animate = true) {
+  const body   = document.getElementById("sbody-" + idx);
+  const inner  = document.getElementById("sbody-inner-" + idx);
+  const toggle = document.querySelector(`#scard-${idx} .aq-step-toggle`);
+  if (!body || !inner) return;
+
+  STATE.openSteps.add(idx);
+  if (toggle) toggle.classList.add("open");
+
+  // Measure content height while element is still in DOM
+  body.style.overflow  = "hidden";
+  body.style.maxHeight = "0";  // reset before measuring
+  body.setAttribute("data-state", "open");
+
+  // Get actual scroll height after potential content change
+  const targetH = inner.scrollHeight + 40; // 40px padding buffer
+
+  if (animate) {
+    // Trigger transition by setting target height
+    // Use requestAnimationFrame to ensure browser registers the 0 → targetH change
+    requestAnimationFrame(() => {
+      body.style.maxHeight = targetH + "px";
+    });
+  } else {
+    // No animation — snap open immediately
+    body.style.maxHeight = targetH + "px";
+  }
+
+  // After transition: remove cap so content (outputs) can grow freely
+  const onTransitionEnd = (e) => {
+    if (e.propertyName !== "max-height") return;
+    body.removeEventListener("transitionend", onTransitionEnd);
+    // Only settle if still open (user might have closed during animation)
+    if (STATE.openSteps.has(idx)) {
+      body.style.maxHeight = "none";
+      body.style.overflow  = "visible";
+      body.setAttribute("data-state", "settled");
+    }
+  };
+  body.addEventListener("transitionend", onTransitionEnd);
+
+  if (!animate) {
+    // No transition fires — settle immediately
+    body.style.maxHeight = "none";
+    body.style.overflow  = "visible";
+    body.setAttribute("data-state", "settled");
+  }
+}
+
+function _closeCard(idx) {
   const body   = document.getElementById("sbody-" + idx);
   const toggle = document.querySelector(`#scard-${idx} .aq-step-toggle`);
   if (!body) return;
 
-  const isOpen = STATE.openSteps.has(idx);
+  STATE.openSteps.delete(idx);
+  if (toggle) toggle.classList.remove("open");
+  body.setAttribute("data-state", "closed");
 
-  if (isOpen) {
-    // Close: animate from current scrollHeight → 0
-    body.style.maxHeight = body.scrollHeight + "px";
+  // FIX: If max-height is "none" (settled state), we MUST snap to a px value first
+  // before animating to 0. CSS cannot transition from "none" to a number.
+  if (body.style.maxHeight === "none" || body.style.maxHeight === "") {
+    const inner = document.getElementById("sbody-inner-" + idx);
+    const h     = inner ? inner.scrollHeight + 40 : 200;
+    body.style.overflow  = "hidden";
+    body.style.maxHeight = h + "px";
+
+    // Force layout recalc, then animate to 0
+    body.getBoundingClientRect(); // triggers reflow
     requestAnimationFrame(() => {
       body.style.maxHeight = "0";
-      body.style.overflow  = "hidden";
     });
-    STATE.openSteps.delete(idx);
-    if (toggle) toggle.classList.remove("open");
-    STATE.selectedStep = null;
   } else {
-    // Open: animate from 0 → scrollHeight
-    STATE.openSteps.add(idx);
-    if (toggle) toggle.classList.add("open");
-    STATE.selectedStep = idx;
-    _applyOpenHeight(idx);
+    body.style.overflow  = "hidden";
+    body.style.maxHeight = "0";
   }
+
+  if (STATE.selectedStep === idx) STATE.selectedStep = null;
 }
 
-function _applyOpenHeight(idx) {
+/* FIX: After dynamic content updates (output rendered), recalculate open card height */
+function _recalcOpenCard(idx) {
+  if (!STATE.openSteps.has(idx)) return;
   const body  = document.getElementById("sbody-" + idx);
   const inner = document.getElementById("sbody-inner-" + idx);
   if (!body || !inner) return;
 
-  body.style.overflow  = "hidden";
-  const targetH = inner.scrollHeight + 32; // padding buffer
-  body.style.maxHeight = targetH + "px";
+  // If already settled (no max-height cap), nothing to do — content expands naturally
+  if (body.getAttribute("data-state") === "settled") return;
 
-  // After transition, remove max-height cap so content can grow freely
-  const onEnd = () => {
-    if (STATE.openSteps.has(idx)) {
-      body.style.maxHeight = "none";
-      body.style.overflow  = "visible";
-    }
-    body.removeEventListener("transitionend", onEnd);
-  };
-  body.addEventListener("transitionend", onEnd);
+  // Still mid-animation — update target height
+  const targetH = inner.scrollHeight + 40;
+  body.style.maxHeight = targetH + "px";
 }
 
 function jumpToStep(idx) {
   STATE.selectedStep = idx;
   const card = document.getElementById("scard-" + idx);
-  if (card) {
-    card.scrollIntoView({ behavior: "smooth", block: "center" });
-    if (!STATE.openSteps.has(idx)) {
-      // small delay so scroll lands first
-      setTimeout(() => toggleCard(idx), 180);
-    }
+  if (!card) return;
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (!STATE.openSteps.has(idx)) {
+    setTimeout(() => toggleCard(idx), 180);
   }
 }
 
 /* ═══════════════════════════════════════════════════════
    RUN STEP (Execution Engine)
+   FIX: POST to /workspace/step/:bundleId/:stepIndex (correct route)
+   FIX: Keep card open post-run; recalc height after output appears
 ═══════════════════════════════════════════════════════ */
 async function runStep(stepIndex) {
   const b = STATE.bundle;
@@ -844,29 +1023,47 @@ async function runStep(stepIndex) {
   STATE.stepRunning.add(stepIndex);
   openRunModal(`▶ ${stepTitle}`);
 
-  // Refresh card to show running state
-  _refreshStepCard(stepIndex);
+  // Show running state immediately — optimistic UI
+  _patchStepCardRunning(stepIndex, true);
 
   try {
+    // FIX: Correct route — POST /workspace/step/:bundleId/:stepIndex
     const res  = await fetch(`/workspace/step/${b._id}/${stepIndex}`, {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ title: stepTitle }),
     });
-    const data = await res.json();
-    if (data.error) { toast(data.error, "error"); closeRunModal(); return; }
 
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      throw new Error(errData.error || `HTTP ${res.status}`);
+    }
+
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    // Update state
     STATE.bundle = data.bundle;
-    if (data.workspace && data.workspace.workspaceMemory) STATE.wsMemory = data.workspace.workspaceMemory;
+    if (data.workspace && data.workspace.workspaceMemory) {
+      STATE.wsMemory = data.workspace.workspaceMemory;
+    }
 
     STATE.stepRunning.delete(stepIndex);
-    // Keep step open after run
+    // Keep card open to show fresh output
     STATE.openSteps.add(stepIndex);
 
+    // Full re-render (updates all panels + step cards)
     renderExecPanel(data.bundle);
     renderMemoryPanel(data.bundle);
     renderInsightPanel(data.bundle);
     updateBundleRowProgress(b._id, data.bundle);
+
+    // FIX: recalc open card height AFTER re-render adds the output block
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        _openCard(stepIndex, false); // re-settle with new content height
+      });
+    });
 
     const output = data.output || (data.bundle.outputs || []).find(o => o && o.stepIndex === stepIndex);
     if (output && output.content) {
@@ -881,30 +1078,59 @@ async function runStep(stepIndex) {
 
   } catch (e) {
     STATE.stepRunning.delete(stepIndex);
-    toast("Error running step", "error");
-    console.error(e);
+    toast("Error running step: " + e.message, "error");
+    console.error("[AQ] runStep error:", e);
     closeRunModal();
-    renderExecPanel(STATE.bundle);
+    // Re-render to restore non-running state
+    if (STATE.bundle) renderExecPanel(STATE.bundle);
   }
 }
 
-function _refreshStepCard(stepIndex) {
-  const b = STATE.bundle;
-  if (!b) return;
-  const steps    = Array.isArray(b.steps)    ? b.steps    : [];
-  const progress = Array.isArray(b.progress) ? b.progress : [];
-  const outputs  = Array.isArray(b.outputs)  ? b.outputs  : [];
-  renderStepCards(steps, progress, outputs, b.currentStep || 0);
+/* Optimistic patch — update only the specific step card during run, avoiding full re-render */
+function _patchStepCardRunning(stepIndex, isRunning) {
+  const card = document.getElementById("scard-" + stepIndex);
+  if (!card) return;
+
+  const badge = card.querySelector(".aq-badge");
+  const num   = card.querySelector(".aq-step-num");
+  const btn   = card.querySelector(".aq-step-act-btn.run-step");
+
+  if (badge) { badge.className = "aq-badge wb-running"; badge.textContent = "RUNNING…"; }
+  if (num)   { num.innerHTML   = `<div class="aq-mini-spinner"></div>`; }
+  if (btn)   { btn.disabled    = isRunning; btn.innerHTML = isRunning ? '<div class="aq-mini-spinner"></div> Running…' : '▶ Run Step'; }
+
+  // Show loading output block
+  const inner = document.getElementById("sbody-inner-" + stepIndex);
+  if (inner && isRunning) {
+    // Remove existing empty-inline placeholder and add spinner
+    const emptyEl = inner.querySelector(".aq-empty-inline");
+    if (emptyEl) {
+      emptyEl.outerHTML = `
+        <div class="aq-output-block aq-output-loading" id="stepLoadingBlock-${stepIndex}">
+          <div class="aq-spinner-row">
+            <div class="aq-spinner aq-spinner-sm"></div>
+            <span>Executing step — please wait…</span>
+          </div>
+        </div>`;
+    }
+    // Recalculate open card height to fit new loading block
+    _recalcOpenCard(stepIndex);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════
-   AUTO RUN
+   AUTO RUN ALL STEPS
 ═══════════════════════════════════════════════════════ */
 async function autoRunSteps() {
   const b = STATE.bundle;
   if (!b || !b.steps) { toast("Select a bundle first", "info"); return; }
-  const ok = await showConfirm("Auto-Run All Steps", `Auto-run all ${b.steps.length} steps sequentially?`, "▶ Auto Run");
+  const ok = await showConfirm(
+    "Auto-Run All Steps",
+    `Auto-run all ${b.steps.length} steps sequentially?`,
+    "▶ Auto Run"
+  );
   if (!ok) return;
+
   for (let i = 0; i < b.steps.length; i++) {
     const latest   = STATE.bundle;
     const progress = Array.isArray(latest.progress) ? latest.progress : [];
@@ -918,6 +1144,7 @@ async function autoRunSteps() {
 
 /* ═══════════════════════════════════════════════════════
    MARK STEP DONE
+   FIX: Same route as runStep — /workspace/step/:bundleId/:stepIndex
 ═══════════════════════════════════════════════════════ */
 async function markStepDone(stepIndex) {
   const b = STATE.bundle;
@@ -942,6 +1169,10 @@ async function markStepDone(stepIndex) {
     renderInsightPanel(data.bundle);
     updateBundleRowProgress(b._id, data.bundle);
 
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => _openCard(stepIndex, false));
+    });
+
     if (data.output) prependOutputFeed(data.bundle.title || "Bundle", data.output.stepIndex, data.output.stepTitle, data.output.content);
 
     if (data.bundle.status === "completed") toast("🎉 Bundle complete!", "success");
@@ -952,6 +1183,9 @@ async function markStepDone(stepIndex) {
   } finally { hideLoading(); }
 }
 
+/* ═══════════════════════════════════════════════════════
+   RE-RUN STEP (local state reset — no backend call)
+═══════════════════════════════════════════════════════ */
 function rerunStep(stepIndex) {
   const b = STATE.bundle;
   if (!b) return;
@@ -959,10 +1193,12 @@ function rerunStep(stepIndex) {
     const entry = b.progress.find(p => p && p.step === stepIndex);
     if (entry) entry.status = "pending";
   }
-  if (Array.isArray(b.outputs)) b.outputs = b.outputs.filter(o => o && o.stepIndex !== stepIndex);
+  if (Array.isArray(b.outputs)) {
+    b.outputs = b.outputs.filter(o => o && o.stepIndex !== stepIndex);
+  }
   STATE.openSteps.add(stepIndex);
   renderExecPanel(b);
-  toast(`Step ${stepIndex + 1} reset — mark done to re-run`, "info");
+  toast(`Step ${stepIndex + 1} reset — click Run Step`, "info");
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1019,8 +1255,8 @@ async function resumeCurrentBundle() {
   finally { hideLoading(); }
 }
 
-async function pinCurrentBundle()     { const b = STATE.bundle; if (!b) return; await _togglePin(b._id); }
-async function pinBundleById(id)      { await _togglePin(id); }
+async function pinCurrentBundle()   { const b = STATE.bundle; if (!b) return; await _togglePin(b._id); }
+async function pinBundleById(id)    { await _togglePin(id); }
 
 async function _togglePin(id) {
   const isPinned = STATE.pinnedIds.some(p => String(p) === String(id));
@@ -1028,14 +1264,19 @@ async function _togglePin(id) {
   try {
     const res  = await fetch(`/workspace/${endpoint}/${id}`, { method: "POST" });
     const data = await res.json();
+    // Update local pinned state from server response
     if (data.pinnedBundleIds) STATE.pinnedIds = data.pinnedBundleIds;
-    else if (!isPinned) STATE.pinnedIds.push(id);
-    else STATE.pinnedIds = STATE.pinnedIds.filter(x => String(x) !== String(id));
+    else if (!isPinned)       STATE.pinnedIds.push(id);
+    else                      STATE.pinnedIds = STATE.pinnedIds.filter(x => String(x) !== String(id));
+
     if (STATE.bundle && String(STATE.bundle._id) === String(id)) updatePinBtn(id);
+
+    // Update sidebar row button label
     const rowEl = document.getElementById("brow-" + id);
     if (rowEl) {
       const pinBtn = rowEl.querySelector(".aq-bundle-act-btn.pin");
-      if (pinBtn) pinBtn.textContent = STATE.pinnedIds.some(p => String(p) === String(id)) ? "★ PIND" : "☆ PIN";
+      const nowPinned = STATE.pinnedIds.some(p => String(p) === String(id));
+      if (pinBtn) pinBtn.textContent = nowPinned ? "★ PINNED" : "☆ PIN";
     }
     toast(isPinned ? "Unpinned" : "Pinned ★", isPinned ? "info" : "success");
   } catch { toast("Pin action failed", "error"); }
@@ -1062,10 +1303,16 @@ async function _doDeleteBundle(id) {
   try {
     const res = await fetch("/bundle/" + id, { method: "DELETE" });
     if (!res.ok) throw new Error("Delete failed: " + res.status);
+
+    // Remove from DOM
     const rowEl = document.getElementById("brow-" + id);
     if (rowEl) rowEl.remove();
     const sw = document.getElementById("bundleSwitcher");
     if (sw) { const opt = sw.querySelector(`option[value="${id}"]`); if (opt) opt.remove(); }
+
+    // Remove from local state
+    STATE.allBundles = STATE.allBundles.filter(b => String(b._id) !== String(id));
+
     if (STATE.bundle && String(STATE.bundle._id) === String(id)) {
       STATE.bundle = null;
       localStorage.removeItem("aq_activeBundle");
@@ -1079,13 +1326,18 @@ async function _doDeleteBundle(id) {
   } finally { hideLoading(); }
 }
 
+/* ═══════════════════════════════════════════════════════
+   TOOL ACTIONS
+   FIX: Use /workspace/tools/:id (DELETE) — NOT /tool/:id
+═══════════════════════════════════════════════════════ */
 async function removeTool(id) {
   if (!id) return;
   const ok = await showConfirm("Remove Tool", "Remove this tool from your workspace?", "Remove");
   if (!ok) return;
   showLoading();
   try {
-    const res = await fetch("/workspace/tools/" + id, { method: "DELETE" });
+    // FIX: canonical route is DELETE /workspace/tools/:id
+    const res = await fetch(`/workspace/tools/${id}`, { method: "DELETE" });
     if (!res.ok) throw new Error("Remove failed: " + res.status);
     const el = document.getElementById("trow-" + id);
     if (el) el.remove();
@@ -1112,8 +1364,8 @@ function renderMemoryPanel(b) {
     : `<div class="aq-empty" style="padding:8px 0;font-size:0.64rem;">No bundle memory yet.</div>`;
 
   if (b.contextSummary) {
-    document.getElementById("memContextBox").textContent    = b.contextSummary;
-    document.getElementById("memContextBox").style.display  = "";
+    document.getElementById("memContextBox").textContent     = b.contextSummary;
+    document.getElementById("memContextBox").style.display   = "";
     document.getElementById("memContextEmpty").style.display = "none";
   } else {
     document.getElementById("memContextBox").style.display   = "none";
@@ -1156,7 +1408,10 @@ function renderInsightPanel(b) {
 
 function renderOutputFeed(outputs) {
   const feed = document.getElementById("outputFeed");
-  if (!outputs || !outputs.length) { feed.innerHTML = `<div class="aq-empty">No outputs yet.</div>`; return; }
+  if (!outputs || !outputs.length) {
+    feed.innerHTML = `<div class="aq-empty">No outputs yet.</div>`;
+    return;
+  }
   feed.innerHTML = outputs.map(o => `
     <div class="aq-feed-item">
       <div class="aq-feed-meta">
@@ -1227,6 +1482,9 @@ function launchTool(url) {
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
+/* ═══════════════════════════════════════════════════════
+   SANITIZATION & FORMATTING
+═══════════════════════════════════════════════════════ */
 function esc(str) {
   if (str == null) return "";
   return String(str)
@@ -1307,6 +1565,7 @@ function paletteKeydown(e) {
   if (e.key === "Escape") document.getElementById("aqPalette").classList.remove("open");
 }
 
+/* Global keyboard shortcuts */
 document.addEventListener("keydown", e => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
     e.preventDefault(); openPalette();
@@ -1320,6 +1579,8 @@ document.addEventListener("keydown", e => {
 
 /* ═══════════════════════════════════════════════════════
    REALTIME (socket.io)
+   FIX: on bundle:update, fetch fresh + re-render
+   Preserves open step state across real-time updates
 ═══════════════════════════════════════════════════════ */
 (function initRealtime() {
   if (typeof io === "undefined") return;
@@ -1331,26 +1592,31 @@ document.addEventListener("keydown", e => {
       fetch("/workspace/bundle/" + STATE.bundle._id)
         .then(r => r.json())
         .then(d => {
-          if (d.bundle) {
-            STATE.bundle = d.bundle;
-            renderExecPanel(d.bundle);
-            renderMemoryPanel(d.bundle);
-            renderInsightPanel(d.bundle);
-          }
+          if (!d.bundle) return;
+          STATE.bundle = d.bundle;
+          // FIX: preserve open steps across real-time re-renders
+          renderExecPanel(d.bundle);
+          renderMemoryPanel(d.bundle);
+          renderInsightPanel(d.bundle);
         }).catch(() => {});
     });
-  } catch { /* socket.io not configured */ }
+  } catch { /* socket.io not configured — polling fallback active */ }
 })();
 
 /* ═══════════════════════════════════════════════════════
-   POLLING FALLBACK (every 10s)
+   POLLING FALLBACK (every 10s when socket not available)
+   Only runs if bundle is selected and not currently loading
 ═══════════════════════════════════════════════════════ */
 setInterval(async () => {
-  if (!STATE.bundle || STATE.loading) return;
+  if (!STATE.bundle || STATE.loading || STATE.stepRunning.size > 0) return;
   try {
     const res  = await fetch("/workspace/bundle/" + STATE.bundle._id);
     const data = await res.json();
-    if (data.bundle) {
+    if (!data.bundle) return;
+    // FIX: Only re-render if data actually changed (check completionPercent)
+    const prevDone = (STATE.bundle.progress || []).filter(p => p && p.status === "completed").length;
+    const nextDone = (data.bundle.progress || []).filter(p => p && p.status === "completed").length;
+    if (nextDone !== prevDone || data.bundle.status !== STATE.bundle.status) {
       STATE.bundle = data.bundle;
       renderExecPanel(data.bundle);
     }
