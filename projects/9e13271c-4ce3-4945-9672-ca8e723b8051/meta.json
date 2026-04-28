@@ -1,0 +1,15 @@
+{
+  "projectId": "9e13271c-4ce3-4945-9672-ca8e723b8051",
+  "userId": "69b6c1b8cd3038e700ab58ff",
+  "name": "Ai tool directory",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-04-28T15:55:05.421Z",
+  "updatedAt": "2026-04-28T15:55:05.619Z",
+  "prompt": "Ai tool directory",
+  "intent": "landing_page",
+  "source": "template"
+}

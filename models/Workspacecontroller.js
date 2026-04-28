@@ -1,49 +1,28 @@
-/**
- * controllers/workspaceController.js — AQUIPLEX Production
- *
- * All workspace-related route handlers. Mount in routes/workspace.js.
- *
- * REST surface:
- *   GET  /workspace                     → render workspace page
- *   GET  /workspace/state               → JSON: { workspace, bundles }
- *   GET  /workspace/bundle/:id          → JSON: { bundle }
- *   POST /workspace/run/:id             → start bundle execution
- *   POST /workspace/pause/:id           → pause bundle
- *   POST /workspace/resume/:id          → resume bundle
- *   POST /workspace/step/:id/:stepIndex → mark step complete
- *   POST /workspace/pin/:id             → pin bundle
- *   POST /workspace/unpin/:id           → unpin bundle
- *   DELETE /workspace/tools/:id         → remove tool from workspace
- *
- * Bundle CRUD lives in bundleController / routes/bundle.js:
- *   DELETE /bundle/:id
- */
-
 "use strict";
 
 const Workspace = require("../models/Workspace");
-const Bundle    = require("../models/Bundle");   // adjust path as needed
+const Bundle    = require("../models/Bundle");
+const {
+  createProject,
+  generateProject,
+  getProjectList,
+  getProjectFiles,
+  getProjectFile,
+  saveProjectFile,
+  editProjectFile,
+} = require("../services/workspace.service");
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Load (or create) the workspace for the current user.
- * Throws if userId is missing.
- */
 async function getOrCreateWorkspace(userId) {
   if (!userId) throw new Error("No userId on session");
   let ws = await Workspace.findOne({ userId });
-  if (!ws) {
-    ws = await Workspace.create({ userId });
-  }
+  if (!ws) ws = await Workspace.create({ userId });
   return ws;
 }
 
-/**
- * Lightweight error responder.
- */
 function apiError(res, msg, status = 500) {
   return res.status(status).json({ error: msg });
 }
@@ -53,18 +32,13 @@ function apiError(res, msg, status = 500) {
 // ─────────────────────────────────────────────────────────────────────────────
 exports.renderWorkspace = async (req, res) => {
   try {
-    const userId = req.user._id;
-
-    // Load workspace + bundles (same pattern as getState)
-    const ws = await Workspace.findOne({ userId }).lean();
-    const bundles = await Bundle.find({ userId })
-      .sort({ updatedAt: -1 })
-      .lean();
-
+    const userId  = req.user._id;
+    const ws      = await Workspace.findOne({ userId }).lean();
+    const bundles = await Bundle.find({ userId }).sort({ updatedAt: -1 }).lean();
     res.render("workspace", {
-      page: "workspace",   // ✅ CRITICAL (fixes your layout issue)
+      page:      "workspace",
       workspace: ws || null,
-      bundles: bundles || [],
+      bundles:   bundles || [],
     });
   } catch (err) {
     console.error("[WS] renderWorkspace:", err);
@@ -73,18 +47,14 @@ exports.renderWorkspace = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /workspace/state — hydrate frontend state on boot
+// GET /workspace/state
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getState = async (req, res) => {
   try {
     const userId  = req.user._id;
     const ws      = await getOrCreateWorkspace(userId);
     const bundles = await Bundle.find({ userId }).sort({ updatedAt: -1 }).lean();
-
-    res.json({
-      workspace: ws.toObject({ getters: true }),
-      bundles,
-    });
+    res.json({ workspace: ws.toObject({ getters: true }), bundles });
   } catch (err) {
     console.error("[WS] getState:", err);
     apiError(res, "Failed to load workspace state");
@@ -92,22 +62,15 @@ exports.getState = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// GET /workspace/bundle/:id — fetch single bundle (fresh)
+// GET /workspace/bundle/:id
 // ─────────────────────────────────────────────────────────────────────────────
 exports.getBundle = async (req, res) => {
   try {
-    const bundle = await Bundle.findOne({
-      _id:    req.params.id,
-      userId: req.user._id,
-    }).lean();
-
+    const bundle = await Bundle.findOne({ _id: req.params.id, userId: req.user._id }).lean();
     if (!bundle) return apiError(res, "Bundle not found", 404);
-
-    // Track last open
     const ws = await getOrCreateWorkspace(req.user._id);
     ws.lastOpenBundleId = bundle._id;
     await ws.save();
-
     res.json({ bundle });
   } catch (err) {
     console.error("[WS] getBundle:", err);
@@ -116,28 +79,21 @@ exports.getBundle = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /workspace/run/:id — start / restart bundle
+// POST /workspace/run/:id
 // ─────────────────────────────────────────────────────────────────────────────
 exports.runBundle = async (req, res) => {
   try {
     const userId = req.user._id;
     const bundle = await Bundle.findOne({ _id: req.params.id, userId });
     if (!bundle) return apiError(res, "Bundle not found", 404);
-
     bundle.status      = "active";
     bundle.currentStep = bundle.currentStep || 0;
     await bundle.save();
-
     const ws = await getOrCreateWorkspace(userId);
     ws.openSession(bundle._id, (bundle.steps || []).length);
     ws.lastOpenBundleId = bundle._id;
     await ws.save();
-
-    // Emit realtime event if socket.io is available
-    if (req.app.get("io")) {
-      req.app.get("io").emit("bundle:update", { bundleId: bundle._id });
-    }
-
+    if (req.app.get("io")) req.app.get("io").emit("bundle:update", { bundleId: bundle._id });
     res.json({ bundle: bundle.toObject(), workspace: ws.toObject({ getters: true }) });
   } catch (err) {
     console.error("[WS] runBundle:", err);
@@ -153,18 +109,12 @@ exports.pauseBundle = async (req, res) => {
     const userId = req.user._id;
     const bundle = await Bundle.findOne({ _id: req.params.id, userId });
     if (!bundle) return apiError(res, "Bundle not found", 404);
-
     bundle.status = "paused";
     await bundle.save();
-
     const ws = await getOrCreateWorkspace(userId);
     ws.updateSession(bundle._id, { status: "paused" });
     await ws.save();
-
-    if (req.app.get("io")) {
-      req.app.get("io").emit("bundle:update", { bundleId: bundle._id });
-    }
-
+    if (req.app.get("io")) req.app.get("io").emit("bundle:update", { bundleId: bundle._id });
     res.json({ bundle: bundle.toObject() });
   } catch (err) {
     console.error("[WS] pauseBundle:", err);
@@ -180,18 +130,12 @@ exports.resumeBundle = async (req, res) => {
     const userId = req.user._id;
     const bundle = await Bundle.findOne({ _id: req.params.id, userId });
     if (!bundle) return apiError(res, "Bundle not found", 404);
-
     bundle.status = "active";
     await bundle.save();
-
     const ws = await getOrCreateWorkspace(userId);
     ws.updateSession(bundle._id, { status: "running" });
     await ws.save();
-
-    if (req.app.get("io")) {
-      req.app.get("io").emit("bundle:update", { bundleId: bundle._id });
-    }
-
+    if (req.app.get("io")) req.app.get("io").emit("bundle:update", { bundleId: bundle._id });
     res.json({ bundle: bundle.toObject(), workspace: ws.toObject({ getters: true }) });
   } catch (err) {
     console.error("[WS] resumeBundle:", err);
@@ -200,52 +144,34 @@ exports.resumeBundle = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /workspace/step/:id/:stepIndex — mark step complete
+// POST /workspace/step/:id/:stepIndex
 // ─────────────────────────────────────────────────────────────────────────────
 exports.completeStep = async (req, res) => {
   try {
     const userId    = req.user._id;
     const stepIndex = parseInt(req.params.stepIndex, 10);
-    if (isNaN(stepIndex) || stepIndex < 0) {
-      return apiError(res, "Invalid stepIndex", 400);
-    }
+    if (isNaN(stepIndex) || stepIndex < 0) return apiError(res, "Invalid stepIndex", 400);
 
     const bundle = await Bundle.findOne({ _id: req.params.id, userId });
     if (!bundle) return apiError(res, "Bundle not found", 404);
 
-    // Ensure progress array exists
     if (!Array.isArray(bundle.progress)) bundle.progress = [];
-
     const existing = bundle.progress.find((p) => p && p.step === stepIndex);
     if (existing) {
       existing.status      = "completed";
       existing.completedAt = new Date();
     } else {
-      bundle.progress.push({
-        step:        stepIndex,
-        status:      "completed",
-        completedAt: new Date(),
-      });
+      bundle.progress.push({ step: stepIndex, status: "completed", completedAt: new Date() });
     }
 
-    // Advance currentStep
     bundle.currentStep = Math.max(bundle.currentStep || 0, stepIndex + 1);
+    const totalSteps   = (bundle.steps || []).length;
+    const done         = bundle.progress.filter((p) => p && p.status === "completed").length;
+    const allDone      = totalSteps > 0 && done >= totalSteps;
 
-    const totalSteps = (bundle.steps || []).length;
-    const done       = bundle.progress.filter((p) => p && p.status === "completed").length;
-    const allDone    = totalSteps > 0 && done >= totalSteps;
+    bundle.status = allDone ? "completed" : "active";
 
-    if (allDone) {
-      bundle.status = "completed";
-    } else if (bundle.status !== "active") {
-      bundle.status = "active";
-    }
-
-    // Build synthetic output entry
-    const stepTitle = (bundle.steps && bundle.steps[stepIndex] && bundle.steps[stepIndex].title)
-      || req.body.title
-      || `Step ${stepIndex + 1}`;
-
+    const stepTitle  = (bundle.steps?.[stepIndex]?.title) || req.body.title || `Step ${stepIndex + 1}`;
     const outputEntry = {
       stepIndex,
       stepTitle,
@@ -264,32 +190,14 @@ exports.completeStep = async (req, res) => {
     bundle.markModified("outputs");
     await bundle.save();
 
-    // Update workspace session + recent outputs
     const ws = await getOrCreateWorkspace(userId);
-    ws.updateSession(bundle._id, {
-      status:      allDone ? "completed" : "running",
-      currentStep: bundle.currentStep,
-    });
+    ws.updateSession(bundle._id, { status: allDone ? "completed" : "running", currentStep: bundle.currentStep });
     if (allDone) ws.closeSession(bundle._id, "completed");
-
-    ws.pushRecentOutput({
-      bundleId:    bundle._id,
-      bundleTitle: bundle.title,
-      stepIndex,
-      stepTitle,
-      content:     outputEntry.content,
-    });
+    ws.pushRecentOutput({ bundleId: bundle._id, bundleTitle: bundle.title, stepIndex, stepTitle, content: outputEntry.content });
     await ws.save();
 
-    if (req.app.get("io")) {
-      req.app.get("io").emit("bundle:update", { bundleId: bundle._id });
-    }
-
-    res.json({
-      bundle:    bundle.toObject(),
-      output:    outputEntry,
-      workspace: ws.toObject({ getters: true }),
-    });
+    if (req.app.get("io")) req.app.get("io").emit("bundle:update", { bundleId: bundle._id });
+    res.json({ bundle: bundle.toObject(), output: outputEntry, workspace: ws.toObject({ getters: true }) });
   } catch (err) {
     console.error("[WS] completeStep:", err);
     apiError(res, "Failed to complete step");
@@ -303,11 +211,8 @@ exports.pinBundle = async (req, res) => {
   try {
     const ws = await getOrCreateWorkspace(req.user._id);
     const id = req.params.id;
-
-    const alreadyPinned = ws.pinnedBundles.some((p) => p && p.toString() === id);
-    if (!alreadyPinned) ws.pinnedBundles.push(id);
+    if (!ws.pinnedBundles.some((p) => p && p.toString() === id)) ws.pinnedBundles.push(id);
     await ws.save();
-
     res.json({ success: true, pinnedBundleIds: ws.pinnedBundles.map(String) });
   } catch (err) {
     console.error("[WS] pinBundle:", err);
@@ -323,7 +228,6 @@ exports.unpinBundle = async (req, res) => {
     const ws = await getOrCreateWorkspace(req.user._id);
     ws.pinnedBundles = ws.pinnedBundles.filter((p) => p && p.toString() !== req.params.id);
     await ws.save();
-
     res.json({ success: true, pinnedBundleIds: ws.pinnedBundles.map(String) });
   } catch (err) {
     console.error("[WS] unpinBundle:", err);
@@ -332,7 +236,7 @@ exports.unpinBundle = async (req, res) => {
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DELETE /workspace/tools/:id  ← FIXED route (was /tool/:id)
+// DELETE /workspace/tools/:id
 // ─────────────────────────────────────────────────────────────────────────────
 exports.removeTool = async (req, res) => {
   try {
@@ -343,5 +247,136 @@ exports.removeTool = async (req, res) => {
   } catch (err) {
     console.error("[WS] removeTool:", err);
     apiError(res, "Failed to remove tool");
+  }
+};
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PROJECT / CODE GENERATION ROUTES
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /workspace/projects  — list all projects for user
+// ─────────────────────────────────────────────────────────────────────────────
+exports.listProjects = async (req, res) => {
+  try {
+    const projects = await getProjectList(req.user._id);
+    res.json({ success: true, projects });
+  } catch (err) {
+    console.error("[WS] listProjects:", err);
+    apiError(res, "Failed to list projects");
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /workspace/projects  — create a blank project
+// ─────────────────────────────────────────────────────────────────────────────
+exports.createNewProject = async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return apiError(res, "Project name required", 400);
+    const project = await createProject({ userId: req.user._id, name });
+    res.json({ success: true, project });
+  } catch (err) {
+    console.error("[WS] createNewProject:", err);
+    apiError(res, "Failed to create project");
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /workspace/generate  — AI generate project files
+// ─────────────────────────────────────────────────────────────────────────────
+exports.generateProjectFiles = async (req, res) => {
+  try {
+    const { prompt, name } = req.body;
+    if (!prompt) return apiError(res, "Prompt required", 400);
+
+    const projectName = name || prompt.slice(0, 60);
+    const project     = await createProject({ userId: req.user._id, name: projectName });
+    const result      = await generateProject({ userId: req.user._id, projectId: project._id || project.id, prompt });
+
+    res.json({ success: true, project, files: result.files || [] });
+  } catch (err) {
+    console.error("[WS] generateProjectFiles:", err);
+    apiError(res, "Generation failed: " + err.message);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /workspace/files/:projectId  — list files in a project
+// ─────────────────────────────────────────────────────────────────────────────
+exports.listFiles = async (req, res) => {
+  try {
+    const files = await getProjectFiles({ userId: req.user._id, projectId: req.params.projectId });
+    res.json({ success: true, files });
+  } catch (err) {
+    console.error("[WS] listFiles:", err);
+    apiError(res, "Failed to list files");
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /workspace/file/:projectId/:fileName  — get file content
+// ─────────────────────────────────────────────────────────────────────────────
+exports.getFile = async (req, res) => {
+  try {
+    const { projectId, fileName } = req.params;
+    const file = await getProjectFile({ userId: req.user._id, projectId, fileName });
+    res.json({ success: true, file });
+  } catch (err) {
+    console.error("[WS] getFile:", err);
+    apiError(res, "Failed to get file");
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /workspace/save-file  — overwrite file content
+// ─────────────────────────────────────────────────────────────────────────────
+exports.saveFile = async (req, res) => {
+  try {
+    const { projectId, fileName, content } = req.body;
+    if (!projectId || !fileName) return apiError(res, "projectId and fileName required", 400);
+    const result = await saveProjectFile({ userId: req.user._id, projectId, fileName, content: content || "" });
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error("[WS] saveFile:", err);
+    apiError(res, "Failed to save file");
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// POST /workspace/edit-file  — AI-powered edit
+// ─────────────────────────────────────────────────────────────────────────────
+exports.editFile = async (req, res) => {
+  try {
+    const { projectId, fileName, instruction } = req.body;
+    if (!projectId || !fileName || !instruction) {
+      return apiError(res, "projectId, fileName, and instruction required", 400);
+    }
+    const result = await editProjectFile({ userId: req.user._id, projectId, fileName, instruction });
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error("[WS] editFile:", err);
+    apiError(res, "AI edit failed: " + err.message);
+  }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /workspace/project/:projectId/:fileName  — serve raw file for iframe preview
+// ─────────────────────────────────────────────────────────────────────────────
+exports.serveFile = async (req, res) => {
+  try {
+    const { projectId, fileName } = req.params;
+    const file = await getProjectFile({ userId: req.user._id, projectId, fileName });
+    const ext  = fileName.split(".").pop().toLowerCase();
+    const mime = ext === "html" ? "text/html"
+               : ext === "css"  ? "text/css"
+               : ext === "js"   ? "application/javascript"
+               : ext === "json" ? "application/json"
+               : "text/plain";
+    res.setHeader("Content-Type", mime);
+    res.send(file.content || "");
+  } catch (err) {
+    console.error("[WS] serveFile:", err);
+    res.status(404).send("File not found");
   }
 };

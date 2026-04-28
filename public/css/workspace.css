@@ -1981,3 +1981,307 @@ body {
   outline-offset: 2px;
 }
 *:not(:focus-visible) { outline: none; }
+
+/* ══════════════════════════════════════════════════════════════
+   MOBILE OPTIMIZATIONS — v4.0 addendum
+   SAFE OVERRIDES ONLY — desktop styles are unchanged
+   All rules scoped to @media (max-width: 768px) unless noted
+══════════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+
+  /* ── TOPBAR ── */
+  .aq-topbar {
+    padding: 0 12px;
+    gap: 8px;
+    height: 48px;
+  }
+  .aq-menu-btn {
+    display: flex;
+    width: 44px;
+    height: 44px;
+    font-size: 1.1rem;
+  }
+  .aq-breadcrumb { display: none; }
+  .aq-status-pill { display: none; }
+  .aq-switcher { max-width: 110px; font-size: 0.62rem; }
+  .aq-btn#paletteBtn { padding: 6px 10px; min-height: 36px; }
+
+  /* ── BODY LAYOUT — single column, no horizontal scroll ── */
+  .aq-body {
+    grid-template-columns: 1fr;
+    overflow: hidden;
+  }
+
+  /* ── SIDEBAR — slide-in drawer ── */
+  .aq-sidebar {
+    position: fixed;
+    top: 48px;
+    left: 0;
+    bottom: 0;
+    width: 280px;
+    max-width: 85vw;
+    transform: translateX(-100%);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 200;
+    overflow: hidden;
+    /* keep sidebar border but only when open */
+    border-right: 1px solid var(--border-lit);
+  }
+  .aq-sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+  }
+  .aq-sidebar-close { display: block; }
+
+  /* Touch-friendly sidebar items */
+  .aq-bundle-item    { padding: 12px 10px; }
+  .aq-sidebar-tab    { padding: 10px 4px; min-height: 44px; }
+  .aq-tool-item      { padding: 12px 10px; }
+  .aq-site-item      { padding: 12px 10px; }
+
+  /* Always show bundle actions on mobile (no hover) */
+  .aq-bundle-actions { opacity: 1; }
+  .aq-tool-btns      { opacity: 1; }
+  .aq-site-item-del  { opacity: 1; }
+
+  /* ── MAIN AREA — full width ── */
+  .aq-main {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  /* ── EXEC HEADER ── */
+  .aq-exec-hdr {
+    padding: 14px 14px 12px;
+  }
+  .aq-exec-hdr-top {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .aq-exec-title { font-size: 0.95rem; }
+  .aq-exec-goal  { font-size: 0.68rem; }
+  .aq-exec-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .aq-exec-actions .aq-btn {
+    flex: 1 1 auto;
+    min-height: 44px;
+    justify-content: center;
+    font-size: 0.6rem;
+  }
+  .aq-stats-row { gap: 12px; flex-wrap: wrap; }
+
+  /* ── EXEC CONTENT — single column, steps full-width ── */
+  .aq-exec-content {
+    grid-template-columns: 1fr;
+    overflow: hidden;
+  }
+
+  /* ── RIGHT PANEL — hidden on mobile (accessible via bottom nav) ── */
+  .aq-right-panel {
+    display: none !important;
+    width: 0 !important;
+    border-left: none !important;
+  }
+
+  /* ── STEPS PANEL — full-width, no right border ── */
+  .aq-steps-panel {
+    border-right: none;
+    min-width: 0;
+    width: 100%;
+  }
+  .aq-steps-scroll {
+    padding: 12px 12px;
+  }
+
+  /* ── STEP CARDS — touch-friendly, always-visible actions ── */
+  .aq-step-hdr {
+    padding: 14px 12px;
+    gap: 10px;
+  }
+  .aq-step-title { font-size: 0.82rem; }
+  .aq-step-desc  { font-size: 0.68rem; }
+  .aq-step-toggle { opacity: 1; }  /* always visible on mobile */
+  .aq-step-actions {
+    opacity: 1;  /* always visible — no hover on touch */
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .aq-step-act-btn {
+    min-height: 44px;
+    padding: 8px 14px;
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+
+  /* ── TIMELINE — horizontal scroll (already has overflow-x: auto) ── */
+  .aq-timeline {
+    padding: 10px 12px;
+  }
+
+  /* ── WELCOME STATE ── */
+  .aq-welcome {
+    padding: 40px 20px;
+  }
+  .aq-welcome h2 { font-size: 1.3rem; }
+  .aq-welcome p  { font-size: 0.84rem; }
+  .aq-welcome-actions {
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+  }
+  .aq-welcome-actions .aq-btn {
+    width: 100%;
+    max-width: 280px;
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  /* ── BOTTOM NAV — always visible on mobile ── */
+  .aq-bottom-nav { display: flex; }
+  .aq-bottom-tab {
+    min-height: 52px;
+    padding: 8px 4px;
+    gap: 3px;
+  }
+  .aq-bottom-tab .icon { font-size: 1.1rem; }
+
+  /* ── TOAST — full-width on mobile ── */
+  #aq-toast-root {
+    bottom: 68px; /* above bottom nav */
+    left: 12px;
+    right: 12px;
+    align-items: center;
+  }
+  .aq-toast { text-align: center; width: 100%; }
+
+  /* ── SITE BUILDER ── */
+  .aq-sb-header {
+    padding: 14px 14px 12px;
+    gap: 10px;
+  }
+  .aq-sb-title-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .aq-sb-title   { font-size: 0.9rem; }
+  .aq-sb-actions .aq-btn { min-height: 44px; }
+
+  /* Suggestion chips — allow wrapping */
+  .aq-sb-suggestions { gap: 8px; }
+  .aq-sb-chip {
+    min-height: 40px;
+    padding: 8px 14px;
+  }
+
+  /* Generate / edit bars — stacked */
+  .aq-sb-generate-bar,
+  .aq-sb-edit-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .aq-sb-input {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 0.82rem;
+  }
+  .aq-sb-file-select {
+    width: 100%;
+    min-width: 0;
+  }
+  .aq-sb-intent-badge { align-self: flex-start; }
+  .aq-btn-run,
+  .aq-sb-generate-bar .aq-btn,
+  .aq-sb-edit-bar .aq-btn {
+    min-height: 44px;
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Site builder body — filetree collapsed above preview */
+  .aq-sb-body {
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .aq-sb-filetree {
+    width: 100%;
+    max-height: 130px;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .aq-sb-filetree-list { overflow-y: auto; }
+  .aq-sb-file-item {
+    padding: 10px 12px;
+    min-height: 40px;
+  }
+
+  /* Preview panel full-width */
+  .aq-sb-preview-panel {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+  }
+
+  /* Empty state — tighter on mobile */
+  .aq-sb-empty {
+    padding: 40px 20px;
+  }
+  .aq-sb-empty-title { font-size: 1.1rem; }
+  .aq-sb-empty-sub   { font-size: 0.8rem; max-width: 100%; }
+  .aq-sb-empty-examples {
+    gap: 6px;
+    max-width: 100%;
+  }
+
+  /* ── COMMAND PALETTE ── */
+  .aq-palette-backdrop { padding-top: 60px; padding-left: 12px; padding-right: 12px; }
+  .aq-palette { max-width: 100%; border-radius: var(--r); }
+  .aq-palette-input { font-size: 0.9rem; padding: 16px 16px; }
+  .aq-palette-cmd { min-height: 44px; }
+
+  /* ── CONFIRM MODAL ── */
+  .aq-confirm-box { padding: 22px 18px; width: 92%; }
+  .aq-confirm-actions .aq-btn { min-height: 44px; flex: 1; justify-content: center; }
+
+  /* ── OUTPUT BLOCK ── */
+  .aq-output-content {
+    font-size: 0.74rem;
+    max-height: 160px;
+    overflow-x: auto;
+  }
+
+  /* ── MISC OVERFLOW GUARDS ── */
+  .aq-exec,
+  .aq-site-builder,
+  .aq-welcome,
+  .aq-sb-body,
+  .aq-sb-preview-panel {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+}
+
+/* ── 480px and below: extra tightening ── */
+@media (max-width: 480px) {
+  .aq-topbar { padding: 0 10px; height: 48px; }
+  .aq-switcher { display: none; }
+  .aq-exec-hdr { padding: 12px 12px 10px; }
+  .aq-steps-scroll { padding: 10px 10px; }
+  .aq-step-hdr { padding: 12px 10px; gap: 8px; }
+  .aq-step-num  { width: 24px; height: 24px; font-size: 0.58rem; }
+  .aq-stats-row { gap: 10px; }
+  .aq-stat-val  { font-size: 0.9rem; }
+  .aq-sb-filetree { max-height: 110px; }
+  .aq-welcome { padding: 32px 16px; }
+  .aq-welcome h2 { font-size: 1.15rem; }
+  .aq-sb-empty { padding: 32px 16px; }
+  #aq-toast-root { bottom: 62px; }
+}
+
