@@ -1,26 +1,24 @@
 /* ═══════════════════════════════════════════════════════════════
-   WORKSPACE — PREMIUM MINIMAL v4.0
+   WORKSPACE — PREMIUM MINIMAL v5.0
    Design direction: Calm · Focused · Premium · ChatGPT-class UX
-   
-   CHANGES vs v3.0:
-   ✂ REMOVED: accent2 (purple), accent3 (pink/red) from UI surfaces
-   ✂ REMOVED: cyan overload — accent used surgically only
-   ✂ REMOVED: border on .aq-bundle-item (transparent by default)
-   ✂ REMOVED: glowing selected state — subtle background instead
-   ✂ REMOVED: heavy progress-glow animation — progress bar simplified
-   ✂ REMOVED: stacked box-shadows on step cards hover
-   ✂ REMOVED: .aq-logo-sep purple accent — monochrome logo
-   ✂ REMOVED: .aq-insight-chip purple — now neutral muted
-   ✂ REMOVED: step-act-btn.rerun purple
-   ✂ SIMPLIFIED: Welcome state — larger, more editorial
-   ✂ SIMPLIFIED: Topbar — thinner, fewer elements visible
-   ✂ SIMPLIFIED: Sidebar header — no bottom border, more spacious
-   ✂ SIMPLIFIED: Step cards — no border default, soft bg contrast
-   ✦ ADDED: Progressive disclosure on sidebar actions (already hover-only, now smoother)
-   ✦ ADDED: Right panel collapsible toggle button
-   ✦ ADDED: Better empty state hierarchy
-   ✦ ADDED: Single accent system (--accent cyan only)
-   ✦ ADDED: More breathing room throughout via spacing increases
+
+   v5.0 CHANGES:
+   ✦ ADDED: Sticky action bar for builder (Generate / Edit / Preview)
+   ✦ ADDED: Unsaved changes indicator (dot on file tab)
+   ✦ ADDED: Mobile-first touch targets (≥44px everywhere)
+   ✦ ADDED: Improved empty states with example prompts + CTA
+   ✦ ADDED: Better file tree (active highlight, indent, unsaved dot)
+   ✦ ADDED: Preview open-in-tab button
+   ✦ ADDED: Generating overlay polish + progress steps
+   ✦ ADDED: Skeleton placeholders for project loading
+   ✦ ADDED: Sidebar drawer overlay with auto-close
+   ✦ ADDED: Topbar prompt focus ring + clear CTA
+   ✦ ADDED: Smooth tab switching (no flicker)
+   ✦ ADDED: Better toast positioning and sizing on mobile
+   ✦ IMPROVED: Spacing, hierarchy, grouping across all panels
+   ✦ IMPROVED: Button sizing and contrast for CTA clarity
+   ✦ IMPROVED: Step card active state with left accent stripe
+   ✦ IMPROVED: Progress bar with animated shimmer while running
 ═══════════════════════════════════════════════════════════════ */
 
 /* ── BASE ────────────────────────────────────────────────────── */
@@ -40,43 +38,39 @@ body {
 }
 
 /* ── DESIGN TOKENS ───────────────────────────────────────────── */
-/* SIMPLIFIED: Reduced from 5 accent colors to 1 + neutral grayscale */
 .aq-workspace {
-  /* surfaces — softened contrast between levels */
   --bg:         #07090e;
   --surface:    #0c0f16;
   --panel:      #111520;
   --panel-2:    #161b28;
 
-  /* borders — more subtle, less visual noise */
   --border:     rgba(255,255,255,0.05);
   --border-lit: rgba(255,255,255,0.09);
 
-  /* ONE accent color — surgical use only */
   --accent:     #22d3ee;
   --green:      #34d399;
   --amber:      #fbbf24;
 
-  /* Legacy aliases — kept for backward compat with inline JS-rendered HTML */
-  --accent2:    #22d3ee;   /* ← was purple, now maps to accent for legacy refs */
-  --accent3:    #f87171;   /* ← kept only for error/danger states */
+  /* Legacy aliases — kept for backward compat */
+  --accent2:    #22d3ee;
+  --accent3:    #f87171;
 
-  /* text — slightly warmer */
   --text:       #b8c1cc;
   --muted:      #505866;
   --bright:     #eef0f3;
 
-  /* radius */
   --r:          10px;
   --r-sm:       6px;
 
-  /* type */
   --mono:       'IBM Plex Mono', monospace;
   --ui:         'Syne', system-ui, sans-serif;
 
-  /* shadows — lighter, single layer */
   --shadow:     0 2px 12px rgba(0,0,0,0.4);
   --shadow-lg:  0 8px 40px rgba(0,0,0,0.6);
+  --shadow-md:  0 4px 24px rgba(0,0,0,0.5);
+
+  /* topbar height — referenced in sidebar positioning */
+  --topbar-h: 48px;
 }
 
 /* ── ANIMATIONS ──────────────────────────────────────────────── */
@@ -96,6 +90,10 @@ body {
   from { opacity: 0; transform: translateY(-4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
+@keyframes aq-progress-run {
+  0%   { background-position: 0% 0; }
+  100% { background-position: 200% 0; }
+}
 
 /* ── WORKSPACE SHELL ─────────────────────────────────────────── */
 .workspace-page {
@@ -103,7 +101,6 @@ body {
   min-height: 0;
   overflow: hidden;
   background: var(--bg);
-  /* SIMPLIFIED: Removed radial gradient — flat surface, less noise */
 }
 
 .aq-workspace {
@@ -117,14 +114,13 @@ body {
 .aq-loading-bar {
   position: fixed;
   top: 0; left: 0; right: 0;
-  height: 1.5px;
+  height: 2px;
   background: var(--accent);
   z-index: 9999;
   opacity: 0;
   transition: opacity 0.2s ease;
   transform-origin: left;
   pointer-events: none;
-  /* SIMPLIFIED: Single color, no purple gradient */
 }
 .aq-loading-bar.visible {
   opacity: 1;
@@ -134,37 +130,51 @@ body {
 /* ── TOAST ────────────────────────────────────────────────────── */
 #aq-toast-root {
   position: fixed;
-  bottom: 24px; right: 24px;
+  bottom: 24px; right: 20px;
   z-index: 9999;
   display: flex;
   flex-direction: column;
   gap: 8px;
   pointer-events: none;
+  width: 280px;
 }
 
 .aq-toast {
-  padding: 10px 16px;
+  padding: 11px 16px;
   border-radius: var(--r);
   font-family: var(--mono);
   font-size: 0.68rem;
   pointer-events: auto;
   animation: aq-slide-up 0.2s ease;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-md);
   letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: opacity 0.32s ease;
 }
-.aq-toast.success { background: rgba(52,211,153,0.08);  border: 1px solid rgba(52,211,153,0.2);  color: var(--green);  }
-.aq-toast.error   { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.2); color: var(--accent3); }
-.aq-toast.info    { background: rgba(34,211,238,0.08);  border: 1px solid rgba(34,211,238,0.2);  color: var(--accent); }
+.aq-toast::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.aq-toast.success { background: rgba(52,211,153,0.08);  border: 1px solid rgba(52,211,153,0.22);  color: var(--green); }
+.aq-toast.success::before { background: var(--green); }
+.aq-toast.error   { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.22); color: var(--accent3); }
+.aq-toast.error::before { background: var(--accent3); }
+.aq-toast.info    { background: rgba(34,211,238,0.07);  border: 1px solid rgba(34,211,238,0.2);   color: var(--accent); }
+.aq-toast.info::before { background: var(--accent); }
+.aq-toast.fadeout { opacity: 0; }
 
 /* ── TOPBAR ───────────────────────────────────────────────────── */
-/* SIMPLIFIED: Height reduced 52→46px. Status pill hidden by default
-   (shown only on hover of topbar-right). Cleaner breadcrumb. */
 .aq-topbar {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 0 20px;
-  height: 46px;
+  gap: 12px;
+  padding: 0 16px;
+  height: var(--topbar-h);
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -177,18 +187,17 @@ body {
   border: none;
   color: var(--muted);
   border-radius: var(--r-sm);
-  width: 28px; height: 28px;
+  width: 36px; height: 36px;
   display: none;
   align-items: center;
   justify-content: center;
   font-size: 1rem;
   cursor: pointer;
-  transition: color 0.15s;
+  transition: color 0.15s, background 0.15s;
   flex-shrink: 0;
 }
-.aq-menu-btn:hover { color: var(--bright); }
+.aq-menu-btn:hover { color: var(--bright); background: var(--panel); }
 
-/* SIMPLIFIED: Logo — no purple separator, monochrome */
 .aq-logo {
   font-family: var(--mono);
   font-size: 0.65rem;
@@ -200,9 +209,42 @@ body {
   flex-shrink: 0;
   opacity: 0.9;
 }
-.aq-logo-sep { color: var(--accent); }
+.aq-logo span { color: var(--muted); }
+.aq-logo-sep  { color: var(--accent); }
 
-/* SIMPLIFIED: Breadcrumb — less decoration */
+/* Topbar prompt — more prominent */
+.aq-topbar-prompt {
+  flex: 1;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  max-width: 700px;
+}
+
+.aq-topbar-prompt input,
+#topPromptInput {
+  flex: 1;
+  height: 36px;
+  background: var(--panel);
+  border: 1px solid var(--border-lit);
+  color: var(--bright);
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  padding: 0 14px;
+  border-radius: var(--r);
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  min-width: 0;
+}
+.aq-topbar-prompt input:focus,
+#topPromptInput:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(34,211,238,0.08);
+}
+.aq-topbar-prompt input::placeholder,
+#topPromptInput::placeholder { color: var(--muted); }
+
 .aq-breadcrumb {
   display: flex;
   align-items: center;
@@ -210,8 +252,7 @@ body {
   font-family: var(--mono);
   font-size: 0.62rem;
   color: var(--muted);
-  flex: 1;
-  min-width: 0;
+  white-space: nowrap;
 }
 .aq-breadcrumb .sep { color: var(--border-lit); }
 .aq-breadcrumb .cur { color: var(--text); font-weight: 600; }
@@ -223,7 +264,6 @@ body {
   flex-shrink: 0;
 }
 
-/* SIMPLIFIED: Status pill — reduced visual weight, no pulsing dot by default */
 .aq-status-pill {
   display: flex;
   align-items: center;
@@ -239,9 +279,10 @@ body {
 }
 
 .aq-status-dot {
-  width: 4px; height: 4px;
+  width: 5px; height: 5px;
   border-radius: 50%;
   background: var(--green);
+  box-shadow: 0 0 5px rgba(52,211,153,0.5);
 }
 
 .aq-switcher {
@@ -251,7 +292,8 @@ body {
   font-family: var(--mono);
   font-size: 0.64rem;
   border-radius: var(--r-sm);
-  padding: 4px 8px;
+  padding: 5px 8px;
+  height: 32px;
   outline: none;
   cursor: pointer;
   transition: border-color 0.15s;
@@ -272,9 +314,11 @@ body {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.5);
+  background: rgba(0,0,0,0.55);
   z-index: 199;
   pointer-events: none;
+  backdrop-filter: blur(2px);
+  animation: aq-fade-in 0.2s ease;
 }
 .aq-drawer-overlay.visible {
   display: block;
@@ -282,8 +326,6 @@ body {
 }
 
 /* ── SIDEBAR ──────────────────────────────────────────────────── */
-/* SIMPLIFIED: No inner border on header. More vertical breathing room.
-   Actions hidden until hover (preserved from v3, smoothed). */
 .aq-sidebar {
   background: var(--surface);
   border-right: 1px solid var(--border);
@@ -299,9 +341,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 14px 12px;
+  padding: 14px 14px 10px;
   flex-shrink: 0;
-  /* REMOVED: bottom border — spacing handles separation */
 }
 
 .aq-sidebar-title {
@@ -320,17 +361,45 @@ body {
   cursor: pointer;
   font-size: 0.85rem;
   display: none;
-  padding: 2px 6px;
+  padding: 4px 8px;
   border-radius: 4px;
   transition: color 0.15s;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
 }
 .aq-sidebar-close:hover { color: var(--bright); }
 
-/* SIMPLIFIED: Tabs — no borders, just underline indicator */
+/* Sidebar new project button */
+.aq-sidebar-new-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: calc(100% - 16px);
+  margin: 6px 8px 10px;
+  padding: 9px 14px;
+  background: rgba(34,211,238,0.05);
+  border: 1px solid rgba(34,211,238,0.15);
+  border-radius: var(--r-sm);
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+.aq-sidebar-new-btn:hover {
+  background: rgba(34,211,238,0.1);
+  border-color: rgba(34,211,238,0.3);
+}
+
+/* Tabs */
 .aq-sidebar-tabs {
   display: flex;
   gap: 0;
-  padding: 0 10px 10px;
+  padding: 0 10px 8px;
   flex-shrink: 0;
 }
 
@@ -349,27 +418,77 @@ body {
   border-radius: 0;
   transition: color 0.15s, border-color 0.15s;
   outline: none;
+  min-height: 36px;
 }
 .aq-sidebar-tab.active {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
-.aq-sidebar-tab:hover:not(.active) {
-  color: var(--text);
-}
+.aq-sidebar-tab:hover:not(.active) { color: var(--text); }
 
 .aq-sidebar-list {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 8px 16px;
+  padding: 4px 8px 16px;
   min-height: 0;
 }
 .aq-sidebar-list::-webkit-scrollbar { width: 2px; }
 .aq-sidebar-list::-webkit-scrollbar-thumb { background: var(--border-lit); border-radius: 2px; }
 
+/* ── PROJECT ITEMS (sidebar) ──────────────────────────────────── */
+.aq-proj-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: background 0.12s, border-color 0.12s;
+  margin-bottom: 1px;
+  min-height: 38px;
+}
+.aq-proj-item:hover { background: var(--panel); }
+.aq-proj-item.active {
+  background: var(--panel-2);
+  border-left-color: var(--accent);
+}
+
+.aq-proj-icon { font-size: 0.82rem; flex-shrink: 0; opacity: 0.7; }
+
+.aq-proj-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.77rem;
+  font-weight: 600;
+  color: var(--text);
+  transition: color 0.12s;
+}
+.aq-proj-item.active .aq-proj-name,
+.aq-proj-item:hover  .aq-proj-name { color: var(--bright); }
+
+.aq-proj-del {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.62rem;
+  padding: 4px 6px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.12s, color 0.12s;
+  flex-shrink: 0;
+  min-height: 28px;
+  align-items: center;
+  display: flex;
+}
+.aq-proj-item:hover .aq-proj-del { opacity: 1; }
+.aq-proj-del:hover { color: var(--accent3); }
+
 /* ── BUNDLE ITEMS ─────────────────────────────────────────────── */
-/* SIMPLIFIED: Flat, no border by default. Selected = softer bg.
-   No glow. More vertical padding. */
 .aq-bundle-item {
   display: flex;
   flex-direction: column;
@@ -378,6 +497,8 @@ body {
   cursor: pointer;
   transition: background 0.15s ease;
   margin-bottom: 1px;
+  min-height: 44px;
+  justify-content: center;
 }
 .aq-bundle-item:hover    { background: var(--panel); }
 .aq-bundle-item.selected { background: var(--panel-2); }
@@ -390,11 +511,11 @@ body {
 }
 
 .aq-dot {
-  width: 5px; height: 5px;
+  width: 6px; height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
 }
-.aq-dot-active    { background: var(--green); }
+.aq-dot-active    { background: var(--green); box-shadow: 0 0 5px rgba(52,211,153,0.5); animation: aq-pulse 2s ease-in-out infinite; }
 .aq-dot-paused    { background: var(--amber); }
 .aq-dot-completed { background: var(--accent); }
 .aq-dot-draft     { background: var(--muted); }
@@ -434,7 +555,6 @@ body {
   border-radius: 2px;
   transition: width 0.4s ease;
   opacity: 0.6;
-  /* SIMPLIFIED: Single color fill, no purple gradient */
 }
 
 .aq-bundle-pct {
@@ -457,7 +577,7 @@ body {
 .aq-bundle-item:hover .aq-bundle-actions { opacity: 1; }
 
 .aq-bundle-act-btn {
-  padding: 2px 7px;
+  padding: 3px 8px;
   font-size: 0.54rem;
   font-family: var(--mono);
   border-radius: 4px;
@@ -467,6 +587,7 @@ body {
   cursor: pointer;
   transition: all 0.12s;
   letter-spacing: 0.04em;
+  min-height: 24px;
 }
 .aq-bundle-act-btn.pin:hover { border-color: var(--accent);  color: var(--accent);  background: rgba(34,211,238,0.05); }
 .aq-bundle-act-btn.del:hover { border-color: var(--accent3); color: var(--accent3); background: rgba(248,113,113,0.05); }
@@ -480,6 +601,7 @@ body {
   border-radius: var(--r-sm);
   margin-bottom: 1px;
   transition: background 0.15s ease;
+  min-height: 40px;
 }
 .aq-tool-item:hover { background: var(--panel); }
 
@@ -501,7 +623,6 @@ body {
   min-width: 0;
 }
 
-/* Progressive disclosure */
 .aq-tool-btns {
   display: flex;
   gap: 4px;
@@ -511,7 +632,7 @@ body {
 .aq-tool-item:hover .aq-tool-btns { opacity: 1; }
 
 .aq-tool-btn {
-  padding: 2px 7px;
+  padding: 3px 8px;
   font-size: 0.56rem;
   font-family: var(--mono);
   border-radius: 4px;
@@ -520,6 +641,7 @@ body {
   color: var(--muted);
   cursor: pointer;
   transition: all 0.12s;
+  min-height: 28px;
 }
 .aq-tool-btn:hover    { border-color: var(--accent);  color: var(--accent); }
 .aq-tool-btn.rm:hover { border-color: var(--accent3); color: var(--accent3); }
@@ -548,6 +670,7 @@ body {
   transition: background 0.15s;
   border-radius: var(--r-sm);
   margin-bottom: 1px;
+  min-height: 40px;
 }
 .aq-site-item:hover  { background: var(--panel); }
 .aq-site-item.active { background: var(--panel-2); }
@@ -555,13 +678,13 @@ body {
 .aq-site-item-info   { flex: 1; min-width: 0; }
 .aq-site-item-name   { font-size: 0.77rem; font-weight: 600; color: var(--bright); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .aq-site-item-meta   { font-size: 0.58rem; color: var(--muted); margin-top: 2px; font-family: var(--mono); }
-.aq-site-item-del    { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px; font-size: 0.78rem; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; }
+.aq-site-item-del    { background: none; border: none; color: var(--muted); cursor: pointer; padding: 4px 6px; font-size: 0.78rem; flex-shrink: 0; opacity: 0; transition: opacity 0.15s; min-height: 32px; display: flex; align-items: center; }
 .aq-site-item:hover .aq-site-item-del { opacity: 1; }
 .aq-site-item-del:hover { color: var(--accent3); }
 
 /* ── EMPTY / ERROR STATES ─────────────────────────────────────── */
 .aq-empty {
-  padding: 28px 12px;
+  padding: 32px 16px;
   text-align: center;
   color: var(--muted);
   font-size: 0.76rem;
@@ -606,8 +729,6 @@ body {
 }
 
 /* ── WELCOME STATE ────────────────────────────────────────────── */
-/* REDESIGNED: Editorial, breathing, clear CTA hierarchy.
-   User understands within 5 seconds: what this is + what to do. */
 .aq-welcome {
   flex: 1;
   display: flex;
@@ -620,33 +741,60 @@ body {
 }
 
 .aq-welcome-glyph {
-  width: 56px; height: 56px;
-  border-radius: 14px;
+  width: 60px; height: 60px;
+  border-radius: 16px;
   background: rgba(34,211,238,0.06);
-  border: 1px solid rgba(34,211,238,0.12);
+  border: 1px solid rgba(34,211,238,0.15);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.6rem;
+  font-size: 1.7rem;
   margin: 0 auto 28px;
-  /* SIMPLIFIED: No compound box-shadow */
 }
 
 .aq-welcome h2 {
-  font-size: 1.6rem;
+  font-size: 1.65rem;
   font-weight: 800;
   color: var(--bright);
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   letter-spacing: -0.03em;
   line-height: 1.2;
 }
 
 .aq-welcome p {
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   color: var(--muted);
-  max-width: 320px;
+  max-width: 340px;
   line-height: 1.7;
-  margin: 0 0 32px;
+  margin: 0 0 36px;
+}
+
+/* Welcome example prompts */
+.aq-welcome-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  max-width: 500px;
+  margin: 0 0 36px;
+}
+
+.aq-welcome-prompt-chip {
+  padding: 8px 16px;
+  background: var(--panel);
+  border: 1px solid var(--border-lit);
+  border-radius: 20px;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+.aq-welcome-prompt-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(34,211,238,0.05);
 }
 
 .aq-welcome-actions {
@@ -654,14 +802,14 @@ body {
   gap: 10px;
   flex-wrap: wrap;
   justify-content: center;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .aq-welcome-hint {
   font-family: var(--mono);
   font-size: 0.6rem;
   color: var(--muted);
-  opacity: 0.6;
+  opacity: 0.5;
   letter-spacing: 0.04em;
 }
 
@@ -676,7 +824,6 @@ body {
 }
 
 /* ── EXEC HEADER ──────────────────────────────────────────────── */
-/* SIMPLIFIED: Tighter, removed heavy border emphasis. Stats row subtle. */
 .aq-exec-hdr {
   padding: 18px 22px 14px;
   border-bottom: 1px solid var(--border);
@@ -712,16 +859,15 @@ body {
   min-width: 0;
 }
 
-/* SIMPLIFIED: Fewer visible buttons. Danger button text-only by default. */
 .aq-exec-actions {
   display: flex;
   gap: 6px;
   flex-shrink: 0;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 /* ── STATS ROW ────────────────────────────────────────────────── */
-/* SIMPLIFIED: Less prominent, inline with lighter type */
 .aq-stats-row {
   display: flex;
   gap: 20px;
@@ -745,7 +891,7 @@ body {
 .aq-stat-val.c-accent  { color: var(--accent); }
 .aq-stat-val.c-green   { color: var(--green); }
 .aq-stat-val.c-amber   { color: var(--amber); }
-.aq-stat-val.c-purple  { color: var(--accent); } /* SIMPLIFIED: Purple maps to accent */
+.aq-stat-val.c-purple  { color: var(--accent); }
 
 .aq-stat-lbl {
   font-family: var(--mono);
@@ -757,7 +903,7 @@ body {
 
 /* ── PROGRESS ─────────────────────────────────────────────────── */
 .aq-progress-track {
-  height: 1.5px;
+  height: 2px;
   background: var(--border);
   border-radius: 2px;
   overflow: hidden;
@@ -769,10 +915,17 @@ body {
   background: var(--accent);
   border-radius: 2px;
   transition: width 0.6s cubic-bezier(0.4,0,0.2,1);
-  /* SIMPLIFIED: Single color, no purple gradient blend */
+  position: relative;
 }
 
-/* REMOVED: .aq-progress-glow — unnecessary visual noise */
+/* Shimmer on progress when bundle is active */
+.aq-progress-fill.running {
+  background: linear-gradient(90deg, var(--accent) 25%, rgba(34,211,238,0.4) 50%, var(--accent) 75%);
+  background-size: 200% 100%;
+  animation: aq-progress-run 1.8s linear infinite;
+}
+
+/* REMOVED: .aq-progress-glow */
 .aq-progress-glow { display: none; }
 
 /* ── EXEC CONTENT GRID ────────────────────────────────────────── */
@@ -794,7 +947,6 @@ body {
   min-width: 0;
 }
 
-/* SIMPLIFIED: Timeline — lighter dots, less chrome */
 .aq-timeline {
   padding: 12px 20px;
   border-bottom: 1px solid var(--border);
@@ -844,16 +996,13 @@ body {
 .aq-steps-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 18px;
+  padding: 16px 16px;
   min-height: 0;
 }
 .aq-steps-scroll::-webkit-scrollbar { width: 2px; }
 .aq-steps-scroll::-webkit-scrollbar-thumb { background: var(--border-lit); border-radius: 2px; }
 
 /* ── STEP CARDS ───────────────────────────────────────────────── */
-/* REDESIGNED: No default border. Soft bg differentiation.
-   Running step highlighted. Completed steps appear receded.
-   Actions revealed on hover only (progressive disclosure). */
 .aq-step-card {
   border: 1px solid transparent;
   border-radius: var(--r);
@@ -861,13 +1010,13 @@ body {
   background: var(--surface);
   overflow: hidden;
   transition: background 0.15s ease, border-color 0.15s ease;
+  border-left: 3px solid transparent;
 }
 .aq-step-card:hover        { background: var(--panel); border-color: var(--border); }
 .aq-step-card.running,
-.aq-step-card.sc-running   { background: var(--panel); border-color: rgba(34,211,238,0.2); }
+.aq-step-card.sc-running   { background: var(--panel); border-color: rgba(34,211,238,0.2); border-left-color: var(--accent); }
 .aq-step-card.done,
-.aq-step-card.sc-done      { opacity: 0.72; }
-/* Running card gets elevated attention */
+.aq-step-card.sc-done      { opacity: 0.72; border-left-color: rgba(52,211,153,0.3); }
 .aq-step-card.running:hover,
 .aq-step-card.sc-running:hover { opacity: 1; border-color: rgba(34,211,238,0.35); }
 
@@ -972,9 +1121,8 @@ body {
 .aq-tool-chip:hover { background: rgba(34,211,238,0.05); border-color: rgba(34,211,238,0.2); color: var(--accent); }
 
 /* ── BADGES ───────────────────────────────────────────────────── */
-/* SIMPLIFIED: Smaller, less border weight */
 .aq-badge {
-  padding: 2px 7px;
+  padding: 2px 8px;
   border-radius: 20px;
   font-family: var(--mono);
   font-size: 0.52rem;
@@ -1050,7 +1198,6 @@ body {
 .aq-output-content::-webkit-scrollbar { width: 2px; }
 .aq-output-content::-webkit-scrollbar-thumb { background: var(--border-lit); }
 
-/* formatted output elements */
 .aq-out-h2   { display: block; font-weight: 700; color: var(--bright); margin: 6px 0 2px; }
 .aq-out-li   { display: block; padding-left: 8px; color: var(--text); }
 .aq-out-code { font-family: var(--mono); font-size: 0.8em; background: var(--panel-2); padding: 1px 5px; border-radius: 3px; color: var(--accent); }
@@ -1066,7 +1213,6 @@ body {
 }
 
 /* ── INSIGHT CHIPS ────────────────────────────────────────────── */
-/* SIMPLIFIED: Purple removed, now neutral muted */
 .aq-insight-chips {
   display: flex;
   flex-wrap: wrap;
@@ -1085,21 +1231,20 @@ body {
 }
 
 /* ── STEP ACTIONS ─────────────────────────────────────────────── */
-/* SIMPLIFIED: Actions hidden by default, revealed on card hover (progressive disclosure) */
 .aq-step-actions {
   display: flex;
   gap: 6px;
   margin-top: 10px;
   opacity: 0;
   transition: opacity 0.2s;
+  flex-wrap: wrap;
 }
 .aq-step-card:hover .aq-step-actions { opacity: 1; }
-/* Always show if step is running */
 .aq-step-card.running .aq-step-actions,
 .aq-step-card.sc-running .aq-step-actions { opacity: 1; }
 
 .aq-step-act-btn {
-  padding: 5px 12px;
+  padding: 6px 12px;
   border-radius: 6px;
   font-family: var(--mono);
   font-size: 0.58rem;
@@ -1114,6 +1259,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 5px;
+  min-height: 30px;
 }
 .aq-step-act-btn:active { transform: scale(0.97); }
 .aq-step-act-btn:hover  { background: var(--panel-2); color: var(--bright); border-color: var(--border-lit); }
@@ -1126,13 +1272,10 @@ body {
 .aq-step-act-btn.done-btn         { background: rgba(52,211,153,0.05); color: var(--green); border-color: rgba(52,211,153,0.18); }
 .aq-step-act-btn.done-btn:hover   { background: rgba(52,211,153,0.1);  border-color: var(--green); }
 
-/* SIMPLIFIED: Rerun no longer purple — neutral ghost button */
 .aq-step-act-btn.rerun            { color: var(--muted); border-color: var(--border); }
 .aq-step-act-btn.rerun:hover      { color: var(--text);  border-color: var(--border-lit); }
 
 /* ── RIGHT PANEL ──────────────────────────────────────────────── */
-/* REDESIGNED: Secondary, reduced visual weight.
-   New: panel-toggle button for collapsing. Hidden on small screens. */
 .aq-right-panel {
   background: var(--surface);
   display: flex;
@@ -1144,7 +1287,6 @@ body {
   transition: width 0.25s ease;
 }
 
-/* Collapsed state (toggled by JS via class) */
 .aq-right-panel.collapsed {
   width: 0;
   overflow: hidden;
@@ -1171,6 +1313,7 @@ body {
   cursor: pointer;
   transition: all 0.15s ease;
   outline: none;
+  min-height: 38px;
 }
 .aq-right-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 .aq-right-tab:hover:not(.active) { color: var(--text); }
@@ -1186,6 +1329,19 @@ body {
 
 .aq-right-section        { display: none; }
 .aq-right-section.active { display: block; animation: aq-fade-in 0.15s ease; }
+
+/* ── INSIGHT ITEM ─────────────────────────────────────────────── */
+.aq-insight-item {
+  display: flex;
+  align-items: center;
+  font-size: 0.68rem;
+  padding: 6px 8px;
+  background: var(--panel);
+  border-radius: 4px;
+  margin-bottom: 4px;
+  line-height: 1.4;
+  gap: 6px;
+}
 
 /* ── FEED ITEMS ───────────────────────────────────────────────── */
 .aq-feed-item {
@@ -1256,7 +1412,6 @@ body {
   background: var(--panel);
   border-radius: 6px;
   border-left: 2px solid var(--accent);
-  /* SIMPLIFIED: Accent replaces purple left border */
 }
 
 .aq-mem-k {
@@ -1280,24 +1435,22 @@ body {
   border: 1px solid var(--border);
   border-radius: var(--r-sm);
   padding: 8px 10px;
-  font-size: 0.72rem;
+  font-size: 0.52rem;
   color: var(--text);
   line-height: 1.6;
   margin-bottom: 8px;
   white-space: pre-wrap;
   word-break: break-word;
   font-family: var(--mono);
-  font-size: 0.52rem;
 }
 
 /* ── BUTTONS (aq-btn system) ──────────────────────────────────── */
-/* SIMPLIFIED: Ghost buttons as default. Primary action = filled accent.
-   Danger = text-only by default, border on hover. */
 .aq-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
-  padding: 7px 14px;
+  padding: 8px 16px;
   border-radius: var(--r-sm);
   font-family: var(--mono);
   font-size: 0.62rem;
@@ -1310,13 +1463,15 @@ body {
   transition: all 0.15s ease;
   outline: none;
   white-space: nowrap;
+  min-height: 36px;
 }
 .aq-btn:active { transform: scale(0.97); }
 .aq-btn:hover  { background: var(--panel); color: var(--bright); border-color: var(--border-lit); }
+.aq-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.aq-btn-sm { padding: 5px 10px; font-size: 0.58rem; }
+.aq-btn-sm { padding: 6px 12px; font-size: 0.58rem; min-height: 32px; }
 
-/* PRIMARY ACTION — visually very clear */
+/* PRIMARY ACTION */
 .aq-btn-run {
   background: var(--accent);
   color: #000;
@@ -1332,7 +1487,13 @@ body {
 }
 .aq-btn-success:hover { background: rgba(52,211,153,0.14); color: var(--green); }
 
-/* SIMPLIFIED: Danger button — ghost, shows color on hover only */
+.aq-btn-ai {
+  background: rgba(34,211,238,0.06);
+  color: var(--accent);
+  border-color: rgba(34,211,238,0.2);
+}
+.aq-btn-ai:hover { background: rgba(34,211,238,0.12); }
+
 .aq-btn-danger {
   background: transparent;
   color: var(--muted);
@@ -1415,6 +1576,7 @@ body {
   font-size: 0.82rem;
   color: var(--text);
   transition: background 0.1s;
+  min-height: 40px;
 }
 .aq-palette-cmd:hover { background: var(--panel-2); color: var(--bright); }
 .aq-palette-cmd .key {
@@ -1516,7 +1678,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 44px;
+  height: 48px;
   padding: 0 18px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
@@ -1536,9 +1698,14 @@ body {
   color: var(--muted);
   cursor: pointer;
   font-size: 0.9rem;
-  padding: 2px 6px;
+  padding: 4px 8px;
   border-radius: 4px;
   transition: color 0.15s;
+  min-height: 32px;
+  min-width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 .aq-modal-close:hover { color: var(--bright); }
 
@@ -1550,7 +1717,7 @@ body {
 }
 
 .aq-modal-footer {
-  height: 52px;
+  height: 56px;
   padding: 0 18px;
   display: flex;
   align-items: center;
@@ -1612,9 +1779,318 @@ body {
   letter-spacing: 0.05em;
   cursor: pointer;
   transition: color 0.15s;
+  min-height: 52px;
 }
 .aq-bottom-tab .icon { font-size: 1rem; }
 .aq-bottom-tab.active { color: var(--accent); }
+
+/* ══════════════════════════════════════════════════════════════
+   PROJECT VIEW — Code Editor + Preview
+══════════════════════════════════════════════════════════════ */
+
+/* ── EDITOR + PREVIEW WRAPPER ─────────────────────────────────── */
+#wsProjectView {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── EDITOR PANE ──────────────────────────────────────────────── */
+.aq-editor-pane {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--border);
+  position: relative;
+  background: var(--bg);
+}
+
+/* ── FILE TABS ────────────────────────────────────────────────── */
+.aq-file-tabs {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+  flex-shrink: 0;
+  gap: 0;
+}
+.aq-file-tabs::-webkit-scrollbar { height: 2px; }
+.aq-file-tabs::-webkit-scrollbar-thumb { background: var(--border-lit); }
+
+.aq-file-tab {
+  padding: 0 14px;
+  height: 38px;
+  background: none;
+  border: none;
+  border-right: 1px solid var(--border);
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s, background 0.1s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.aq-file-tab.active {
+  color: var(--bright);
+  background: var(--bg);
+  border-bottom-color: var(--accent);
+}
+.aq-file-tab:hover:not(.active) { color: var(--text); background: var(--panel); }
+
+/* Unsaved dot on tab */
+.aq-file-tab-dirty {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--amber);
+  flex-shrink: 0;
+}
+
+.aq-file-tab-close {
+  font-size: 0.6rem;
+  opacity: 0.4;
+  line-height: 1;
+  transition: opacity 0.1s;
+  display: flex;
+  align-items: center;
+}
+.aq-file-tab:hover .aq-file-tab-close { opacity: 0.9; }
+
+/* ── EDITOR TOOLBAR ───────────────────────────────────────────── */
+.aq-editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  height: 38px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.aq-editor-filename {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 0.68rem;
+  color: var(--muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Unsaved indicator in toolbar */
+.aq-editor-unsaved {
+  display: none;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--amber);
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.aq-editor-unsaved.visible { display: flex; }
+.aq-editor-unsaved::before {
+  content: '';
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--amber);
+}
+
+/* ── CODE TEXTAREA ────────────────────────────────────────────── */
+.aq-code-editor {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  resize: none;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 0.76rem;
+  line-height: 1.65;
+  padding: 16px 18px;
+  border: none;
+  outline: none;
+  tab-size: 2;
+  white-space: pre;
+  overflow-wrap: normal;
+  overflow-x: auto;
+  transition: opacity 0.15s ease;
+}
+.aq-code-editor.loading { opacity: 0.4; pointer-events: none; }
+
+/* ── AI EDIT BAR (bottom of editor) ──────────────────────────── */
+.aq-ai-edit-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.aq-ai-edit-bar input,
+#aiEditInput {
+  flex: 1;
+  height: 36px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--bright);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+  min-width: 0;
+}
+.aq-ai-edit-bar input:focus,
+#aiEditInput:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(34,211,238,0.08);
+}
+.aq-ai-edit-bar input::placeholder,
+#aiEditInput::placeholder { color: var(--muted); }
+
+/* ── GENERATING OVERLAY ───────────────────────────────────────── */
+.aq-gen-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(7,9,14,0.88);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+  animation: aq-fade-in 0.2s ease;
+}
+
+.aq-gen-overlay-spinner {
+  width: 28px; height: 28px;
+  border: 2px solid var(--border-lit);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: aq-spin 0.65s linear infinite;
+}
+
+.aq-gen-overlay-msg {
+  font-family: var(--mono);
+  font-size: 0.8rem;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+.aq-gen-overlay-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.aq-gen-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 0.64rem;
+  color: var(--muted);
+}
+.aq-gen-step.done  { color: var(--green); }
+.aq-gen-step.active { color: var(--accent); }
+.aq-gen-step-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+.aq-gen-step.done  .aq-gen-step-dot { background: var(--green); }
+.aq-gen-step.active .aq-gen-step-dot { background: var(--accent); animation: aq-pulse 1.4s ease infinite; }
+
+/* ── PREVIEW PANE ─────────────────────────────────────────────── */
+.aq-preview-pane {
+  width: 42%;
+  min-width: 300px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.aq-preview-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  height: 38px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  background: var(--surface);
+}
+
+.aq-preview-dots { display: flex; gap: 5px; flex-shrink: 0; }
+.aq-preview-dots span {
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  display: block;
+}
+
+.aq-preview-url {
+  flex: 1;
+  font-family: var(--mono);
+  font-size: 0.62rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.aq-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+}
+
+.aq-preview-icon-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 4px 6px;
+  border-radius: 4px;
+  font-size: 0.78rem;
+  transition: color 0.15s, background 0.15s;
+  min-height: 28px;
+  min-width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.aq-preview-icon-btn:hover { color: var(--bright); background: var(--panel); }
+
+.aq-preview-iframe {
+  flex: 1;
+  border: none;
+  background: #fff;
+  width: 100%;
+  display: block;
+  transition: opacity 0.2s ease;
+}
+.aq-preview-iframe.loading { opacity: 0.5; }
 
 /* ══════════════════════════════════════════════════════════════
    SITE BUILDER
@@ -1629,7 +2105,7 @@ body {
 }
 
 .aq-sb-header {
-  padding: 18px 22px 14px;
+  padding: 16px 20px 14px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
   display: flex;
@@ -1672,7 +2148,7 @@ body {
 }
 
 .aq-sb-chip {
-  padding: 5px 12px;
+  padding: 6px 14px;
   border-radius: 20px;
   font-size: 0.68rem;
   font-weight: 600;
@@ -1683,6 +2159,9 @@ body {
   transition: border-color 0.15s, color 0.15s, background 0.15s;
   font-family: inherit;
   white-space: nowrap;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
 }
 .aq-sb-chip:hover { border-color: var(--accent); color: var(--accent); background: rgba(34,211,238,0.05); }
 
@@ -1695,22 +2174,27 @@ body {
 
 .aq-sb-input {
   flex: 1;
-  padding: 11px 16px;
+  padding: 0 16px;
+  height: 42px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r);
   color: var(--bright);
   font-size: 0.84rem;
   outline: none;
-  transition: border-color 0.2s;
+  transition: border-color 0.2s, box-shadow 0.2s;
   font-family: inherit;
   min-width: 0;
 }
-.aq-sb-input:focus        { border-color: var(--accent); }
+.aq-sb-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(34,211,238,0.08);
+}
 .aq-sb-input::placeholder { color: var(--muted); }
 
 .aq-sb-file-select {
-  padding: 9px 10px;
+  padding: 0 10px;
+  height: 42px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: var(--r);
@@ -1719,7 +2203,7 @@ body {
   outline: none;
   cursor: pointer;
   font-family: var(--mono);
-  min-width: 100px;
+  min-width: 110px;
   flex-shrink: 0;
 }
 
@@ -1748,8 +2232,9 @@ body {
   min-height: 0;
 }
 
+/* ── FILETREE ─────────────────────────────────────────────────── */
 .aq-sb-filetree {
-  width: 172px;
+  width: 180px;
   flex-shrink: 0;
   border-right: 1px solid var(--border);
   overflow-y: auto;
@@ -1757,6 +2242,8 @@ body {
   display: flex;
   flex-direction: column;
 }
+.aq-sb-filetree::-webkit-scrollbar { width: 2px; }
+.aq-sb-filetree::-webkit-scrollbar-thumb { background: var(--border-lit); }
 
 .aq-sb-filetree-header {
   padding: 10px 12px;
@@ -1776,24 +2263,39 @@ body {
 .aq-sb-filetree-list { flex: 1; overflow-y: auto; }
 
 .aq-sb-file-item {
-  padding: 8px 12px;
+  padding: 9px 12px;
   font-size: 0.72rem;
   font-family: var(--mono);
   color: var(--muted);
   cursor: pointer;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   transition: background 0.12s, color 0.12s;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  border-left: 2px solid transparent;
+  min-height: 36px;
 }
 .aq-sb-file-item:hover  { background: var(--panel); color: var(--text); }
-.aq-sb-file-item.active { background: var(--panel-2); color: var(--accent); }
+.aq-sb-file-item.active {
+  background: var(--panel-2);
+  color: var(--accent);
+  border-left-color: var(--accent);
+}
 .aq-sb-file-icon { font-size: 0.76rem; flex-shrink: 0; }
 
-/* Preview panel */
+/* Unsaved dot in file tree */
+.aq-sb-file-dirty {
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: var(--amber);
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+/* ── PREVIEW PANEL (site builder) ─────────────────────────────── */
 .aq-sb-preview-panel {
   flex: 1;
   display: flex;
@@ -1806,13 +2308,14 @@ body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 14px;
+  padding: 0 14px;
+  height: 40px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
 
-.aq-sb-preview-dots { display: flex; gap: 5px; }
+.aq-sb-preview-dots { display: flex; gap: 5px; flex-shrink: 0; }
 .aq-sb-preview-dots span {
   width: 9px; height: 9px;
   border-radius: 50%;
@@ -1821,13 +2324,20 @@ body {
 
 .aq-sb-preview-url {
   flex: 1;
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-family: var(--mono);
   color: var(--muted);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
+}
+
+.aq-sb-preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 
 .aq-sb-iframe-wrap {
@@ -1857,10 +2367,10 @@ body {
   color: var(--muted);
   pointer-events: auto;
   backdrop-filter: blur(2px);
+  animation: aq-fade-in 0.2s ease;
 }
 
 /* ── EMPTY STATE (SITE BUILDER) ── REDESIGNED ─────────────────── */
-/* Made the best part of the UI: clear headline, clear action, examples */
 .aq-sb-empty {
   flex: 1;
   display: flex;
@@ -1874,23 +2384,31 @@ body {
 }
 
 .aq-sb-empty-icon {
-  font-size: 2.2rem;
-  margin-bottom: 20px;
-  opacity: 0.4;
+  font-size: 2.4rem;
+  margin-bottom: 22px;
+  opacity: 0.35;
   display: block;
 }
 .aq-sb-empty-title {
-  font-size: 1.3rem;
+  font-size: 1.35rem;
   font-weight: 800;
   color: var(--bright);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   letter-spacing: -0.02em;
 }
 .aq-sb-empty-sub {
-  font-size: 0.84rem;
+  font-size: 0.86rem;
   color: var(--muted);
   max-width: 380px;
   line-height: 1.65;
+  margin-bottom: 32px;
+}
+
+.aq-sb-empty-cta {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
   margin-bottom: 28px;
 }
 
@@ -1899,14 +2417,14 @@ body {
   flex-wrap: wrap;
   gap: 8px;
   justify-content: center;
-  max-width: 480px;
+  max-width: 500px;
 }
 .aq-sb-empty-examples span {
-  padding: 7px 16px;
+  padding: 8px 16px;
   background: var(--panel);
   border: 1px solid var(--border-lit);
   border-radius: 20px;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   color: var(--muted);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
@@ -1931,9 +2449,43 @@ body {
   cursor: pointer;
   font-family: var(--mono);
   transition: border-color 0.15s, color 0.15s;
+  min-height: 32px;
 }
 .aq-sb-retry-btn:hover { border-color: var(--accent); color: var(--accent); }
 .aq-sb-retry-btn.visible { display: block; }
+
+/* ── STICKY ACTION BAR ────────────────────────────────────────── */
+/* Shown in project view to provide always-visible key actions */
+.aq-sticky-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.aq-sticky-action-bar-label {
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.aq-sticky-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border-lit);
+  margin: 0 4px;
+  flex-shrink: 0;
+}
 
 /* ══════════════════════════════════════════════════════════════
    RESPONSIVE
@@ -1945,56 +2497,73 @@ body {
 
 @media (max-width: 860px) {
   .aq-menu-btn      { display: flex; }
-  .aq-sidebar-close { display: block; }
+  .aq-sidebar-close { display: flex; }
 
   .aq-body { grid-template-columns: 1fr; }
 
   .aq-sidebar {
     position: fixed;
-    top: 46px; left: 0; bottom: 0;
-    width: 260px;
+    top: var(--topbar-h); left: 0; bottom: 0;
+    width: 270px;
+    max-width: 85vw;
     transform: translateX(-100%);
-    transition: transform 0.25s ease;
+    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
     z-index: 200;
     overflow: hidden;
+    box-shadow: none;
   }
-  .aq-sidebar.open { transform: translateX(0); }
+  .aq-sidebar.open {
+    transform: translateX(0);
+    box-shadow: 4px 0 28px rgba(0,0,0,0.5);
+  }
 
   .aq-exec-content { grid-template-columns: 1fr; }
-  .aq-right-panel  { display: none; }
+  .aq-right-panel  { display: none !important; }
   .aq-bottom-nav   { display: flex; }
+
+  /* Preview pane: hide on narrow screens */
+  .aq-preview-pane { display: none; }
 }
 
 @media (max-width: 600px) {
   .aq-exec-hdr-top { flex-direction: column; gap: 10px; }
   .aq-exec-actions { width: 100%; flex-wrap: wrap; }
+  .aq-exec-actions .aq-btn { flex: 1; min-height: 44px; font-size: 0.6rem; }
   .aq-stats-row    { flex-wrap: wrap; gap: 12px; }
   .aq-topbar       { padding: 0 12px; gap: 8px; }
   .aq-breadcrumb   { display: none; }
+  .aq-status-pill  { display: none; }
+
+  .aq-sb-generate-bar,
+  .aq-sb-edit-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .aq-sb-input {
+    width: 100%;
+    height: 48px;
+    font-size: 0.82rem;
+  }
+  .aq-sb-file-select { width: 100%; }
+  .aq-sb-generate-bar .aq-btn,
+  .aq-sb-edit-bar .aq-btn {
+    width: 100%;
+    min-height: 48px;
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════
-   FOCUS ACCESSIBILITY
+   MOBILE OPTIMIZATIONS — v5.0
 ══════════════════════════════════════════════════════════════ */
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-*:not(:focus-visible) { outline: none; }
-
-/* ══════════════════════════════════════════════════════════════
-   MOBILE OPTIMIZATIONS — v4.0 addendum
-   SAFE OVERRIDES ONLY — desktop styles are unchanged
-   All rules scoped to @media (max-width: 768px) unless noted
-══════════════════════════════════════════════════════════════ */
-
 @media (max-width: 768px) {
 
   /* ── TOPBAR ── */
   .aq-topbar {
     padding: 0 12px;
     gap: 8px;
-    height: 48px;
+    height: 52px;
+    --topbar-h: 52px;
   }
   .aq-menu-btn {
     display: flex;
@@ -2004,10 +2573,13 @@ body {
   }
   .aq-breadcrumb { display: none; }
   .aq-status-pill { display: none; }
-  .aq-switcher { max-width: 110px; font-size: 0.62rem; }
-  .aq-btn#paletteBtn { padding: 6px 10px; min-height: 36px; }
+  .aq-switcher { max-width: 120px; }
 
-  /* ── BODY LAYOUT — single column, no horizontal scroll ── */
+  /* Prompt input — min touch height */
+  .aq-topbar-prompt input,
+  #topPromptInput { height: 40px; }
+
+  /* ── BODY LAYOUT ── */
   .aq-body {
     grid-template-columns: 1fr;
     overflow: hidden;
@@ -2016,36 +2588,34 @@ body {
   /* ── SIDEBAR — slide-in drawer ── */
   .aq-sidebar {
     position: fixed;
-    top: 48px;
-    left: 0;
-    bottom: 0;
+    top: 52px;
+    left: 0; bottom: 0;
     width: 280px;
     max-width: 85vw;
     transform: translateX(-100%);
-    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
     z-index: 200;
-    overflow: hidden;
-    /* keep sidebar border but only when open */
-    border-right: 1px solid var(--border-lit);
   }
   .aq-sidebar.open {
     transform: translateX(0);
     box-shadow: 4px 0 24px rgba(0,0,0,0.5);
   }
-  .aq-sidebar-close { display: block; }
+  .aq-sidebar-close { display: flex; }
 
-  /* Touch-friendly sidebar items */
-  .aq-bundle-item    { padding: 12px 10px; }
-  .aq-sidebar-tab    { padding: 10px 4px; min-height: 44px; }
-  .aq-tool-item      { padding: 12px 10px; }
-  .aq-site-item      { padding: 12px 10px; }
+  /* Touch-friendly items */
+  .aq-bundle-item    { min-height: 52px; padding: 12px 10px; }
+  .aq-sidebar-tab    { min-height: 44px; padding: 10px 4px; }
+  .aq-tool-item      { min-height: 48px; padding: 12px 10px; }
+  .aq-site-item      { min-height: 48px; padding: 12px 10px; }
+  .aq-proj-item      { min-height: 48px; padding: 10px 10px; }
 
-  /* Always show bundle actions on mobile (no hover) */
+  /* Always-visible actions (no hover on touch) */
   .aq-bundle-actions { opacity: 1; }
   .aq-tool-btns      { opacity: 1; }
   .aq-site-item-del  { opacity: 1; }
+  .aq-proj-del       { opacity: 1; }
 
-  /* ── MAIN AREA — full width ── */
+  /* ── MAIN AREA ── */
   .aq-main {
     width: 100%;
     min-width: 0;
@@ -2053,14 +2623,8 @@ body {
   }
 
   /* ── EXEC HEADER ── */
-  .aq-exec-hdr {
-    padding: 14px 14px 12px;
-  }
-  .aq-exec-hdr-top {
-    flex-direction: column;
-    gap: 10px;
-    align-items: stretch;
-  }
+  .aq-exec-hdr { padding: 14px 14px 12px; }
+  .aq-exec-hdr-top { flex-direction: column; gap: 10px; align-items: stretch; }
   .aq-exec-title { font-size: 0.95rem; }
   .aq-exec-goal  { font-size: 0.68rem; }
   .aq-exec-actions {
@@ -2076,39 +2640,34 @@ body {
   }
   .aq-stats-row { gap: 12px; flex-wrap: wrap; }
 
-  /* ── EXEC CONTENT — single column, steps full-width ── */
+  /* ── EXEC CONTENT ── */
   .aq-exec-content {
     grid-template-columns: 1fr;
     overflow: hidden;
   }
 
-  /* ── RIGHT PANEL — hidden on mobile (accessible via bottom nav) ── */
+  /* ── RIGHT PANEL ── */
   .aq-right-panel {
     display: none !important;
     width: 0 !important;
     border-left: none !important;
   }
 
-  /* ── STEPS PANEL — full-width, no right border ── */
+  /* ── STEPS PANEL ── */
   .aq-steps-panel {
     border-right: none;
     min-width: 0;
     width: 100%;
   }
-  .aq-steps-scroll {
-    padding: 12px 12px;
-  }
+  .aq-steps-scroll { padding: 12px 12px; }
 
-  /* ── STEP CARDS — touch-friendly, always-visible actions ── */
-  .aq-step-hdr {
-    padding: 14px 12px;
-    gap: 10px;
-  }
+  /* ── STEP CARDS — touch-friendly ── */
+  .aq-step-hdr { padding: 14px 12px; gap: 10px; }
   .aq-step-title { font-size: 0.82rem; }
   .aq-step-desc  { font-size: 0.68rem; }
-  .aq-step-toggle { opacity: 1; }  /* always visible on mobile */
+  .aq-step-toggle { opacity: 1; }
   .aq-step-actions {
-    opacity: 1;  /* always visible — no hover on touch */
+    opacity: 1;
     flex-wrap: wrap;
     gap: 8px;
   }
@@ -2119,15 +2678,11 @@ body {
     justify-content: center;
   }
 
-  /* ── TIMELINE — horizontal scroll (already has overflow-x: auto) ── */
-  .aq-timeline {
-    padding: 10px 12px;
-  }
+  /* ── TIMELINE ── */
+  .aq-timeline { padding: 10px 12px; }
 
   /* ── WELCOME STATE ── */
-  .aq-welcome {
-    padding: 40px 20px;
-  }
+  .aq-welcome { padding: 40px 20px; }
   .aq-welcome h2 { font-size: 1.3rem; }
   .aq-welcome p  { font-size: 0.84rem; }
   .aq-welcome-actions {
@@ -2138,73 +2693,32 @@ body {
   .aq-welcome-actions .aq-btn {
     width: 100%;
     max-width: 280px;
-    min-height: 44px;
-    justify-content: center;
+    min-height: 48px;
   }
+  .aq-welcome-prompt-chip { font-size: 0.64rem; }
 
-  /* ── BOTTOM NAV — always visible on mobile ── */
+  /* ── BOTTOM NAV ── */
   .aq-bottom-nav { display: flex; }
-  .aq-bottom-tab {
-    min-height: 52px;
-    padding: 8px 4px;
-    gap: 3px;
-  }
-  .aq-bottom-tab .icon { font-size: 1.1rem; }
+  .aq-bottom-tab { min-height: 56px; }
 
-  /* ── TOAST — full-width on mobile ── */
+  /* ── TOAST ── */
   #aq-toast-root {
-    bottom: 68px; /* above bottom nav */
+    bottom: 68px;
     left: 12px;
     right: 12px;
+    width: auto;
     align-items: center;
   }
-  .aq-toast { text-align: center; width: 100%; }
+  .aq-toast { width: 100%; text-align: left; }
 
   /* ── SITE BUILDER ── */
-  .aq-sb-header {
-    padding: 14px 14px 12px;
-    gap: 10px;
-  }
-  .aq-sb-title-row {
-    flex-wrap: wrap;
-    gap: 8px;
-  }
-  .aq-sb-title   { font-size: 0.9rem; }
+  .aq-sb-header { padding: 14px 14px 12px; gap: 10px; }
+  .aq-sb-title-row { flex-wrap: wrap; gap: 8px; }
+  .aq-sb-title { font-size: 0.9rem; }
   .aq-sb-actions .aq-btn { min-height: 44px; }
-
-  /* Suggestion chips — allow wrapping */
   .aq-sb-suggestions { gap: 8px; }
-  .aq-sb-chip {
-    min-height: 40px;
-    padding: 8px 14px;
-  }
+  .aq-sb-chip { min-height: 40px; }
 
-  /* Generate / edit bars — stacked */
-  .aq-sb-generate-bar,
-  .aq-sb-edit-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-  .aq-sb-input {
-    width: 100%;
-    padding: 12px 14px;
-    font-size: 0.82rem;
-  }
-  .aq-sb-file-select {
-    width: 100%;
-    min-width: 0;
-  }
-  .aq-sb-intent-badge { align-self: flex-start; }
-  .aq-btn-run,
-  .aq-sb-generate-bar .aq-btn,
-  .aq-sb-edit-bar .aq-btn {
-    min-height: 44px;
-    width: 100%;
-    justify-content: center;
-  }
-
-  /* Site builder body — filetree collapsed above preview */
   .aq-sb-body {
     flex-direction: column;
     overflow: hidden;
@@ -2217,12 +2731,7 @@ body {
     flex-shrink: 0;
   }
   .aq-sb-filetree-list { overflow-y: auto; }
-  .aq-sb-file-item {
-    padding: 10px 12px;
-    min-height: 40px;
-  }
-
-  /* Preview panel full-width */
+  .aq-sb-file-item { min-height: 42px; }
   .aq-sb-preview-panel {
     flex: 1;
     min-height: 0;
@@ -2230,32 +2739,26 @@ body {
   }
 
   /* Empty state — tighter on mobile */
-  .aq-sb-empty {
-    padding: 40px 20px;
-  }
+  .aq-sb-empty { padding: 40px 20px; }
   .aq-sb-empty-title { font-size: 1.1rem; }
   .aq-sb-empty-sub   { font-size: 0.8rem; max-width: 100%; }
-  .aq-sb-empty-examples {
-    gap: 6px;
-    max-width: 100%;
-  }
+  .aq-sb-empty-examples { gap: 6px; max-width: 100%; }
+  .aq-sb-empty-cta { flex-direction: column; align-items: center; }
+  .aq-sb-empty-cta .aq-btn { width: 100%; max-width: 280px; min-height: 48px; }
 
   /* ── COMMAND PALETTE ── */
   .aq-palette-backdrop { padding-top: 60px; padding-left: 12px; padding-right: 12px; }
   .aq-palette { max-width: 100%; border-radius: var(--r); }
-  .aq-palette-input { font-size: 0.9rem; padding: 16px 16px; }
-  .aq-palette-cmd { min-height: 44px; }
+  .aq-palette-input { font-size: 0.9rem; padding: 16px; }
+  .aq-palette-cmd { min-height: 48px; font-size: 0.78rem; }
 
   /* ── CONFIRM MODAL ── */
   .aq-confirm-box { padding: 22px 18px; width: 92%; }
-  .aq-confirm-actions .aq-btn { min-height: 44px; flex: 1; justify-content: center; }
+  .aq-confirm-actions .aq-btn { min-height: 48px; flex: 1; }
 
-  /* ── OUTPUT BLOCK ── */
-  .aq-output-content {
-    font-size: 0.74rem;
-    max-height: 160px;
-    overflow-x: auto;
-  }
+  /* ── EDITOR ── */
+  .aq-sticky-action-bar { flex-wrap: wrap; gap: 6px; }
+  .aq-sticky-action-bar .aq-btn { min-height: 40px; }
 
   /* ── MISC OVERFLOW GUARDS ── */
   .aq-exec,
@@ -2268,9 +2771,9 @@ body {
   }
 }
 
-/* ── 480px and below: extra tightening ── */
+/* ── 480px and below ── */
 @media (max-width: 480px) {
-  .aq-topbar { padding: 0 10px; height: 48px; }
+  .aq-topbar { padding: 0 10px; height: 52px; }
   .aq-switcher { display: none; }
   .aq-exec-hdr { padding: 12px 12px 10px; }
   .aq-steps-scroll { padding: 10px 10px; }
@@ -2285,3 +2788,11 @@ body {
   #aq-toast-root { bottom: 62px; }
 }
 
+/* ══════════════════════════════════════════════════════════════
+   FOCUS ACCESSIBILITY
+══════════════════════════════════════════════════════════════ */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+*:not(:focus-visible) { outline: none; }

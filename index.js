@@ -239,7 +239,7 @@ async function generateAI(messages, options = {}, useVision = false) {
       const systemContent = [AQUA_IDENTITY, AQUA_CONTEXT].join("\n");
 
       const res = await axios.post(
-        `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${process.env.Gemini_API_Key}`,
+        `https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
         {
           contents: [
             {
@@ -1991,7 +1991,7 @@ async function startServer() {
     "OPENROUTER:",
     process.env.OPENROUTER_API_KEY ? "✅ OK" : "❌ MISSING",
   );
-  console.log("GEMINI:", process.env.Gemini_API_Key ? "✅ OK" : "❌ MISSING");
+  console.log("GEMINI:", process.env.GEMINI_API_KEY ? "✅ OK" : "❌ MISSING");
   console.log(
     "TOGETHER:",
     process.env.TOGETHER_API_KEY ? "✅ OK" : "❌ MISSING",

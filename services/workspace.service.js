@@ -1,14 +1,14 @@
 /**
  * workspace.service.js
- * AQUIPLEX Execution Engine — Production Grade (v2)
+ * AQUIPLEX Execution Engine — Production Grade (v3)
  * Drop in: services/workspace.service.js
  *
- * Upgrades over v1:
- *  - Real LLM code generation via Anthropic API (claude-sonnet-4-20250514)
- *  - Multi-file project output with structured parsing
- *  - Smart app-type detection (game / tool / saas / static / dashboard / form)
- *  - Project file store (fs-backed, keyed by bundleId)
- *  - All original workspace session / memory / pin logic preserved
+ * v3 upgrades:
+ *  - generateCodeWithLLM: retry (×2), AbortController timeout, HTTP/JSON/empty guards
+ *  - parseMultiFileOutput: auto-repair malformed delimiters, strip markdown fences,
+ *    auto-wrap plain HTML, guaranteed non-empty return
+ *  - generateProject: no double-save, index.html normalised before first save
+ *  - Fallback UI: always valid multi-file output, never blank
  */
 
 "use strict";
@@ -26,7 +26,11 @@ const Bundle    = require("../models/Bundle");
 const MAX_SESSIONS       = 10;
 const MAX_RECENT_OUTPUTS = 20;
 const MAX_INSIGHTS       = 4;
-const PROJECTS_DIR       = path.join(__dirname, "../data/projects"); // adjust as needed
+const PROJECTS_DIR       = path.join(__dirname, "../data/projects");
+
+const LLM_TIMEOUT_MS  = 30_000;
+const LLM_MAX_RETRIES = 2;
+const LLM_RETRY_DELAY = 600; // ms — doubles each retry
 
 // Ensure projects dir exists on startup
 (async () => {
@@ -76,9 +80,6 @@ const APP_TYPE_KEYWORDS = {
   ],
 };
 
-/**
- * Returns detected app type string or "static" as fallback.
- */
 function detectAppType(prompt) {
   if (!prompt) return "static";
   const lower = prompt.toLowerCase();
@@ -90,9 +91,6 @@ function detectAppType(prompt) {
   return "static";
 }
 
-/**
- * Build a rich system prompt based on the detected app type.
- */
 function buildSystemPromptForType(appType) {
   const base = `You are an expert full-stack web developer. Generate complete, production-quality, self-contained web projects.
 
@@ -205,248 +203,347 @@ STATIC SITE REQUIREMENTS:
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LLM INTEGRATION — Real Anthropic API Call
+// LLM HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Fetch with AbortController timeout. */
+async function _fetchWithTimeout(url, init, timeoutMs = LLM_TIMEOUT_MS) {
+  const ctrl  = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Call fn up to (1 + maxRetries) times with exponential back-off. */
+async function _withRetry(fn, maxRetries = LLM_MAX_RETRIES, label = "LLM") {
+  let lastErr;
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const reason = err.name === "AbortError" ? "timeout" : err.message;
+      console.warn(`[LLM] ${label} attempt ${attempt} failed: ${reason}`);
+      if (attempt <= maxRetries) {
+        await new Promise(r => setTimeout(r, LLM_RETRY_DELAY * attempt));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+/** Returns true when the text looks like usable LLM output. */
+function _isUsable(text) {
+  return typeof text === "string" && text.trim().length > 30;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LLM INTEGRATION
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Calls the Anthropic Messages API to generate a multi-file web project.
- * Uses claude-sonnet-4-20250514 (fast, high-quality, large context).
+ * Calls OpenRouter → Groq with retry + timeout on each provider.
+ * ALWAYS returns a string that contains at least one === FILE: === block.
  *
- * @param {string} prompt - The user's description of what to build
- * @param {string} appType - Detected type (game, tool, saas, etc.)
- * @param {object} options - { previousFiles, editCommand, targetFile }
- * @returns {Promise<string>} Raw LLM output with === FILE: ... === delimiters
+ * @param {string} prompt
+ * @param {string} appType
+ * @param {object} options  { previousFiles, editCommand, targetFile }
+ * @returns {Promise<string>}
  */
 async function generateCodeWithLLM(prompt, appType = "static", options = {}) {
   const systemPrompt = buildSystemPromptForType(appType);
 
   let userMessage;
-
-  // 🟣 EDIT MODE (preserved from your original)
   if (options.editCommand && options.targetFile && options.previousFiles) {
     const fileContent = options.previousFiles[options.targetFile] || "";
-
-    userMessage = `You are editing an existing file in a web project.
-
-Project context (all files):
-${Object.entries(options.previousFiles)
-  .map(([name, content]) => `--- ${name} ---\n${content.substring(0, 800)}`)
-  .join("\n\n")}
-
-File to edit: ${options.targetFile}
-Current content:
-${fileContent}
-
-Edit instruction: ${options.editCommand}
-
-Output ONLY the updated file using the format:
-=== FILE: ${options.targetFile} ===
-[complete updated file content]`;
+    userMessage =
+      `Edit this file:\n\n${fileContent}\n\n` +
+      `Instruction: ${options.editCommand}\n\n` +
+      `Return ONLY:\n=== FILE: ${options.targetFile} ===\n[updated content]`;
   } else {
-    // 🟢 GENERATE MODE
-    userMessage = `Build this web project: ${prompt}
+    userMessage =
+      `Build this web project: ${prompt}\n\n` +
+      `STRICT FORMAT — start immediately with the delimiter, no preamble:\n` +
+      `=== FILE: index.html ===\n(full HTML)\n\n` +
+      `=== FILE: style.css ===\n(full CSS)\n\n` +
+      `=== FILE: script.js ===\n(full JS)`;
+  }
 
-STRICT RULES (MUST FOLLOW):
-1. Output ONLY files
-2. Use EXACT format:
-
-=== FILE: index.html ===
-(full code)
-
-=== FILE: style.css ===
-(full code)
-
-=== FILE: script.js ===
-(full code)
-
-3. NO markdown
-4. NO explanations
-5. ALWAYS include index.html
-
-FAILURE TO FOLLOW FORMAT = INVALID OUTPUT`;
-} // ✅ THIS WAS MISSING
-
+  const body = (model, messages) =>
+    JSON.stringify({ model, messages, max_tokens: 4096 });
 
   let lastError = null;
 
-  // 🟢 1. OPENROUTER (PRIMARY)
+  // ── 1. OPENROUTER ──────────────────────────────────────────────────────────
   if (process.env.OPENROUTER_API_KEY) {
     try {
-      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-  method: "POST",
-  headers: {
-    "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-    "Content-Type": "application/json"
-  },
-  body: JSON.stringify({
-    model: "deepseek/deepseek-coder-33b-instruct",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: userMessage }
-    ]
-  })
-}); // ✅ THIS LINE WAS MISSING
+      const text = await _withRetry(async () => {
+        const res = await _fetchWithTimeout(
+          "https://openrouter.ai/api/v1/chat/completions",
+          {
+            method:  "POST",
+            headers: {
+              "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+              "Content-Type":  "application/json",
+            },
+            body: body("openai/gpt-4o-mini", [
+              { role: "system", content: systemPrompt },
+              { role: "user",   content: userMessage  },
+            ]),
+          }
+        );
 
-      const data = await res.json();
-      const text = data?.choices?.[0]?.message?.content;
+        if (!res.ok) {
+          const errText = await res.text().catch(() => `HTTP ${res.status}`);
+          throw new Error(`OpenRouter ${res.status}: ${errText.slice(0, 200)}`);
+        }
 
-      if (text && text.length > 200) return text;
+        let data;
+        try { data = await res.json(); }
+        catch { throw new Error("OpenRouter returned non-JSON body"); }
 
+        const content = data?.choices?.[0]?.message?.content;
+        if (!_isUsable(content)) throw new Error("OpenRouter returned empty content");
+        return content;
+      }, LLM_MAX_RETRIES, "OpenRouter");
+
+      if (_isUsable(text)) return text;
     } catch (err) {
-      console.error("OpenRouter error:", err.message);
+      console.error("[LLM] OpenRouter exhausted:", err.message);
       lastError = err;
     }
   }
 
-  // 🟡 2. GROQ (FALLBACK)
+  // ── 2. GROQ ────────────────────────────────────────────────────────────────
   if (process.env.GROQ_API_KEY) {
     try {
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "llama3-70b-8192",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userMessage }
-          ]
-        })
-      });
+      const text = await _withRetry(async () => {
+        const res = await _fetchWithTimeout(
+          "https://api.groq.com/openai/v1/chat/completions",
+          {
+            method:  "POST",
+            headers: {
+              "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+              "Content-Type":  "application/json",
+            },
+            body: body("llama3-70b-8192", [
+              { role: "system", content: systemPrompt },
+              { role: "user",   content: userMessage  },
+            ]),
+          }
+        );
 
-      const data = await res.json();
-      const text = data?.choices?.[0]?.message?.content;
+        if (!res.ok) {
+          const errText = await res.text().catch(() => `HTTP ${res.status}`);
+          throw new Error(`Groq ${res.status}: ${errText.slice(0, 200)}`);
+        }
 
-      if (text && text.length > 200) return text;
+        let data;
+        try { data = await res.json(); }
+        catch { throw new Error("Groq returned non-JSON body"); }
 
+        const content = data?.choices?.[0]?.message?.content;
+        if (!_isUsable(content)) throw new Error("Groq returned empty content");
+        return content;
+      }, LLM_MAX_RETRIES, "Groq");
+
+      if (_isUsable(text)) return text;
     } catch (err) {
-      console.error("Groq error:", err.message);
+      console.error("[LLM] Groq exhausted:", err.message);
       lastError = err;
     }
   }
 
-  // 🔴 3. FINAL FALLBACK (NO WHITE SCREEN EVER)
-  console.error("ALL MODELS FAILED → using fallback", lastError?.message);
+  // ── 3. GUARANTEED FALLBACK ─────────────────────────────────────────────────
+  console.error("[LLM] All providers failed. Returning built-in fallback.", lastError?.message);
 
-  return `
-=== FILE: index.html ===
+  const safePrompt = String(prompt || "your request")
+    .replace(/</g, "&lt;").replace(/>/g, "&gt;").slice(0, 120);
+  const safeError  = String(lastError?.message || "All AI providers are currently unavailable")
+    .replace(/</g, "&lt;").replace(/>/g, "&gt;").slice(0, 200);
+
+  return `=== FILE: index.html ===
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Aquiplex</title>
-  <style>
-    body {
-      font-family: Arial;
-      background: #0b0f1a;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-    }
-    .box {
-      background: #111827;
-      padding: 30px;
-      border-radius: 10px;
-      text-align: center;
-    }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Generation Unavailable — Aquiplex</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div class="box">
-    <h1>⚠️ AI temporarily unavailable</h1>
-    <p>Try again in a moment.</p>
+  <div class="card">
+    <div class="icon">⚡</div>
+    <h1>Generation Unavailable</h1>
+    <p class="subtitle">
+      Could not generate: <strong>${safePrompt}</strong>
+    </p>
+    <div class="detail">${safeError}</div>
+    <div class="actions">
+      <button class="btn-primary" onclick="location.reload()">Retry</button>
+      <button class="btn-secondary" onclick="history.back()">Go Back</button>
+    </div>
   </div>
+  <script src="script.js"></script>
 </body>
 </html>
+
+=== FILE: style.css ===
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f0f13; color: #e2e8f0;
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 24px;
+}
+.card {
+  background: #1a1a24; border: 1px solid #2d2d3d; border-radius: 16px;
+  padding: 40px 36px; max-width: 520px; width: 100%; text-align: center;
+  box-shadow: 0 8px 32px rgba(0,0,0,.4);
+}
+.icon { font-size: 48px; margin-bottom: 16px; }
+h1 { font-size: 22px; font-weight: 700; color: #f8fafc; margin-bottom: 8px; }
+.subtitle { font-size: 14px; color: #94a3b8; margin-bottom: 24px; line-height: 1.5; }
+.detail {
+  background: #111118; border: 1px solid #2d2d3d; border-radius: 8px;
+  padding: 12px 16px; font-size: 12px; color: #64748b; font-family: monospace;
+  text-align: left; margin-bottom: 28px; word-break: break-word;
+}
+.actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+button {
+  padding: 10px 22px; border-radius: 8px; font-size: 14px; font-weight: 600;
+  cursor: pointer; border: none; transition: opacity .15s;
+}
+button:hover { opacity: .85; }
+.btn-primary  { background: #6366f1; color: #fff; }
+.btn-secondary { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; }
+
+=== FILE: script.js ===
+console.warn("[Aquiplex] AI generation failed — showing fallback UI.");
 `;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MULTI-FILE PARSER
+// OUTPUT PARSING  (production-grade, self-healing)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Parses LLM output into structured file objects.
+ * Parses LLM raw output into an array of { fileName, content, language }.
  *
- * Expected format:
- *   === FILE: path/to/file.ext ===
- *   <file content>
- *   === FILE: another/file.ext ===
- *   <file content>
+ * Handles:
+ *  - Correct "=== FILE: x ===" delimiters
+ *  - Variants with extra spaces / dashes / markdown fences around the delimiter
+ *  - Plain HTML with no delimiters → auto-wrapped as index.html
+ *  - Empty or non-string input → returns safe fallback entry
  *
- * @param {string} rawOutput - Raw LLM text
- * @returns {Array<{fileName: string, content: string, language: string}>}
+ * NEVER returns an empty array.
  */
 function parseMultiFileOutput(rawOutput) {
-  if (!rawOutput || typeof rawOutput !== "string") return [];
+  // ── 0. Guard ───────────────────────────────────────────────────────────────
+  if (!rawOutput || typeof rawOutput !== "string") {
+    return [_fallbackFile("parseMultiFileOutput received no input")];
+  }
 
-  // 🔥 Normalize messy LLM output
-  rawOutput = rawOutput
-    .replace(/\r\n/g, "\n")
-    .replace(/```[\s\S]*?```/g, (m) => m.replace(/```/g, "")) // remove code fences
+  // ── 1. Strip wrapping markdown code fences, e.g. ```html … ``` ────────────
+  let cleaned = rawOutput
+    .replace(/^```[\w]*\n?/gm, "")
+    .replace(/^```\s*$/gm, "")
     .trim();
 
-  // 🔥 Flexible delimiter (handles bad formatting)
-  const regex = /=+\s*FILE\s*:\s*(.+?)\s*=+/gi;
+  // ── 2. Normalise delimiter variants ───────────────────────────────────────
+  //   Handles: "-- FILE: x --", "===FILE:x===", "== FILE: x =="
+  cleaned = cleaned.replace(
+    /^(?:={2,}|-{2,})\s*FILE:\s*(.+?)\s*(?:={2,}|-{2,})\s*$/gim,
+    "=== FILE: $1 ==="
+  );
 
+  // ── 3. Find all delimiters ─────────────────────────────────────────────────
+  const DELIM = /^=== FILE:\s*(.+?)\s*===\s*$/gim;
   const matches = [];
-  let match;
-
-  while ((match = regex.exec(rawOutput)) !== null) {
-    matches.push({
-      index: match.index,
-      fileName: match[1].trim(),
-      end: regex.lastIndex
-    });
+  let m;
+  while ((m = DELIM.exec(cleaned)) !== null) {
+    matches.push({ fileName: m[1].trim(), start: m.index, end: DELIM.lastIndex });
   }
 
-  // 🔴 If no files detected → fallback intelligently
+  // ── 4a. No delimiters found — try to salvage ───────────────────────────────
   if (matches.length === 0) {
-    console.warn("[Parser] No delimiters found, wrapping output");
+    const trimmed = cleaned.trim();
 
-    return [{
-      fileName: guessFileName(rawOutput),
-      content: rawOutput.trim(),
-      language: inferLanguage("index.html")
-    }];
+    // Looks like HTML → wrap it
+    if (/<!doctype\s+html|<html[\s>]/i.test(trimmed)) {
+      console.warn("[parser] No FILE delimiters found — wrapping content as index.html");
+      return [{
+        fileName: "index.html",
+        content:  trimmed,
+        language: "html",
+      }];
+    }
+
+    // Anything else — still return something
+    console.warn("[parser] No FILE delimiters and no HTML detected — wrapping as index.html");
+    return [_fallbackFile("LLM output had no recognisable file delimiters", trimmed)];
   }
 
+  // ── 4b. Extract content between delimiters ─────────────────────────────────
   const files = [];
-
   for (let i = 0; i < matches.length; i++) {
-    const current = matches[i];
+    const cur  = matches[i];
     const next = matches[i + 1];
-
     let content = next
-      ? rawOutput.slice(current.end, next.index)
-      : rawOutput.slice(current.end);
+      ? cleaned.slice(cur.end, next.start)
+      : cleaned.slice(cur.end);
 
     content = content.trim();
 
+    // Skip genuinely empty file blocks
     if (!content) continue;
 
-    const fileName = sanitizeFileName(current.fileName);
+    const safeFileName = sanitizeFileName(cur.fileName);
+    if (!safeFileName) continue;
 
     files.push({
-      fileName,
+      fileName: safeFileName,
       content,
-      language: inferLanguage(fileName)
+      language: inferLanguage(safeFileName),
     });
   }
 
-  // 🔥 Safety: ensure index.html exists
-  const hasIndex = files.some(f => f.fileName === "index.html");
-
-  if (!hasIndex && files.length > 0) {
-    const htmlFile = files.find(f => f.fileName.endsWith(".html"));
-    if (htmlFile) htmlFile.fileName = "index.html";
+  // ── 5. Guarantee at least one file ────────────────────────────────────────
+  if (files.length === 0) {
+    console.warn("[parser] All parsed file blocks were empty — using fallback");
+    return [_fallbackFile("All file blocks were empty after parsing")];
   }
 
   return files;
 }
+
+/** Returns a minimal valid index.html file entry. */
+function _fallbackFile(reason = "", content = null) {
+  const safeReason = String(reason).replace(/</g, "&lt;").replace(/>/g, "&gt;").slice(0, 200);
+  return {
+    fileName: "index.html",
+    content: content || `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Aquiplex</title></head>
+<body style="font-family:system-ui;text-align:center;padding:60px;background:#0f0f13;color:#e2e8f0;">
+  <h1 style="margin-bottom:16px;">⚠️ Output Error</h1>
+  <p style="color:#94a3b8;margin-bottom:24px;">${safeReason || "The AI returned an unrecognisable response."}</p>
+  <button onclick="location.reload()"
+    style="background:#6366f1;color:#fff;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;">
+    Retry
+  </button>
+</body>
+</html>`,
+    language: "html",
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FILE HELPERS
+// ─────────────────────────────────────────────────────────────────────────────
 
 function guessFileName(content) {
   if (content.includes("<html")) return "index.html";
@@ -456,13 +553,13 @@ function guessFileName(content) {
 }
 
 function sanitizeFileName(name) {
-  // Remove leading slashes, null bytes, traversal attempts
+  if (!name || typeof name !== "string") return "";
   return name.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\0/g, "").trim();
 }
 
 function inferLanguage(fileName) {
   const ext = path.extname(fileName).toLowerCase();
-  const map  = {
+  const map = {
     ".html": "html", ".htm": "html",
     ".css":  "css",
     ".js":   "javascript", ".mjs": "javascript", ".cjs": "javascript",
@@ -487,7 +584,6 @@ async function saveProjectFiles(projectId, files) {
   const dir = projectDir(projectId);
   await fs.mkdir(dir, { recursive: true });
 
-  // Write index with metadata
   const index = {
     projectId: String(projectId),
     files:     files.map(f => f.fileName),
@@ -495,7 +591,6 @@ async function saveProjectFiles(projectId, files) {
   };
   await fs.writeFile(path.join(dir, "_index.json"), JSON.stringify(index, null, 2));
 
-  // Write each file (creating sub-dirs as needed)
   for (const file of files) {
     const filePath = path.join(dir, file.fileName);
     await fs.mkdir(path.dirname(filePath), { recursive: true });
@@ -515,9 +610,7 @@ async function readProjectFiles(projectId) {
       try {
         const content = await fs.readFile(path.join(dir, fileName), "utf8");
         files.push({ fileName, content, language: inferLanguage(fileName) });
-      } catch {
-        // File missing — skip
-      }
+      } catch { /* file missing — skip */ }
     }
     return { index, files };
   } catch {
@@ -528,10 +621,7 @@ async function readProjectFiles(projectId) {
 async function readSingleFile(projectId, fileName) {
   const safeFile = sanitizeFileName(fileName);
   const filePath = path.join(projectDir(projectId), safeFile);
-  // Guard against path traversal
-  if (!filePath.startsWith(projectDir(projectId))) {
-    throw new Error("Forbidden path");
-  }
+  if (!filePath.startsWith(projectDir(projectId))) throw new Error("Forbidden path");
   return fs.readFile(filePath, "utf8");
 }
 
@@ -543,7 +633,6 @@ async function writeSingleFile(projectId, fileName, content) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, content, "utf8");
 
-  // Update index
   try {
     const indexPath = path.join(dir, "_index.json");
     const indexRaw  = await fs.readFile(indexPath, "utf8");
@@ -561,12 +650,14 @@ async function deleteProject(projectId) {
 
 async function listProjects() {
   try {
-    const entries = await fs.readdir(PROJECTS_DIR, { withFileTypes: true });
+    const entries  = await fs.readdir(PROJECTS_DIR, { withFileTypes: true });
     const projects = [];
     for (const entry of entries) {
       if (!entry.isDirectory()) continue;
       try {
-        const indexRaw = await fs.readFile(path.join(PROJECTS_DIR, entry.name, "_index.json"), "utf8");
+        const indexRaw = await fs.readFile(
+          path.join(PROJECTS_DIR, entry.name, "_index.json"), "utf8"
+        );
         projects.push(JSON.parse(indexRaw));
       } catch {}
     }
@@ -577,7 +668,7 @@ async function listProjects() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FALLBACK TEMPLATE ENGINE (unchanged from v1 — used for non-code bundles)
+// FALLBACK TEMPLATE ENGINE
 // ─────────────────────────────────────────────────────────────────────────────
 
 const INSIGHT_TEMPLATES = [
@@ -626,11 +717,11 @@ const OUTPUT_TEMPLATES = [
 ];
 
 function generateStepOutput(step, bundle, stepIndex) {
-  const seed     = stepIndex % OUTPUT_TEMPLATES.length;
-  const content  = OUTPUT_TEMPLATES[seed](step, bundle.goal || bundle.title);
+  const seed    = stepIndex % OUTPUT_TEMPLATES.length;
+  const content = OUTPUT_TEMPLATES[seed](step, bundle.goal || bundle.title);
   const insights = generateInsights(step.title || `Step ${stepIndex + 1}`, stepIndex);
-  const memory   = extractMemoryFromStep(step, stepIndex, bundle);
-  const score    = 0.72 + ((stepIndex * 7) % 23) / 100;
+  const memory  = extractMemoryFromStep(step, stepIndex, bundle);
+  const score   = 0.72 + ((stepIndex * 7) % 23) / 100;
   return {
     stepIndex,
     stepTitle:       step.title || `Step ${stepIndex + 1}`,
@@ -667,14 +758,15 @@ function extractMemoryFromStep(step, stepIndex, bundle) {
   if (step.title) entries[`step_${stepIndex}_completed`] = step.title;
   if (bundle.goal) entries["bundle_goal"] = bundle.goal;
   if (step.description) {
-    const words = (step.description || "").split(" ").slice(0, 3).join("_").toLowerCase().replace(/[^a-z0-9_]/g, "");
+    const words = (step.description || "").split(" ").slice(0, 3).join("_")
+      .toLowerCase().replace(/[^a-z0-9_]/g, "");
     if (words) entries[`context_${words}`] = step.description.substring(0, 120);
   }
   return entries;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INTERNAL HELPERS (unchanged from v1)
+// INTERNAL HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function getOrCreateWorkspace(userId) {
@@ -735,77 +827,49 @@ function validateBundleId(bundleId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROJECT SERVICES (new)
+// PROJECT SERVICES
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Create a new project (directory) tied to a user.
- * projectId is a random slug unless you pass one in.
- */
 async function createProject(userId, name, projectId = null) {
   if (!userId) throw new Error("Unauthorized");
-  const id = projectId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const id  = projectId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   const dir = projectDir(id);
   await fs.mkdir(dir, { recursive: true });
-  const index = { projectId: id, name: name || "Untitled Project", userId: String(userId), files: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+  const index = {
+    projectId: id,
+    name:      name || "Untitled Project",
+    userId:    String(userId),
+    files:     [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
   await fs.writeFile(path.join(dir, "_index.json"), JSON.stringify(index, null, 2));
   return { success: true, projectId: id, name: index.name };
 }
 
 /**
  * Generate a complete multi-file project using the LLM.
+ * Fixes vs v2:
+ *  - Normalise index.html BEFORE the first save (no double-save)
+ *  - parseMultiFileOutput never returns [] so fallback branch is safety-only
  */
 async function generateProject(userId, projectId, prompt) {
-  if (!userId) throw new Error("Unauthorized");
+  if (!userId)              throw new Error("Unauthorized");
   if (!projectId || !prompt) throw new Error("projectId and prompt are required");
 
-  const appType  = detectAppType(prompt);
+  const appType   = detectAppType(prompt);
   const rawOutput = await generateCodeWithLLM(prompt, appType);
-  const files    = parseMultiFileOutput(rawOutput);
+  let   files     = parseMultiFileOutput(rawOutput); // never empty
 
-  if (!files.length) {
-  console.warn("No files parsed, injecting fallback UI");
-
-  const fallback = [{
-    fileName: "index.html",
-    content: `
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Aquiplex</title>
-</head>
-<body style="font-family:Arial;text-align:center;padding:50px;">
-  <h1>⚠️ AI output failed</h1>
-  <p>Your system is working, but model returned invalid format.</p>
-  <button onclick="location.reload()">Retry</button>
-</body>
-</html>
-`,
-    language: "html"
-  }];
-
-  await saveProjectFiles(projectId, fallback);
-
-  return {
-    success: true,
-    projectId,
-    appType,
-    files: ["index.html"],
-    fileData: fallback
-  };
-}
-  
-  await saveProjectFiles(projectId, files);
-
-  // Ensure index.html exists — if LLM only gave one HTML file, rename it
+  // Normalise: ensure index.html is the entry point
   const hasIndex = files.some(f => f.fileName === "index.html");
   if (!hasIndex) {
     const htmlFile = files.find(f => f.fileName.endsWith(".html"));
-    if (htmlFile) {
-      htmlFile.fileName = "index.html";
-      await saveProjectFiles(projectId, files); // re-save with corrected name
-    }
+    if (htmlFile) htmlFile.fileName = "index.html";
   }
+
+  // Single save after normalisation
+  await saveProjectFiles(projectId, files);
 
   return {
     success:  true,
@@ -816,9 +880,6 @@ async function generateProject(userId, projectId, prompt) {
   };
 }
 
-/**
- * Edit a single file within a project using the LLM.
- */
 async function editProjectFile(userId, projectId, filename, command) {
   if (!userId) throw new Error("Unauthorized");
 
@@ -837,25 +898,21 @@ async function editProjectFile(userId, projectId, filename, command) {
   const parsed = parseMultiFileOutput(rawOutput);
   if (!parsed.length) throw new Error("LLM returned no file content for edit");
 
-  // Apply each returned file
   for (const file of parsed) {
-    const targetName = file.fileName === filename || parsed.length === 1
+    const targetName = (file.fileName === filename || parsed.length === 1)
       ? filename
       : file.fileName;
     await writeSingleFile(projectId, targetName, file.content);
   }
 
   return {
-    success:  true,
+    success:      true,
     projectId,
     filename,
     updatedFiles: parsed.map(f => f.fileName),
   };
 }
 
-/**
- * Get list of all projects (optionally filtered by userId via index).
- */
 async function getProjectList(userId) {
   const all = await listProjects();
   return {
@@ -864,9 +921,6 @@ async function getProjectList(userId) {
   };
 }
 
-/**
- * Get all files for a project.
- */
 async function getProjectFiles(userId, projectId) {
   const { index, files } = await readProjectFiles(projectId);
   if (!index) throw new Error("Project not found");
@@ -878,32 +932,23 @@ async function getProjectFiles(userId, projectId) {
   };
 }
 
-/**
- * Get a single file's content.
- */
 async function getProjectFile(userId, projectId, fileName) {
   const content = await readSingleFile(projectId, fileName);
   return { success: true, projectId, fileName, content };
 }
 
-/**
- * Save (overwrite) a single file manually.
- */
 async function saveProjectFile(userId, projectId, fileName, content) {
   await writeSingleFile(projectId, fileName, content);
   return { success: true, projectId, fileName };
 }
 
-/**
- * Delete a project entirely.
- */
 async function deleteProjectById(userId, projectId) {
   await deleteProject(projectId);
   return { success: true };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// EXISTING WORKSPACE SERVICES (preserved from v1, unchanged logic)
+// WORKSPACE SERVICES
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function getWorkspaceState(userId) {
@@ -972,34 +1017,31 @@ async function completeStep(userId, bundleId, stepIndex, payload = {}) {
   }
   if (!Array.isArray(bundle.outputs)) bundle.outputs = [];
 
-  // ── CODE GENERATION MODE ──────────────────────────────────────────────────
   let outputEntry;
   const isCodeBundle = bundle.type === "code_generation" ||
     (bundle.goal && /\b(build|create|generate|make)\b.*\b(site|app|game|tool|dashboard|page)\b/i.test(bundle.goal));
 
   if (isCodeBundle && !payload.content) {
-    // Use the step description or bundle goal as the LLM prompt
-    const prompt   = steps[idx].description || steps[idx].title || bundle.goal || bundle.title;
-    const appType  = detectAppType(bundle.goal || bundle.title || "");
+    const prompt    = steps[idx].description || steps[idx].title || bundle.goal || bundle.title;
+    const appType   = detectAppType(bundle.goal || bundle.title || "");
     const projectId = String(bundle._id);
 
     try {
-      // Create project dir if first step
       if (idx === 0) {
         await fs.mkdir(projectDir(projectId), { recursive: true });
         const initIndex = {
           projectId, name: bundle.title || "Generated Project",
-          userId: String(userId), files: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+          userId: String(userId), files: [],
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
         };
-        await fs.writeFile(path.join(projectDir(projectId), "_index.json"), JSON.stringify(initIndex, null, 2)).catch(() => {});
+        await fs.writeFile(
+          path.join(projectDir(projectId), "_index.json"),
+          JSON.stringify(initIndex, null, 2)
+        ).catch(() => {});
       }
 
-      const rawOutput = await generateCodeWithLLM(
-        bundle.goal || prompt,
-        appType,
-        {}
-      );
-      const files = parseMultiFileOutput(rawOutput);
+      const rawOutput = await generateCodeWithLLM(bundle.goal || prompt, appType, {});
+      const files     = parseMultiFileOutput(rawOutput);
 
       if (files.length) {
         await saveProjectFiles(projectId, files);
@@ -1007,22 +1049,14 @@ async function completeStep(userId, bundleId, stepIndex, payload = {}) {
 
       const filesSummary = files.map(f => `- \`${f.fileName}\` (${f.content.length} chars)`).join("\n");
       outputEntry = {
-        stepIndex:       idx,
-        stepTitle:       steps[idx].title || `Step ${idx + 1}`,
-        content: `## ⚡ Code Generated
-
-**App type:** ${appType}
-**Files generated:** ${files.length}
-
-${filesSummary}
-
-**Preview available at:** /workspace/project/${projectId}/index.html`,
-
-keyInsights: [
-  `Generated ${files.length} file(s) for a ${appType} project.`,
-  `Primary entry: index.html`,
-  `Live preview available in the File Explorer panel.`,
-],
+        stepIndex,
+        stepTitle: steps[idx].title || `Step ${idx + 1}`,
+        content: `## ⚡ Code Generated\n\n**App type:** ${appType}\n**Files generated:** ${files.length}\n\n${filesSummary}\n\n**Preview:** /workspace/project/${projectId}/index.html`,
+        keyInsights: [
+          `Generated ${files.length} file(s) for a ${appType} project.`,
+          `Primary entry: index.html`,
+          `Live preview available in the File Explorer panel.`,
+        ],
         nextStepHints:   generateNextHints(steps[idx], steps, idx),
         confidenceScore: 0.95,
         tokensUsed:      rawOutput.length / 4 | 0,
@@ -1033,40 +1067,35 @@ keyInsights: [
       };
     } catch (llmErr) {
       console.error("[WS] LLM generation error:", llmErr.message);
-      // Fall back to template output and surface the error
       const fallback = generateStepOutput(steps[idx] || {}, bundle, idx);
       outputEntry = {
         ...fallback,
-        content: `⚠️ Code generation failed: ${llmErr.message}\n\n${fallback.content}`,
+        content:   `⚠️ Code generation failed: ${llmErr.message}\n\n${fallback.content}`,
         createdAt: new Date(),
       };
     }
   } else {
-    // ── STANDARD (TEMPLATE) MODE ──────────────────────────────────────────
     const autoOutput = generateStepOutput(steps[idx] || {}, bundle, idx);
     outputEntry = {
       stepIndex:       idx,
-      stepTitle:       payload.title       || autoOutput.stepTitle,
-      content:         payload.content     || autoOutput.content,
-      keyInsights:     payload.keyInsights || autoOutput.keyInsights,
-      nextStepHints:   payload.nextStepHints || autoOutput.nextStepHints,
+      stepTitle:       payload.title            || autoOutput.stepTitle,
+      content:         payload.content          || autoOutput.content,
+      keyInsights:     payload.keyInsights      || autoOutput.keyInsights,
+      nextStepHints:   payload.nextStepHints    || autoOutput.nextStepHints,
       confidenceScore: payload.confidenceScore !== undefined ? payload.confidenceScore : autoOutput.confidenceScore,
-      tokensUsed:      payload.tokensUsed  || autoOutput.tokensUsed,
-      durationMs:      payload.durationMs  || autoOutput.durationMs,
+      tokensUsed:      payload.tokensUsed       || autoOutput.tokensUsed,
+      durationMs:      payload.durationMs       || autoOutput.durationMs,
       createdAt:       new Date(),
     };
   }
 
-  // Mark progress
   const progEntry = bundle.progress.find((p) => p && p.step === idx);
   if (progEntry) { progEntry.status = "completed"; progEntry.completedAt = new Date(); }
   else           bundle.progress.push({ step: idx, status: "completed", completedAt: new Date() });
 
-  // Remove old output, push new
   bundle.outputs = (bundle.outputs || []).filter((o) => o && o.stepIndex !== idx);
   bundle.outputs.push(outputEntry);
 
-  // Memory merge
   const memEntries = payload.memoryEntries || {};
   if (bundle.memory instanceof Map) {
     for (const [k, v] of Object.entries(memEntries)) { if (k && v) bundle.memory.set(k.trim(), String(v).trim()); }
@@ -1075,16 +1104,18 @@ keyInsights: [
     for (const [k, v] of Object.entries(memEntries)) { if (k && v) bundle.memory[k.trim()] = String(v).trim(); }
   }
 
-  // Advance step
   const nextPending = bundle.progress.findIndex((p, i) => i > idx && p && p.status !== "completed");
   if (nextPending !== -1) { bundle.currentStep = nextPending; bundle.status = "active"; }
   else {
-    const allDone = bundle.progress.every((p) => p && p.status === "completed");
+    const allDone      = bundle.progress.every((p) => p && p.status === "completed");
     bundle.status      = allDone ? "completed" : "active";
     bundle.currentStep = allDone ? steps.length - 1 : bundle.currentStep;
   }
 
-  ws.pushRecentOutput({ bundleId, bundleTitle: bundle.title || "Untitled", stepIndex: idx, stepTitle: outputEntry.stepTitle, content: outputEntry.content || "" });
+  ws.pushRecentOutput({
+    bundleId, bundleTitle: bundle.title || "Untitled",
+    stepIndex: idx, stepTitle: outputEntry.stepTitle, content: outputEntry.content || "",
+  });
   if (typeof ws.mergeWorkspaceMemory === "function") ws.mergeWorkspaceMemory(memEntries);
 
   if (bundle.status === "completed") {
@@ -1174,8 +1205,8 @@ async function autoProgressNext(userId, bundleId) {
   try {
     const bundle = await Bundle.findOne({ _id: bundleId, userId });
     if (!bundle || bundle.status !== "active") return null;
-    const steps  = Array.isArray(bundle.steps) ? bundle.steps : [];
-    const next   = (Array.isArray(bundle.progress) ? bundle.progress : []).findIndex(
+    const steps = Array.isArray(bundle.steps) ? bundle.steps : [];
+    const next  = (Array.isArray(bundle.progress) ? bundle.progress : []).findIndex(
       (p) => p && p.status !== "completed"
     );
     if (next === -1 || next >= steps.length) return null;
@@ -1203,7 +1234,7 @@ module.exports = {
   updateWorkspaceMemory,
   autoProgressNext,
 
-  // New project/code-gen services
+  // Project / code-gen services
   createProject,
   generateProject,
   editProjectFile,
@@ -1213,7 +1244,7 @@ module.exports = {
   saveProjectFile,
   deleteProjectById,
 
-  // Exported helpers (useful for routes)
+  // Exported helpers
   detectAppType,
   parseMultiFileOutput,
   readSingleFile,

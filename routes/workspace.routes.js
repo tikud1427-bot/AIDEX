@@ -1,38 +1,14 @@
 /**
- * workspace.routes.js — AQUIPLEX Production (v2 — AI Execution Engine)
+ * workspace.routes.js — AQUIPLEX Production (v3 — Fixed)
  *
- * CHANGELOG v2:
+ * CHANGELOG v3:
  * - Mounted project engine at /workspace/project/*
+ * - Added proxy routes for frontend ↔ project engine:
+ *     GET  /workspace/files/:id          → list project files
+ *     GET  /workspace/file/:id/:file     → serve raw file (returns JSON for editor)
+ *     POST /workspace/save-file          → save file content
+ *     POST /workspace/edit-file          → AI edit file
  * - All existing routes preserved exactly
- *
- * Mount in index.js:
- *   const workspaceRoutes = require("./workspace.routes");
- *   app.use("/workspace", requireLogin, workspaceRoutes);
- *
- * ROUTES (existing — unchanged):
- *   GET    /workspace                      → render EJS
- *   GET    /workspace/state                → { workspace, bundles }
- *   GET    /workspace/bundle/:bundleId     → { bundle }
- *   POST   /workspace/run/:bundleId        → start bundle
- *   POST   /workspace/step/:bundleId/:step → mark step complete / run step
- *   POST   /workspace/pause/:bundleId      → pause
- *   POST   /workspace/resume/:bundleId     → resume
- *   POST   /workspace/pin/:bundleId        → pin
- *   POST   /workspace/unpin/:bundleId      → unpin
- *   POST   /workspace/memory               → update workspace memory
- *   POST   /workspace/add/:toolId          → add tool (compat)
- *   POST   /workspace/remove/:toolId       → remove tool (compat)
- *   DELETE /workspace/tools/:id            → remove tool (canonical)
- *
- * NEW ROUTES (project engine):
- *   POST   /workspace/project/create       → create project folder
- *   POST   /workspace/project/generate     → AI generates website files
- *   POST   /workspace/project/edit         → AI edits file
- *   GET    /workspace/project/list         → list user projects
- *   GET    /workspace/project/:id          → project metadata
- *   GET    /workspace/project/:id/files    → list project files
- *   GET    /workspace/project/:id/:file    → serve file (for iframe)
- *   DELETE /workspace/project/:id          → delete project
  */
 
 "use strict";
@@ -40,6 +16,8 @@
 const express   = require("express");
 const router    = express.Router();
 const mongoose  = require("mongoose");
+const fs        = require("fs");
+const path      = require("path");
 const Workspace = require("../models/Workspace");
 const Bundle    = require("../models/Bundle");
 const svc       = require("../services/workspace.service");
@@ -96,7 +74,13 @@ router.get("/", async (req, res) => {
 
     const bundles = await Bundle.find({ userId }).sort({ updatedAt: -1 }).lean();
 
-    res.render("workspace", { workspace: ws, bundles, page: "workspace" });
+    res.render("workspace", {
+      workspace:       ws,
+      bundles,
+      page:            "workspace",
+      openProjectId:   null,
+      openProjectName: null,
+    });
   } catch (err) {
     console.error("[WS] render:", err);
     res.status(500).send("Workspace unavailable");
@@ -308,6 +292,84 @@ router.post("/remove/:toolId", async (req, res) => {
     }
 
     res.json({ success: true });
+  } catch (err) {
+    handleErr(res, err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [NEW] GET /workspace/files/:projectId
+// Frontend calls this to list project files for the code editor.
+// Proxies to project engine's /:id/files logic.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/files/:projectId", async (req, res) => {
+  try {
+    const userId    = uid(req);
+    const { projectId } = req.params;
+    const result    = await svc.getProjectFiles(userId, projectId);
+    res.json(result);
+  } catch (err) {
+    handleErr(res, err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [NEW] GET /workspace/file/:projectId/:filename
+// Frontend calls this to get file content for the code editor.
+// Returns JSON { success, file: { content, fileName } }.
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.get("/file/:projectId/:filename", async (req, res) => {
+  try {
+    const userId   = uid(req);
+    const { projectId, filename } = req.params;
+    const result   = await svc.getProjectFile(userId, projectId, decodeURIComponent(filename));
+    res.json({
+      success:  true,
+      file:     { content: result.content, fileName: result.fileName },
+      projectId,
+    });
+  } catch (err) {
+    handleErr(res, err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [NEW] POST /workspace/save-file
+// Frontend calls this to save manually edited file content.
+// Body: { projectId, fileName, content }
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/save-file", async (req, res) => {
+  try {
+    const userId = uid(req);
+    const { projectId, fileName, content } = req.body || {};
+    if (!projectId || !fileName) {
+      return res.status(400).json({ success: false, error: "projectId and fileName required" });
+    }
+    const result = await svc.saveProjectFile(userId, projectId, fileName, content || "");
+    res.json(result);
+  } catch (err) {
+    handleErr(res, err);
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// [NEW] POST /workspace/edit-file
+// Frontend calls this for AI-powered file editing.
+// Body: { projectId, fileName, instruction }
+// ─────────────────────────────────────────────────────────────────────────────
+
+router.post("/edit-file", async (req, res) => {
+  try {
+    const userId = uid(req);
+    const { projectId, fileName, instruction } = req.body || {};
+    if (!projectId || !fileName || !instruction) {
+      return res.status(400).json({ success: false, error: "projectId, fileName, and instruction required" });
+    }
+    const result = await svc.editProjectFile(userId, projectId, fileName, instruction);
+    res.json(result);
   } catch (err) {
     handleErr(res, err);
   }

@@ -8,7 +8,7 @@
  *           This was the root cause: the browser was receiving raw JSON instead of HTML.
  * - [FIX-2] Added GET /api/:id — dedicated JSON endpoint for programmatic consumers.
  *           API routes are always prefixed /api/ to prevent mixing concerns.
- * - [FIX-3] GET /:id fetches the user's full workspace + bundles so workspace.ejs
+ * - [FIX-3] GETfetches the user's full workspace + bundles so workspace.ejs
  *           receives the same data shape as GET /workspace (workspace_routes.js line 99).
  *
  * ROUTES:
@@ -195,7 +195,7 @@ router.post("/create", async (req, res) => {
 
 router.post("/generate", async (req, res) => {
   try {
-    const userId              = uid(req);
+    const userId = uid(req);
     const { projectId, prompt } = req.body || {};
 
     if (!projectId || !prompt) {
@@ -207,165 +207,38 @@ router.post("/generate", async (req, res) => {
       return res.status(404).json({ success: false, error: "Project not found" });
     }
 
-    const buildResult = await builderService.generate(prompt);
-    const filesMap    = normalizeFiles(buildResult.files);
-    const dir         = projectDir(projectId);
-    const written     = [];
+    // ✅ USE REAL AI ENGINE
+    const svc = require("../services/workspace.service");
+    const result = await svc.generateProject(userId, projectId, prompt);
 
-    for (const [filename, content] of Object.entries(filesMap)) {
-      const safeName = safeFilename(filename);
+    if (!result.success) {
+      return res.status(500).json({ success: false, error: "Generation failed" });
+    }
+
+    const dir = projectDir(projectId);
+    const written = [];
+
+    for (const file of result.fileData) {
+      const safeName = safeFilename(file.fileName);
       if (!safeName || !isAllowedExt(safeName)) continue;
-      fs.writeFileSync(path.join(dir, safeName), content, "utf8");
+
+      fs.writeFileSync(path.join(dir, safeName), file.content, "utf8");
       written.push(safeName);
     }
 
-    meta.files     = written;
-    meta.prompt    = prompt;
-    meta.intent    = buildResult.intent;
-    meta.source    = buildResult.source;
+    meta.files = written;
+    meta.prompt = prompt;
     meta.updatedAt = new Date().toISOString();
     writeMeta(projectId, meta);
-
-    console.log(`[Project Engine] Generated ${written.length} files via ${buildResult.source} (intent: ${buildResult.intent})`);
 
     res.json({
       success: true,
       projectId,
-      files:   written,
-      source:  buildResult.source,
-      intent:  buildResult.intent,
+      files: written
     });
+
   } catch (err) {
-    console.error("[Project Engine] /generate unexpected error:", err);
-    handleErr(res, err);
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// POST /workspace/project/edit  — UNCHANGED
-// ─────────────────────────────────────────────────────────────────────────────
-
-router.post("/edit", async (req, res) => {
-  try {
-    const userId = uid(req);
-    const { projectId, command, filename = "index.html" } = req.body || {};
-
-    if (!projectId || !command) {
-      return res.status(400).json({ success: false, error: "projectId and command are required" });
-    }
-
-    const meta = readMeta(projectId);
-    if (!meta || meta.userId !== String(userId)) {
-      return res.status(404).json({ success: false, error: "Project not found" });
-    }
-
-    const safeName = safeFilename(filename);
-    const filePath = path.join(projectDir(projectId), safeName);
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ success: false, error: `File ${safeName} not found in project` });
-    }
-
-    const currentContent = fs.readFileSync(filePath, "utf8");
-
-    const systemPrompt = `You are an expert web developer editing an existing file.
-
-CRITICAL RULES:
-1. Return ONLY the complete, updated file content. No explanation, no markdown, no code fences.
-2. Apply the user's instruction to the existing code exactly.
-3. Preserve everything not mentioned in the instruction.
-4. Return raw file content only — the exact bytes that should be written to ${safeName}.`;
-
-    const userPrompt = `Current ${safeName} content:
-${currentContent}
-
-Instruction: ${command}
-
-Return ONLY the updated complete file content. Nothing else.`;
-
-    const updatedContent = await callAIForEdit(systemPrompt, userPrompt);
-
-    const cleanContent = updatedContent
-      .replace(/^```[a-zA-Z]*\n?/gm, "")
-      .replace(/^```\n?/gm, "")
-      .trim();
-
-    fs.writeFileSync(filePath, cleanContent, "utf8");
-
-    meta.updatedAt = new Date().toISOString();
-    writeMeta(projectId, meta);
-
-    res.json({ success: true, projectId, filename: safeName, updated: true });
-  } catch (err) {
-    handleErr(res, err);
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// GET /workspace/project/list  — UNCHANGED
-// ─────────────────────────────────────────────────────────────────────────────
-
-router.get("/list", async (req, res) => {
-  try {
-    const userId   = String(uid(req));
-    const projects = [];
-
-    if (!fs.existsSync(PROJECTS_ROOT)) {
-      return res.json({ success: true, projects: [] });
-    }
-
-    const dirs = fs.readdirSync(PROJECTS_ROOT, { withFileTypes: true })
-      .filter(d => d.isDirectory())
-      .map(d => d.name);
-
-    for (const dir of dirs) {
-      const meta = readMeta(dir);
-      if (meta && meta.userId === userId) {
-        projects.push({
-          projectId:  meta.projectId,
-          name:       meta.name,
-          files:      meta.files || [],
-          createdAt:  meta.createdAt,
-          updatedAt:  meta.updatedAt,
-        });
-      }
-    }
-
-    projects.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-    res.json({ success: true, projects });
-  } catch (err) {
-    handleErr(res, err);
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// [NEW] GET /workspace/project/api/:id  — JSON metadata for programmatic use
-//
-// Kept here so AJAX callers that previously hit /:id for JSON continue to work
-// after the fix. Prefix all API-only routes with /api/ to prevent collisions
-// with view routes.
-// ─────────────────────────────────────────────────────────────────────────────
-
-router.get("/api/:id", async (req, res) => {
-  try {
-    const userId = String(uid(req));
-    const meta   = readMeta(req.params.id);
-
-    if (!meta || meta.userId !== userId) {
-      return res.status(404).json({ success: false, error: "Project not found" });
-    }
-
-    res.json({
-      success: true,
-      project: {
-        projectId:  meta.projectId,
-        name:       meta.name,
-        files:      meta.files || [],
-        createdAt:  meta.createdAt,
-        updatedAt:  meta.updatedAt,
-      },
-    });
-  } catch (err) {
+    console.error("[Project Engine] /generate error:", err);
     handleErr(res, err);
   }
 });

@@ -12,570 +12,6 @@
 <link rel="shortcut icon" href="https://aquiplex.com/logo/favicon.ico">
 <link rel="apple-touch-icon" sizes="180x180" href="https://aquiplex.com/logo/apple-touch-icon.png">
 <script src="/socket.io/socket.io.js"></script>
-
-<style>
-/* ─── RESET & VARIABLES ─── */
-:root {
-  --bg:        #0a0a0f;
-  --surface:   #111118;
-  --surface2:  #18181f;
-  --border:    #2a2a3a;
-  --accent:    #6ee7b7;
-  --accent2:   #818cf8;
-  --accent3:   #f472b6;
-  --text:      #e2e8f0;
-  --muted:     #64748b;
-  --danger:    #f87171;
-  --mono:      'IBM Plex Mono', monospace;
-  --sans:      'Syne', sans-serif;
-  --radius:    6px;
-  --topbar-h:  52px;
-}
-
-*,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
-html,body { height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 13px; }
-
-/* ─── LAYOUT ─── */
-.aq-workspace { display: flex; flex-direction: column; height: 100vh; }
-
-.aq-topbar {
-  height: var(--topbar-h);
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 16px;
-  flex-shrink: 0;
-  z-index: 50;
-}
-
-.aq-logo {
-  font-family: var(--sans);
-  font-weight: 800;
-  font-size: 1rem;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  flex-shrink: 0;
-}
-.aq-logo span { color: var(--muted); }
-
-.aq-topbar-prompt {
-  flex: 1;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  min-width: 0;
-  max-width: 680px;
-}
-.aq-topbar-prompt input {
-  flex: 1;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 0.78rem;
-  padding: 7px 12px;
-  border-radius: var(--radius);
-  outline: none;
-  transition: border-color 0.15s;
-  min-width: 0;
-}
-.aq-topbar-prompt input:focus { border-color: var(--accent); }
-.aq-topbar-prompt input::placeholder { color: var(--muted); }
-
-.aq-body {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-}
-
-/* ─── SIDEBAR ─── */
-.aq-sidebar {
-  width: 220px;
-  flex-shrink: 0;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-.aq-sidebar-hdr {
-  padding: 12px 14px 8px;
-  border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.aq-sidebar-title {
-  font-family: var(--sans);
-  font-weight: 700;
-  font-size: 0.7rem;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-.aq-sidebar-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border);
-}
-.aq-sidebar-tab {
-  flex: 1;
-  padding: 7px 4px;
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 0.65rem;
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s, border-color 0.15s;
-  letter-spacing: 0.05em;
-}
-.aq-sidebar-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.aq-sidebar-tab:hover:not(.active) { color: var(--text); }
-
-.aq-sidebar-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 6px 0;
-}
-.aq-sidebar-list::-webkit-scrollbar { width: 3px; }
-.aq-sidebar-list::-webkit-scrollbar-thumb { background: var(--border); }
-
-/* ─── PROJECT ITEMS ─── */
-.aq-proj-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 14px;
-  cursor: pointer;
-  border-left: 2px solid transparent;
-  transition: background 0.1s, border-color 0.1s;
-  position: relative;
-}
-.aq-proj-item:hover { background: var(--surface2); }
-.aq-proj-item.active { background: var(--surface2); border-left-color: var(--accent); }
-.aq-proj-icon { font-size: 0.85rem; flex-shrink: 0; }
-.aq-proj-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.72rem;
-  color: var(--text);
-}
-.aq-proj-del {
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 0.65rem;
-  padding: 2px 4px;
-  border-radius: 3px;
-  opacity: 0;
-  transition: opacity 0.1s, color 0.1s;
-}
-.aq-proj-item:hover .aq-proj-del { opacity: 1; }
-.aq-proj-del:hover { color: var(--danger); }
-
-/* ─── BUNDLE ITEMS ─── */
-.aq-bundle-item {
-  padding: 8px 14px;
-  cursor: pointer;
-  border-left: 2px solid transparent;
-  transition: background 0.1s, border-color 0.1s;
-}
-.aq-bundle-item:hover { background: var(--surface2); }
-.aq-bundle-item.selected { background: var(--surface2); border-left-color: var(--accent2); }
-.aq-bundle-row1 { display: flex; align-items: center; gap: 7px; }
-.aq-bundle-title { font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
-.aq-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.aq-dot-active { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 2s infinite; }
-.aq-dot-paused { background: #fbbf24; }
-.aq-dot-completed { background: var(--accent2); }
-.aq-dot-draft { background: var(--muted); }
-.aq-bundle-meta { display: flex; align-items: center; gap: 6px; margin-top: 4px; }
-.aq-bundle-track { flex: 1; height: 2px; background: var(--border); border-radius: 1px; }
-.aq-bundle-fill { height: 100%; background: var(--accent2); border-radius: 1px; transition: width 0.4s; }
-.aq-bundle-pct { font-size: 0.58rem; color: var(--muted); }
-
-/* ─── MAIN AREA ─── */
-.aq-main { display: flex; flex: 1; min-width: 0; min-height: 0; }
-
-/* ─── CODE EDITOR PANE ─── */
-.aq-editor-pane {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-  border-right: 1px solid var(--border);
-}
-
-.aq-file-tabs {
-  display: flex;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  overflow-x: auto;
-  flex-shrink: 0;
-}
-.aq-file-tabs::-webkit-scrollbar { height: 2px; }
-.aq-file-tabs::-webkit-scrollbar-thumb { background: var(--border); }
-
-.aq-file-tab {
-  padding: 8px 14px;
-  background: none;
-  border: none;
-  border-right: 1px solid var(--border);
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 0.68rem;
-  cursor: pointer;
-  white-space: nowrap;
-  border-bottom: 2px solid transparent;
-  transition: color 0.15s, border-color 0.15s, background 0.1s;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.aq-file-tab.active { color: var(--text); background: var(--surface2); border-bottom-color: var(--accent); }
-.aq-file-tab:hover:not(.active) { color: var(--text); background: var(--surface2); }
-.aq-file-tab-close {
-  font-size: 0.6rem;
-  opacity: 0.4;
-  line-height: 1;
-  transition: opacity 0.1s;
-}
-.aq-file-tab:hover .aq-file-tab-close { opacity: 0.9; }
-
-.aq-editor-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.aq-editor-filename {
-  flex: 1;
-  font-size: 0.68rem;
-  color: var(--muted);
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.aq-code-editor {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  resize: none;
-  background: var(--bg);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 0.76rem;
-  line-height: 1.6;
-  padding: 14px 16px;
-  border: none;
-  outline: none;
-  tab-size: 2;
-  white-space: pre;
-  overflow-wrap: normal;
-  overflow-x: auto;
-}
-
-/* ─── AI EDIT BAR ─── */
-.aq-ai-edit-bar {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  padding: 8px 12px;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.aq-ai-edit-bar input {
-  flex: 1;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font-family: var(--mono);
-  font-size: 0.72rem;
-  padding: 6px 10px;
-  border-radius: var(--radius);
-  outline: none;
-  transition: border-color 0.15s;
-}
-.aq-ai-edit-bar input:focus { border-color: var(--accent2); }
-.aq-ai-edit-bar input::placeholder { color: var(--muted); }
-
-/* ─── PREVIEW PANE ─── */
-.aq-preview-pane {
-  width: 42%;
-  min-width: 280px;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface);
-  flex-shrink: 0;
-}
-.aq-preview-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-.aq-preview-dots { display: flex; gap: 5px; }
-.aq-preview-dots span { width: 10px; height: 10px; border-radius: 50%; display: block; }
-.aq-preview-url {
-  flex: 1;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.65rem;
-  padding: 4px 8px;
-  border-radius: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.aq-preview-iframe {
-  flex: 1;
-  border: none;
-  background: #fff;
-  width: 100%;
-}
-
-/* ─── WELCOME / EMPTY STATE ─── */
-.aq-welcome {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 40px;
-  text-align: center;
-}
-.aq-welcome-glyph { font-size: 2.5rem; opacity: 0.25; }
-.aq-welcome h2 { font-family: var(--sans); font-weight: 700; font-size: 1.2rem; color: var(--text); }
-.aq-welcome p { font-size: 0.75rem; color: var(--muted); max-width: 340px; line-height: 1.7; }
-.aq-welcome-hint { font-size: 0.62rem; color: var(--muted); margin-top: 6px; }
-
-/* ─── EXEC PANEL ─── */
-.aq-exec { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
-.aq-exec-hdr { padding: 14px 18px; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
-.aq-exec-hdr-top { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
-.aq-exec-title { font-family: var(--sans); font-weight: 700; font-size: 0.95rem; }
-.aq-exec-goal { font-size: 0.7rem; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aq-exec-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.aq-stats-row { display: flex; gap: 18px; margin: 8px 0; flex-wrap: wrap; }
-.aq-stat { display: flex; flex-direction: column; gap: 2px; }
-.aq-stat-val { font-family: var(--sans); font-weight: 700; font-size: 1rem; }
-.aq-stat-lbl { font-size: 0.58rem; color: var(--muted); letter-spacing: 0.08em; text-transform: uppercase; }
-.c-accent { color: var(--accent); } .c-green { color: #4ade80; } .c-amber { color: #fbbf24; } .c-purple { color: var(--accent2); }
-.aq-progress-track { height: 3px; background: var(--border); border-radius: 2px; position: relative; overflow: visible; margin-top: 6px; }
-.aq-progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; transition: width 0.5s; }
-.aq-progress-glow { position: absolute; top: -4px; width: 8px; height: 11px; background: var(--accent); border-radius: 4px; transform: translateX(-50%); transition: left 0.5s; opacity: 0.7; }
-.aq-exec-content { display: flex; flex: 1; min-height: 0; gap: 0; }
-.aq-steps-panel { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.aq-timeline { display: flex; align-items: center; padding: 10px 18px; gap: 0; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; flex-shrink: 0; }
-.aq-timeline::-webkit-scrollbar { height: 2px; } .aq-timeline::-webkit-scrollbar-thumb { background: var(--border); }
-.aq-tl-step { display: flex; align-items: center; cursor: pointer; }
-.aq-tl-dot { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.58rem; color: var(--muted); transition: all 0.2s; background: var(--surface); flex-shrink: 0; }
-.aq-tl-dot.done { background: var(--accent2); border-color: var(--accent2); color: #fff; }
-.aq-tl-dot.running { border-color: var(--accent); color: var(--accent); animation: pulse 1.5s infinite; }
-.aq-tl-line { width: 20px; height: 2px; background: var(--border); flex-shrink: 0; }
-.aq-tl-line.done { background: var(--accent2); }
-.aq-steps-scroll { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
-.aq-steps-scroll::-webkit-scrollbar { width: 3px; } .aq-steps-scroll::-webkit-scrollbar-thumb { background: var(--border); }
-.aq-step-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; transition: border-color 0.2s; }
-.aq-step-card.active { border-color: var(--accent); }
-.aq-step-card.done { border-color: var(--accent2); }
-.aq-step-card.running { border-color: var(--accent); box-shadow: 0 0 12px rgba(110,231,183,0.1); }
-.aq-step-hdr { display: flex; align-items: center; gap: 10px; padding: 10px 14px; cursor: pointer; user-select: none; }
-.aq-step-hdr:hover { background: var(--surface2); }
-.aq-step-num { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 0.6rem; flex-shrink: 0; transition: all 0.2s; }
-.aq-step-num.done { background: var(--accent2); border-color: var(--accent2); color: #fff; }
-.aq-step-num.running { border-color: var(--accent); color: var(--accent); }
-.aq-step-info { flex: 1; min-width: 0; }
-.aq-step-title { font-size: 0.75rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aq-step-desc { font-size: 0.65rem; color: var(--muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aq-badge { font-size: 0.56rem; padding: 2px 6px; border-radius: 3px; letter-spacing: 0.07em; font-weight: 600; flex-shrink: 0; }
-.wb-done { background: rgba(129,140,248,0.15); color: var(--accent2); }
-.wb-running { background: rgba(110,231,183,0.1); color: var(--accent); }
-.wb-pending { background: var(--surface2); color: var(--muted); }
-.wb-failed { background: rgba(248,113,113,0.15); color: var(--danger); }
-.aq-step-toggle { color: var(--muted); font-size: 0.7rem; transition: transform 0.2s; flex-shrink: 0; }
-.aq-step-toggle.open { transform: rotate(180deg); }
-.aq-step-body { max-height: 0; overflow: hidden; transition: max-height 0.3s ease; }
-.aq-step-body-inner { padding: 10px 14px 12px; border-top: 1px solid var(--border); }
-.aq-output-block { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; margin-bottom: 8px; }
-.aq-output-hdr { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-.aq-output-label { font-size: 0.62rem; color: var(--accent); font-weight: 600; letter-spacing: 0.08em; }
-.aq-output-badges { display: flex; gap: 4px; flex: 1; }
-.aq-out-meta-badge { font-size: 0.56rem; padding: 1px 5px; border-radius: 3px; }
-.aq-out-meta-badge.green { background: rgba(74,222,128,0.1); color: #4ade80; }
-.aq-out-meta-badge.muted { background: var(--border); color: var(--muted); }
-.aq-output-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: 0.6; }
-.aq-output-content { font-size: 0.7rem; line-height: 1.7; color: var(--text); overflow-x: auto; word-break: break-word; }
-.aq-output-content strong { color: var(--accent2); }
-.aq-out-h2 { display: block; color: var(--accent); font-size: 0.75rem; font-weight: 700; margin: 6px 0 2px; font-family: var(--sans); }
-.aq-out-li { display: block; padding-left: 10px; color: var(--text); opacity: 0.85; }
-.aq-out-code { background: var(--border); border-radius: 3px; padding: 1px 4px; font-size: 0.67rem; color: var(--accent3); }
-.aq-step-actions { display: flex; gap: 6px; margin-top: 8px; }
-.aq-step-act-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 0.65rem; padding: 4px 10px; border-radius: var(--radius); cursor: pointer; transition: all 0.15s; display: flex; align-items: center; gap: 5px; }
-.aq-step-act-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.aq-step-act-btn.run-step:hover:not(:disabled) { background: rgba(110,231,183,0.08); }
-.aq-step-act-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.aq-insight-chips { display: flex; flex-wrap: wrap; gap: 5px; }
-.aq-insight-chip { font-size: 0.6rem; background: rgba(129,140,248,0.1); border: 1px solid rgba(129,140,248,0.2); color: var(--accent2); padding: 2px 7px; border-radius: 10px; }
-.aq-empty-inline { font-size: 0.68rem; color: var(--muted); padding: 6px 0; }
-.aq-output-loading { display: flex; }
-.aq-spinner-row { display: flex; align-items: center; gap: 8px; font-size: 0.7rem; color: var(--muted); }
-.aq-tool-chips { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
-.aq-tool-chip { font-size: 0.6rem; background: var(--surface2); border: 1px solid var(--border); padding: 2px 7px; border-radius: 10px; color: var(--muted); text-decoration: none; }
-.aq-right-panel { width: 260px; flex-shrink: 0; border-left: 1px solid var(--border); display: flex; flex-direction: column; background: var(--surface); }
-.aq-right-tabs { display: flex; border-bottom: 1px solid var(--border); }
-.aq-right-tab { flex: 1; padding: 7px 4px; background: none; border: none; color: var(--muted); font-family: var(--mono); font-size: 0.62rem; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.15s; letter-spacing: 0.04em; }
-.aq-right-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-.aq-right-body { flex: 1; overflow-y: auto; padding: 10px; }
-.aq-right-section { display: none; }
-.aq-right-section.active { display: block; transition: opacity 0.2s; }
-.aq-feed-item { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 8px 10px; margin-bottom: 6px; }
-.aq-feed-item-new { opacity: 0; transition: opacity 0.3s; }
-.aq-feed-item-new.visible { opacity: 1; }
-.aq-feed-meta { display: flex; justify-content: space-between; margin-bottom: 4px; gap: 8px; }
-.aq-feed-step { font-size: 0.62rem; color: var(--accent); }
-.aq-feed-bundle { font-size: 0.58rem; color: var(--muted); }
-.aq-feed-preview { font-size: 0.65rem; color: var(--text); opacity: 0.7; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.aq-mem-hdr { font-size: 0.6rem; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
-.aq-mem-hdr span { color: var(--accent); font-size: 0.56rem; }
-.aq-mem-kv { background: var(--surface2); border-left: 2px solid var(--accent2); padding: 5px 8px; border-radius: 0 4px 4px 0; margin-bottom: 4px; }
-.aq-mem-k { font-size: 0.6rem; color: var(--accent2); margin-bottom: 2px; }
-.aq-mem-v { font-size: 0.65rem; color: var(--text); word-break: break-word; }
-.aq-context-box { background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; padding: 8px; font-size: 0.65rem; line-height: 1.5; color: var(--text); }
-.aq-insight-item { display: flex; align-items: center; font-size: 0.68rem; padding: 6px 8px; background: var(--surface2); border-radius: 4px; margin-bottom: 4px; line-height: 1.4; }
-.aq-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 20px; text-align: center; color: var(--muted); font-size: 0.7rem; }
-.aq-empty-icon { font-size: 1.5rem; opacity: 0.3; }
-
-/* ─── BUTTONS ─── */
-.aq-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 0.68rem; padding: 6px 14px; border-radius: var(--radius); cursor: pointer; transition: all 0.15s; white-space: nowrap; letter-spacing: 0.04em; }
-.aq-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.aq-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.aq-btn-sm { padding: 4px 10px; font-size: 0.64rem; }
-.aq-btn-run { background: rgba(110,231,183,0.1); border-color: var(--accent); color: var(--accent); }
-.aq-btn-run:hover:not(:disabled) { background: rgba(110,231,183,0.2); }
-.aq-btn-ai { background: rgba(129,140,248,0.1); border-color: var(--accent2); color: var(--accent2); }
-.aq-btn-ai:hover:not(:disabled) { background: rgba(129,140,248,0.2); }
-.aq-btn-danger { border-color: var(--danger); color: var(--danger); }
-.aq-btn-danger:hover:not(:disabled) { background: rgba(248,113,113,0.1); }
-.aq-btn-success { border-color: var(--accent); color: var(--accent); }
-
-/* ─── SPINNER ─── */
-.aq-spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
-.aq-spinner-sm { width: 10px; height: 10px; }
-.aq-mini-spinner { width: 10px; height: 10px; border: 1.5px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; }
-
-/* ─── MODALS ─── */
-.aq-modal-backdrop,.aq-confirm-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 1000; }
-.aq-modal-backdrop.open,.aq-confirm-backdrop.open { display: flex; }
-.aq-modal { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; width: min(500px, 94vw); max-height: 80vh; display: flex; flex-direction: column; }
-.aq-modal-hdr { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); }
-.aq-modal-title { font-family: var(--sans); font-weight: 700; font-size: 0.85rem; }
-.aq-modal-close { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 0.9rem; transition: color 0.15s; }
-.aq-modal-close:hover { color: var(--danger); }
-.aq-modal-body { flex: 1; overflow-y: auto; padding: 16px; }
-.aq-modal-footer { padding: 10px 16px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; }
-.aq-run-spinner { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 0.75rem; }
-.aq-run-output-label { font-size: 0.65rem; color: var(--accent); margin-bottom: 8px; letter-spacing: 0.08em; }
-.aq-run-output-content { font-size: 0.72rem; line-height: 1.7; color: var(--text); }
-.aq-confirm-box { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; width: min(380px, 94vw); padding: 20px; }
-.aq-confirm-title { font-family: var(--sans); font-weight: 700; margin-bottom: 8px; font-size: 0.9rem; }
-.aq-confirm-msg { font-size: 0.72rem; color: var(--muted); margin-bottom: 16px; line-height: 1.6; }
-.aq-confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
-
-/* ─── PALETTE ─── */
-.aq-palette-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: flex-start; justify-content: center; padding-top: 15vh; z-index: 999; }
-.aq-palette-backdrop.open { display: flex; }
-.aq-palette { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; width: min(520px, 92vw); max-height: 60vh; display: flex; flex-direction: column; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
-.aq-palette-input { background: transparent; border: none; border-bottom: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 0.85rem; padding: 14px 16px; outline: none; }
-.aq-palette-list { flex: 1; overflow-y: auto; }
-.aq-palette-cmd { padding: 10px 16px; cursor: pointer; font-size: 0.75rem; display: flex; align-items: center; justify-content: space-between; transition: background 0.1s; }
-.aq-palette-cmd:hover { background: var(--surface2); }
-.aq-palette-cmd .key { font-size: 0.58rem; color: var(--muted); background: var(--border); padding: 2px 5px; border-radius: 3px; }
-
-/* ─── LOADING BAR ─── */
-.aq-loading-bar { position: fixed; top: 0; left: 0; height: 2px; width: 0; background: linear-gradient(90deg, var(--accent), var(--accent2)); transition: width 0.3s; z-index: 9999; }
-.aq-loading-bar.visible { animation: loadbar 1.5s ease-in-out infinite; }
-
-/* ─── TOAST ─── */
-#aq-toast-root { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 6px; z-index: 9999; }
-.aq-toast { background: var(--surface); border: 1px solid var(--border); padding: 10px 16px; border-radius: var(--radius); font-size: 0.72rem; max-width: 280px; transition: opacity 0.32s; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
-.aq-toast.success { border-color: var(--accent); color: var(--accent); }
-.aq-toast.error { border-color: var(--danger); color: var(--danger); }
-.aq-toast.info { border-color: var(--accent2); color: var(--accent2); }
-.aq-toast.fadeout { opacity: 0; }
-
-/* ─── SKELETON ─── */
-.aq-skeleton { background: linear-gradient(90deg, var(--surface) 25%, var(--surface2) 50%, var(--surface) 75%); background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: var(--radius); }
-
-/* ─── ANIMATIONS ─── */
-@keyframes spin { to { transform: rotate(360deg); } }
-@keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
-@keyframes loadbar { 0%{width:0;left:0;} 50%{width:60%;left:20%;} 100%{width:0;left:100%;} }
-@keyframes shimmer { 0%{background-position:200% 0;} 100%{background-position:-200% 0;} }
-
-/* ─── RESPONSIVE ─── */
-@media (max-width: 768px) {
-  .aq-preview-pane { display: none; }
-  .aq-right-panel { display: none !important; }
-  .aq-sidebar { width: 100%; position: absolute; z-index: 200; top: var(--topbar-h); bottom: 0; left: -100%; transition: left 0.25s; }
-  .aq-sidebar.open { left: 0; }
-}
-@media (max-width: 600px) {
-  .aq-topbar-prompt { max-width: unset; }
-}
-
-/* ─── STATUS PILL ─── */
-.aq-status-pill { display: flex; align-items: center; gap: 5px; font-size: 0.6rem; color: var(--muted); letter-spacing: 0.08em; }
-.aq-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 2s infinite; }
-
-/* ─── SWITCHER ─── */
-.aq-switcher { background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 0.68rem; padding: 4px 8px; border-radius: var(--radius); outline: none; cursor: pointer; }
-
-/* ─── STEP BODY SETTLED STATE ─── */
-.aq-step-body[data-state="settled"] { max-height: none !important; overflow: visible !important; }
-
-/* ─── OVERFLOW FIXES ─── */
-.aq-workspace,.aq-body,.aq-main,.aq-exec,.aq-exec-content,.aq-steps-panel,.aq-steps-scroll { min-width: 0; }
-
-/* ─── PROJECT GENERATOR LOADING OVERLAY ─── */
-.aq-gen-overlay {
-  position: absolute; inset: 0;
-  background: rgba(10,10,15,0.85);
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
-  z-index: 100; backdrop-filter: blur(4px);
-  border-radius: var(--radius);
-}
-.aq-gen-overlay-msg { font-size: 0.78rem; color: var(--accent); animation: pulse 1.5s infinite; }
-.aq-editor-pane { position: relative; }
-
-/* ─── MENU BTN ─── */
-.aq-menu-btn { background: none; border: none; color: var(--muted); font-size: 1rem; cursor: pointer; padding: 4px; transition: color 0.15s; display: none; }
-.aq-menu-btn:hover { color: var(--text); }
-@media (max-width: 768px) { .aq-menu-btn { display: block; } }
-
-/* ─── BREADCRUMB ─── */
-.aq-breadcrumb { display: flex; align-items: center; gap: 6px; font-size: 0.68rem; color: var(--muted); }
-.aq-breadcrumb .cur { color: var(--text); }
-</style>
 </head>
 <body>
 
@@ -584,12 +20,15 @@ html,body { height: 100%; overflow: hidden; background: var(--bg); color: var(--
 <div class="aq-loading-bar" id="aqLoadingBar"></div>
 <div id="aq-toast-root"></div>
 
+<!-- ═══ DRAWER OVERLAY (mobile) ═══ -->
+<div class="aq-drawer-overlay" id="aqDrawerOverlay" onclick="closeSidebar()"></div>
+
 <!-- ═══ STEP RUN MODAL ═══ -->
 <div class="aq-modal-backdrop" id="aqRunModal">
   <div class="aq-modal">
     <div class="aq-modal-hdr">
       <span class="aq-modal-title" id="runModalTitle">Running Step…</span>
-      <button class="aq-modal-close" onclick="closeRunModal()">✕</button>
+      <button class="aq-modal-close" onclick="closeRunModal()" aria-label="Close">✕</button>
     </div>
     <div class="aq-modal-body">
       <div class="aq-run-spinner" id="runModalSpinner">
@@ -608,16 +47,17 @@ html,body { height: 100%; overflow: hidden; background: var(--bg); color: var(--
 
 <!-- ═══ COMMAND PALETTE ═══ -->
 <div class="aq-palette-backdrop" id="aqPalette" onclick="closePalette(event)">
-  <div class="aq-palette">
+  <div class="aq-palette" role="dialog" aria-label="Command palette">
     <input class="aq-palette-input" id="aqPaletteInput" placeholder="Type a command…"
-           oninput="filterPalette(this.value)" onkeydown="paletteKeydown(event)"/>
+           oninput="filterPalette(this.value)" onkeydown="paletteKeydown(event)"
+           autocomplete="off" spellcheck="false"/>
     <div class="aq-palette-list" id="aqPaletteList"></div>
   </div>
 </div>
 
 <!-- ═══ CONFIRM MODAL ═══ -->
 <div class="aq-confirm-backdrop" id="aqConfirm">
-  <div class="aq-confirm-box">
+  <div class="aq-confirm-box" role="alertdialog">
     <div class="aq-confirm-title" id="aqConfirmTitle">Are you sure?</div>
     <div class="aq-confirm-msg"   id="aqConfirmMsg"></div>
     <div class="aq-confirm-actions">
@@ -631,23 +71,31 @@ html,body { height: 100%; overflow: hidden; background: var(--bg); color: var(--
 
   <!-- ═══ TOPBAR ═══ -->
   <div class="aq-topbar">
-    <button class="aq-menu-btn" id="menuBtn" aria-label="Open menu" onclick="openSidebar()">☰</button>
+    <button class="aq-menu-btn" id="menuBtn" aria-label="Open sidebar" onclick="openSidebar()">☰</button>
     <div class="aq-logo">AQUI<span>PLEX</span></div>
-    <div class="aq-breadcrumb"><span class="cur" id="topBreadcrumb">Workspace</span></div>
-
-    <!-- Generate bar (shared, always visible) -->
-    <div class="aq-topbar-prompt">
-      <input id="topPromptInput" placeholder="What do you want to build? Press Enter to generate…"
-             onkeydown="if(event.key==='Enter')generateProject()"/>
-      <button class="aq-btn aq-btn-run aq-btn-sm" id="topGenBtn" onclick="generateProject()">⚡ Generate</button>
+    <div class="aq-breadcrumb">
+      <span class="sep">/</span>
+      <span class="cur" id="topBreadcrumb">Workspace</span>
     </div>
 
-    <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-      <div class="aq-status-pill">
+    <!-- Generate bar -->
+    <div class="aq-topbar-prompt">
+      <input id="topPromptInput"
+             placeholder="Describe what to build — press Enter to generate…"
+             aria-label="Project prompt"
+             onkeydown="if(event.key==='Enter'&&!STATE.busy)generateProject()"
+             oninput="_debouncePromptHint(this.value)"/>
+      <button class="aq-btn aq-btn-run aq-btn-sm" id="topGenBtn" onclick="generateProject()" aria-label="Generate project">
+        ⚡ Generate
+      </button>
+    </div>
+
+    <div class="aq-topbar-right">
+      <div class="aq-status-pill" title="Connected">
         <div class="aq-status-dot"></div><span>ONLINE</span>
       </div>
-      <select id="bundleSwitcher" class="aq-switcher" title="Switch bundle" style="display:none;"></select>
-      <button class="aq-btn aq-btn-sm" onclick="openPalette()" title="Command palette">⌘K</button>
+      <select id="bundleSwitcher" class="aq-switcher" title="Switch bundle" style="display:none;" aria-label="Switch bundle"></select>
+      <button class="aq-btn aq-btn-sm" id="paletteBtn" onclick="openPalette()" title="Command palette (⌘K)" aria-label="Open command palette">⌘K</button>
     </div>
   </div>
 
@@ -655,28 +103,33 @@ html,body { height: 100%; overflow: hidden; background: var(--bg); color: var(--
   <div class="aq-body">
 
     <!-- ═══ LEFT SIDEBAR ═══ -->
-    <div class="aq-sidebar" id="aqSidebar">
-      <div class="aq-sidebar-hdr">
+    <div class="aq-sidebar" id="aqSidebar" role="navigation" aria-label="Workspace sidebar">
+      <div class="aq-sidebar-header">
         <span class="aq-sidebar-title">Workspace</span>
-        <button class="aq-btn aq-btn-sm" onclick="closeSidebar()" style="display:none;" id="sidebarCloseBtn">✕</button>
+        <button class="aq-sidebar-close" id="sidebarCloseBtn" onclick="closeSidebar()" aria-label="Close sidebar">✕</button>
       </div>
-      <div class="aq-sidebar-tabs">
-        <button class="aq-sidebar-tab active" onclick="switchLeftTab('projects', this)">Projects</button>
-        <button class="aq-sidebar-tab"        onclick="switchLeftTab('bundles',  this)">Bundles</button>
+
+      <div class="aq-sidebar-tabs" role="tablist">
+        <button class="aq-sidebar-tab active" role="tab" aria-selected="true"  onclick="switchLeftTab('projects', this)">Projects</button>
+        <button class="aq-sidebar-tab"        role="tab" aria-selected="false" onclick="switchLeftTab('bundles',  this)">Bundles</button>
       </div>
 
       <!-- PROJECTS LIST -->
-      <div class="aq-sidebar-list" id="leftProjectList">
-        <div style="padding:8px 10px;">
-          <button class="aq-btn aq-btn-sm" onclick="promptNewProject()" style="width:100%;">+ New Project</button>
-        </div>
+      <div class="aq-sidebar-list" id="leftProjectList" role="tabpanel">
+        <button class="aq-sidebar-new-btn" onclick="promptNewProject()" aria-label="New project">
+          + New Project
+        </button>
         <div id="projectListItems">
-          <div class="aq-empty"><span class="aq-empty-icon">📁</span>No projects yet.</div>
+          <div class="aq-empty">
+            <span class="aq-empty-icon">📁</span>
+            No projects yet.<br/>
+            <a href="#" onclick="promptNewProject();return false;" style="color:var(--accent);font-size:0.66rem;margin-top:4px;display:inline-block;">Create your first →</a>
+          </div>
         </div>
       </div>
 
       <!-- BUNDLES LIST -->
-      <div class="aq-sidebar-list" id="leftBundleList" style="display:none;">
+      <div class="aq-sidebar-list" id="leftBundleList" style="display:none;" role="tabpanel">
         <% if (bundles && bundles.length > 0) { %>
           <% bundles.forEach(function(b) {
             const completed = (b.progress || []).filter(p => p && p.status === 'completed').length;
@@ -687,10 +140,11 @@ html,body { height: 100%; overflow: hidden; background: var(--bg); color: var(--
                             : b.status === 'completed' ? 'aq-dot-completed'
                             : 'aq-dot-draft';
           %>
-          <div class="aq-bundle-item" id="brow-<%= b._id %>" onclick="selectBundleById('<%= b._id %>')">
+          <div class="aq-bundle-item" id="brow-<%= b._id %>" onclick="selectBundleById('<%= b._id %>')" role="button" tabindex="0"
+               onkeydown="if(event.key==='Enter')selectBundleById('<%= b._id %>')">
             <div class="aq-bundle-row1">
-              <div class="aq-dot <%= dotCls %>"></div>
-              <div class="aq-bundle-title"><%= b.title %></div>
+              <div class="aq-dot <%= dotCls %>" title="<%= b.status %>"></div>
+              <div class="aq-bundle-title" title="<%= b.title %>"><%= b.title %></div>
             </div>
             <div class="aq-bundle-meta">
               <div class="aq-bundle-track"><div class="aq-bundle-fill" style="width:<%= pct %>%"></div></div>
@@ -706,42 +160,70 @@ html,body { height: 100%; overflow: hidden; background: var(--bg); color: var(--
           </div>
         <% } %>
       </div>
-    </div>
+    </div><!-- /aq-sidebar -->
 
     <!-- ═══ MAIN ═══ -->
     <div class="aq-main">
 
       <!-- ─── PROJECT VIEW (code editor + preview) ─── -->
-      <div id="wsProjectView" style="display:none;flex:1;min-width:0;min-height:0;display:none;">
+      <div id="wsProjectView" style="display:none;flex:1;min-width:0;min-height:0;">
+
+        <!-- Sticky Action Bar -->
+        <div class="aq-sticky-action-bar" id="projectActionBar">
+          <span class="aq-sticky-action-bar-label">Actions</span>
+          <button class="aq-btn aq-btn-sm aq-btn-run" id="stickyGenBtn" onclick="generateProject()" title="Re-generate project">⚡ Generate</button>
+          <div class="aq-sticky-sep"></div>
+          <button class="aq-btn aq-btn-sm aq-btn-success" onclick="saveCurrentFile()" id="stickySaveBtn" title="Save file (⌘S)">💾 Save</button>
+          <button class="aq-btn aq-btn-sm aq-btn-ai" id="stickyAiBtn" onclick="focusAiEdit()" title="AI-edit current file">✦ AI Edit</button>
+          <div class="aq-sticky-sep"></div>
+          <button class="aq-btn aq-btn-sm" onclick="refreshPreview()" title="Reload preview">⟳ Reload</button>
+          <button class="aq-btn aq-btn-sm" onclick="openPreviewInTab()" title="Open preview in new tab">↗ Preview</button>
+        </div>
 
         <!-- Code Editor Pane -->
         <div class="aq-editor-pane" id="editorPane">
           <!-- File tabs -->
-          <div class="aq-file-tabs" id="fileTabs"></div>
+          <div class="aq-file-tabs" id="fileTabs" role="tablist" aria-label="Open files"></div>
           <!-- Toolbar -->
           <div class="aq-editor-toolbar">
             <span class="aq-editor-filename" id="editorFilename">No file selected</span>
-            <button class="aq-btn aq-btn-sm aq-btn-success" onclick="saveCurrentFile()">💾 Save</button>
+            <span class="aq-editor-unsaved" id="editorUnsaved" aria-live="polite">Unsaved</span>
+            <button class="aq-btn aq-btn-sm aq-btn-success" onclick="saveCurrentFile()" title="Save (⌘S)">💾 Save</button>
           </div>
           <!-- Code textarea -->
           <textarea class="aq-code-editor" id="codeEditor" spellcheck="false"
                     placeholder="Select a file from the tabs above…"
-                    oninput="markDirty()"></textarea>
+                    oninput="markDirty()"
+                    aria-label="Code editor"></textarea>
           <!-- AI Edit bar -->
           <div class="aq-ai-edit-bar">
-            <input id="aiEditInput" placeholder="Describe an edit: 'Make the navbar sticky', 'Add dark mode toggle'…"
-                   onkeydown="if(event.key==='Enter')aiEditFile()"/>
-            <button class="aq-btn aq-btn-ai aq-btn-sm" id="aiEditBtn" onclick="aiEditFile()">✦ AI Edit</button>
+            <input id="aiEditInput"
+                   placeholder="Describe an edit — 'Make the navbar sticky', 'Add dark mode'…"
+                   onkeydown="if(event.key==='Enter')aiEditFile()"
+                   aria-label="AI edit instruction"
+                   autocomplete="off"/>
+            <button class="aq-btn aq-btn-ai aq-btn-sm" id="aiEditBtn" onclick="aiEditFile()" aria-label="Apply AI edit">✦ AI Edit</button>
           </div>
           <!-- Generating overlay -->
-          <div class="aq-gen-overlay" id="genOverlay" style="display:none;">
-            <div class="aq-spinner" style="width:22px;height:22px;border-width:3px;"></div>
+          <div class="aq-gen-overlay" id="genOverlay" style="display:none;" aria-live="polite" aria-label="Generating">
+            <div class="aq-gen-overlay-spinner"></div>
             <div class="aq-gen-overlay-msg" id="genOverlayMsg">Generating project…</div>
+            <div class="aq-gen-overlay-steps" id="genOverlaySteps">
+              <div class="aq-gen-step" id="genStep1">
+                <div class="aq-gen-step-dot"></div>Creating project…
+              </div>
+              <div class="aq-gen-step" id="genStep2">
+                <div class="aq-gen-step-dot"></div>AI generating files…
+              </div>
+              <div class="aq-gen-step" id="genStep3">
+                <div class="aq-gen-step-dot"></div>Loading preview…
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- Preview Pane -->
-        <div class="aq-preview-pane">
+        <div class="aq-preview-pane" id="previewPane">
           <div class="aq-preview-header">
             <div class="aq-preview-dots">
               <span style="background:#ff5f57;"></span>
@@ -749,11 +231,17 @@ html,body { height: 100%; overflow: hidden; background: var(--bg); color: var(--
               <span style="background:#28c940;"></span>
             </div>
             <div class="aq-preview-url" id="previewUrl">about:blank</div>
-            <button class="aq-btn aq-btn-sm" onclick="refreshPreview()" title="Reload" style="padding:3px 8px;font-size:0.6rem;">⟳</button>
+            <div class="aq-preview-actions">
+              <button class="aq-preview-icon-btn" onclick="refreshPreview()" title="Reload preview" aria-label="Reload preview">⟳</button>
+              <button class="aq-preview-icon-btn" onclick="openPreviewInTab()" title="Open in new tab" aria-label="Open preview in new tab">↗</button>
+            </div>
           </div>
-          <iframe id="previewFrame" class="aq-preview-iframe" sandbox="allow-scripts allow-same-origin" title="Preview"></iframe>
+          <iframe id="previewFrame" class="aq-preview-iframe"
+                  sandbox="allow-scripts allow-same-origin"
+                  title="Live preview"
+                  onload="this.classList.remove('loading')"></iframe>
         </div>
-      </div>
+      </div><!-- /wsProjectView -->
 
       <!-- ─── BUNDLE EXEC VIEW ─── -->
       <div class="aq-exec" id="wsExec" style="display:none;">
@@ -768,8 +256,8 @@ html,body { height: 100%; overflow: hidden; background: var(--bg); color: var(--
               <button class="aq-btn aq-btn-sm"            id="btnPause"  onclick="pauseCurrentBundle()"  style="display:none;">⏸ Pause</button>
               <button class="aq-btn aq-btn-sm"            id="btnResume" onclick="resumeCurrentBundle()" style="display:none;">↺ Resume</button>
               <button class="aq-btn aq-btn-sm"            id="btnAutoRun" onclick="autoRunSteps()">⚡ Auto</button>
-              <button class="aq-btn aq-btn-sm"            id="btnPin"    onclick="pinCurrentBundle()">☆</button>
-              <button class="aq-btn aq-btn-sm aq-btn-danger" onclick="deleteCurrentBundle()">⌫</button>
+              <button class="aq-btn aq-btn-sm"            id="btnPin"    onclick="pinCurrentBundle()">☆ PIN</button>
+              <button class="aq-btn aq-btn-sm aq-btn-danger" onclick="deleteCurrentBundle()" title="Delete bundle">⌫ Del</button>
             </div>
           </div>
           <div class="aq-stats-row">
@@ -779,72 +267,100 @@ html,body { height: 100%; overflow: hidden; background: var(--bg); color: var(--
             <div class="aq-stat"><div class="aq-stat-val c-amber"   id="statStatus">—</div><div class="aq-stat-lbl">Status</div></div>
             <div class="aq-stat"><div class="aq-stat-val c-purple"  id="statConfidence">—</div><div class="aq-stat-lbl">Confidence</div></div>
           </div>
-          <div class="aq-progress-track">
+          <div class="aq-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="mainProgressTrack">
             <div class="aq-progress-fill" id="mainProgressFill" style="width:0%"></div>
             <div class="aq-progress-glow" id="mainProgressGlow" style="left:0%"></div>
           </div>
         </div>
         <div class="aq-exec-content">
           <div class="aq-steps-panel">
-            <div class="aq-timeline" id="execTimeline"></div>
-            <div class="aq-steps-scroll" id="execSteps"></div>
+            <div class="aq-timeline" id="execTimeline" role="list" aria-label="Step timeline"></div>
+            <div class="aq-steps-scroll" id="execSteps" role="list"></div>
           </div>
           <div class="aq-right-panel" id="aqRightPanel">
-            <div class="aq-right-tabs">
-              <button class="aq-right-tab active" data-tab="outputs"  onclick="switchRightTab('outputs',this)">Outputs</button>
-              <button class="aq-right-tab"         data-tab="memory"   onclick="switchRightTab('memory',this)">Memory</button>
-              <button class="aq-right-tab"         data-tab="insights" onclick="switchRightTab('insights',this)">Insights</button>
+            <div class="aq-right-tabs" role="tablist">
+              <button class="aq-right-tab active" role="tab" data-tab="outputs"  onclick="switchRightTab('outputs',this)">Outputs</button>
+              <button class="aq-right-tab"         role="tab" data-tab="memory"   onclick="switchRightTab('memory',this)">Memory</button>
+              <button class="aq-right-tab"         role="tab" data-tab="insights" onclick="switchRightTab('insights',this)">Insights</button>
             </div>
             <div class="aq-right-body">
-              <div class="aq-right-section active" id="rtab-outputs">
-                <div id="outputFeed"><div class="aq-empty">Run a step to see outputs.</div></div>
+              <div class="aq-right-section active" id="rtab-outputs" role="tabpanel">
+                <div id="outputFeed"><div class="aq-empty"><span class="aq-empty-icon">📤</span>Run a step to see outputs.</div></div>
               </div>
-              <div class="aq-right-section" id="rtab-memory">
+              <div class="aq-right-section" id="rtab-memory" role="tabpanel">
                 <div class="aq-mem-hdr">Bundle Memory <span id="memBundleCount">0 keys</span></div>
                 <div id="memBundleEntries"></div>
                 <div class="aq-mem-hdr" style="margin-top:14px;">Context <span id="memWsCount">0 keys</span></div>
                 <div id="memWsEntries"></div>
               </div>
-              <div class="aq-right-section" id="rtab-insights">
-                <div id="insightList"><div class="aq-empty">Insights appear after steps run.</div></div>
+              <div class="aq-right-section" id="rtab-insights" role="tabpanel">
+                <div id="insightList"><div class="aq-empty"><span class="aq-empty-icon">💡</span>Insights appear after steps run.</div></div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </div><!-- /wsExec -->
 
       <!-- ─── WELCOME ─── -->
       <div class="aq-welcome" id="wsWelcome">
         <div class="aq-welcome-glyph">⚡</div>
         <h2>Aquiplex Workspace</h2>
-        <p>Generate a project with AI, or select a bundle to monitor execution.</p>
-        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center;">
-          <button class="aq-btn aq-btn-run" onclick="focusPrompt()">⚡ Generate Project</button>
-          <button class="aq-btn" onclick="switchLeftTab('bundles')">📦 View Bundles</button>
+        <p>Generate a project with AI, monitor execution bundles, or pick up where you left off.</p>
+
+        <!-- Example prompts -->
+        <div class="aq-welcome-prompts" id="welcomePrompts">
+          <span class="aq-welcome-prompt-chip" onclick="_fillPrompt(this.textContent)">Landing page for a SaaS product</span>
+          <span class="aq-welcome-prompt-chip" onclick="_fillPrompt(this.textContent)">Portfolio site with dark mode</span>
+          <span class="aq-welcome-prompt-chip" onclick="_fillPrompt(this.textContent)">Dashboard with charts</span>
+          <span class="aq-welcome-prompt-chip" onclick="_fillPrompt(this.textContent)">E-commerce product page</span>
         </div>
-        <div class="aq-welcome-hint">Press ⌘K for commands</div>
+
+        <div class="aq-welcome-actions">
+          <button class="aq-btn aq-btn-run" onclick="focusPrompt()" style="min-height:48px;padding:0 24px;">⚡ Generate Project</button>
+          <button class="aq-btn" onclick="switchLeftTab('bundles')" style="min-height:48px;padding:0 24px;">📦 View Bundles</button>
+        </div>
+        <div class="aq-welcome-hint">Press ⌘K for commands · ⌘S to save</div>
       </div>
 
-      <!-- ─── LOADING ─── -->
+      <!-- ─── LOADING SKELETON ─── -->
       <div id="wsLoading" style="display:none;" class="aq-welcome">
-        <div style="display:flex;flex-direction:column;gap:10px;width:100%;max-width:300px;">
-          <div class="aq-skeleton" style="height:16px;width:55%;"></div>
-          <div class="aq-skeleton" style="height:11px;width:75%;"></div>
-          <div class="aq-skeleton" style="height:56px;margin-top:10px;"></div>
-          <div class="aq-skeleton" style="height:56px;"></div>
+        <div style="display:flex;flex-direction:column;gap:12px;width:100%;max-width:320px;align-items:center;">
+          <div class="aq-skeleton" style="height:18px;width:50%;border-radius:8px;"></div>
+          <div class="aq-skeleton" style="height:12px;width:70%;border-radius:6px;"></div>
+          <div class="aq-skeleton" style="height:58px;margin-top:10px;border-radius:10px;"></div>
+          <div class="aq-skeleton" style="height:58px;border-radius:10px;"></div>
+          <div class="aq-skeleton" style="height:58px;border-radius:10px;"></div>
         </div>
       </div>
 
       <!-- ─── ERROR ─── -->
       <div id="wsError" style="display:none;" class="aq-welcome">
-        <div style="font-size:1.4rem;opacity:0.5;">⚠</div>
-        <div id="wsErrorMsg">Something went wrong.</div>
-        <button class="aq-btn" onclick="retryLoad()" style="margin-top:12px;">↺ Retry</button>
+        <div style="font-size:1.8rem;opacity:0.3;margin-bottom:16px;">⚠</div>
+        <div id="wsErrorMsg" style="font-size:0.84rem;color:var(--muted);margin-bottom:20px;">Something went wrong.</div>
+        <button class="aq-btn aq-btn-run" onclick="retryLoad()" style="min-height:44px;padding:0 20px;">↺ Retry</button>
       </div>
 
     </div><!-- /aq-main -->
   </div><!-- /aq-body -->
+
+  <!-- ─── MOBILE BOTTOM NAV ─── -->
+  <nav class="aq-bottom-nav" aria-label="Mobile navigation">
+    <button class="aq-bottom-tab active" id="btnav-workspace" onclick="mobileNavSwitch('workspace',this)">
+      <span class="icon">⚡</span>Workspace
+    </button>
+    <button class="aq-bottom-tab" id="btnav-projects" onclick="mobileNavSwitch('projects',this)">
+      <span class="icon">📁</span>Projects
+    </button>
+    <button class="aq-bottom-tab" id="btnav-bundles" onclick="mobileNavSwitch('bundles',this)">
+      <span class="icon">📦</span>Bundles
+    </button>
+    <button class="aq-bottom-tab" id="btnav-cmd" onclick="openPalette()">
+      <span class="icon">⌘</span>Commands
+    </button>
+  </nav>
+
 </div><!-- /aq-workspace -->
+
 
 <script>
 "use strict";
@@ -873,6 +389,10 @@ const STATE = {
 const _ejsBundles = JSON.parse(decodeURIComponent("<%- encodeURIComponent(JSON.stringify(bundles || [])) %>"));
 STATE.allBundles = _ejsBundles.slice();
 
+// Handle server-side auto-open (when navigating to /workspace/project/:id)
+const _openProjectId   = "<%= typeof openProjectId !== 'undefined' && openProjectId ? openProjectId : '' %>";
+const _openProjectName = "<%= typeof openProjectName !== 'undefined' && openProjectName ? openProjectName : '' %>";
+
 /* ─── LOADING BAR ─── */
 function showLoading()  { document.getElementById("aqLoadingBar").classList.add("visible");    STATE.loading = true; }
 function hideLoading()  { document.getElementById("aqLoadingBar").classList.remove("visible"); STATE.loading = false; }
@@ -881,7 +401,8 @@ function hideLoading()  { document.getElementById("aqLoadingBar").classList.remo
 function showView(id) {
   ["wsWelcome","wsLoading","wsExec","wsError","wsProjectView"].forEach(v => {
     const el = document.getElementById(v);
-    if (el) el.style.display = (v === id) ? (v === "wsProjectView" ? "flex" : "flex") : "none";
+    if (!el) return;
+    el.style.display = (v === id) ? "flex" : "none";
   });
 }
 function retryLoad() { if (STATE.lastBundleId) { const b = STATE.allBundles.find(x=>String(x._id)===String(STATE.lastBundleId)); if(b) selectBundle(b); } }
@@ -922,19 +443,31 @@ function closeRunModal() { document.getElementById("aqRunModal").classList.remov
 /* ─── SIDEBAR ─── */
 function openSidebar()  {
   document.getElementById("aqSidebar").classList.add("open");
-  document.getElementById("sidebarCloseBtn").style.display = "";
+  document.getElementById("sidebarCloseBtn").style.display = "flex";
+  document.getElementById("aqDrawerOverlay").classList.add("visible");
 }
 function closeSidebar() {
   document.getElementById("aqSidebar").classList.remove("open");
   document.getElementById("sidebarCloseBtn").style.display = "none";
+  document.getElementById("aqDrawerOverlay").classList.remove("visible");
 }
 
 /* ─── TABS ─── */
 function switchLeftTab(tab, btn) {
-  document.querySelectorAll(".aq-sidebar-tab").forEach(b => b.classList.remove("active"));
-  if (btn) btn.classList.add("active");
-  else {
-    document.querySelectorAll(".aq-sidebar-tab").forEach(b => { if(b.textContent.trim().toLowerCase().startsWith(tab[0])) b.classList.add("active"); });
+  document.querySelectorAll(".aq-sidebar-tab").forEach(b => {
+    b.classList.remove("active");
+    b.setAttribute("aria-selected", "false");
+  });
+  if (btn) {
+    btn.classList.add("active");
+    btn.setAttribute("aria-selected", "true");
+  } else {
+    document.querySelectorAll(".aq-sidebar-tab").forEach(b => {
+      if(b.textContent.trim().toLowerCase().startsWith(tab[0])) {
+        b.classList.add("active");
+        b.setAttribute("aria-selected", "true");
+      }
+    });
   }
   document.getElementById("leftProjectList").style.display = tab === "projects" ? "" : "none";
   document.getElementById("leftBundleList").style.display  = tab === "bundles"  ? "" : "none";
@@ -948,10 +481,46 @@ function switchRightTab(tab, btn) {
   if (sec) { sec.classList.add("active"); sec.style.opacity="0"; requestAnimationFrame(()=>requestAnimationFrame(()=>sec.style.opacity="1")); }
 }
 
+/* ─── MOBILE NAV ─── */
+function mobileNavSwitch(view, btn) {
+  document.querySelectorAll(".aq-bottom-tab").forEach(b => b.classList.remove("active"));
+  if (btn) btn.classList.add("active");
+  if (view === "projects") { openSidebar(); switchLeftTab("projects"); }
+  else if (view === "bundles") { openSidebar(); switchLeftTab("bundles"); }
+  else { closeSidebar(); }
+}
+
+/* ─── PROMPT HELPERS ─── */
+function focusPrompt() {
+  const i = document.getElementById("topPromptInput");
+  if(i){ i.focus(); i.select(); }
+}
+function focusAiEdit() {
+  const i = document.getElementById("aiEditInput");
+  if(i){ i.focus(); i.select(); }
+}
+function _fillPrompt(text) {
+  const i = document.getElementById("topPromptInput");
+  if (i) { i.value = text; i.focus(); }
+}
+let _promptHintTimer;
+function _debouncePromptHint(val) {
+  clearTimeout(_promptHintTimer);
+  // no-op placeholder for future prompt suggestions
+}
+
 /* ─── INIT ─── */
 window.addEventListener("DOMContentLoaded", async () => {
   initBundleSwitcher();
   await loadProjectList();
+
+  // Auto-open a project if navigated to /workspace/project/:id
+  if (_openProjectId) {
+    await openProject(_openProjectId, _openProjectName || "Project");
+    switchLeftTab("projects");
+    return;
+  }
+
   try {
     const res  = await fetch("/workspace/state");
     if (!res.ok) throw new Error("state fail");
@@ -977,8 +546,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   } catch(e) { console.warn("[AQ] init:", e.message); }
 });
 
-function focusPrompt() { const i = document.getElementById("topPromptInput"); if(i){i.focus();i.select();} }
-
 /* ─── BUNDLE SWITCHER ─── */
 function initBundleSwitcher() {
   const sw = document.getElementById("bundleSwitcher");
@@ -1000,9 +567,10 @@ function initBundleSwitcher() {
    PROJECT ENGINE
 ───────────────────────────────────────────────────────────────────────────── */
 
+// [FIX] Correct endpoint: /workspace/project/list
 async function loadProjectList() {
   try {
-    const res  = await fetch("/workspace/projects");
+    const res  = await fetch("/workspace/project/list");
     if (!res.ok) return;
     const data = await res.json();
     renderProjectList(data.projects || []);
@@ -1011,36 +579,41 @@ async function loadProjectList() {
 
 function renderProjectList(projects) {
   const container = document.getElementById("projectListItems");
+  if (!container) return;
   if (!projects.length) {
-    container.innerHTML = `<div class="aq-empty"><span class="aq-empty-icon">📁</span>No projects yet.</div>`;
+    container.innerHTML = `<div class="aq-empty"><span class="aq-empty-icon">📁</span>No projects yet.<br/><a href="#" onclick="promptNewProject();return false;" style="color:var(--accent);font-size:0.66rem;margin-top:4px;display:inline-block;">Create your first →</a></div>`;
     return;
   }
   container.innerHTML = projects.map(p => `
-    <div class="aq-proj-item ${STATE.projectId === String(p._id || p.id) ? 'active' : ''}"
-         id="prow-${p._id || p.id}"
-         onclick="openProject('${p._id || p.id}','${esc(p.name)}')">
+    <div class="aq-proj-item ${STATE.projectId === String(p.projectId || p._id || p.id) ? 'active' : ''}"
+         id="prow-${p.projectId || p._id || p.id}"
+         role="button" tabindex="0"
+         onclick="openProject('${p.projectId || p._id || p.id}','${esc(p.name)}')"
+         onkeydown="if(event.key==='Enter')openProject('${p.projectId || p._id || p.id}','${esc(p.name)}')">
       <span class="aq-proj-icon">📁</span>
-      <span class="aq-proj-name">${esc(p.name)}</span>
-      <button class="aq-proj-del" onclick="event.stopPropagation();deleteProject('${p._id || p.id}')" title="Delete">✕</button>
+      <span class="aq-proj-name" title="${esc(p.name)}">${esc(p.name)}</span>
+      <button class="aq-proj-del" onclick="event.stopPropagation();deleteProject('${p.projectId || p._id || p.id}')" title="Delete project" aria-label="Delete ${esc(p.name)}">✕</button>
     </div>`).join("");
 }
 
+// [FIX] Two-step: create project first, then generate using returned projectId
 async function promptNewProject() {
   const name = window.prompt("Project name:");
   if (!name || !name.trim()) return;
   showLoading();
   try {
-    const res  = await fetch("/workspace/projects", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ name: name.trim() }) });
+    const res  = await fetch("/workspace/project/create", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ name: name.trim() }) });
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Create failed");
     await loadProjectList();
-    const id = data.project?._id || data.project?.id;
+    const id = data.projectId;
     if (id) openProject(id, name.trim());
     toast("Project created", "success");
   } catch(e) { toast("Error: " + e.message, "error"); }
   finally { hideLoading(); }
 }
 
+// [FIX] Full corrected flow: create → generate → load files → preview
 async function generateProject() {
   const input  = document.getElementById("topPromptInput");
   const prompt = input.value.trim();
@@ -1048,62 +621,92 @@ async function generateProject() {
   if (STATE.busy) return;
   STATE.busy = true;
 
-  const btn = document.getElementById("topGenBtn");
-  btn.disabled   = true;
+  const btn       = document.getElementById("topGenBtn");
+  const stickyBtn = document.getElementById("stickyGenBtn");
+  btn.disabled    = true;
   btn.textContent = "⏳ Generating…";
+  if (stickyBtn) { stickyBtn.disabled = true; stickyBtn.textContent = "⏳…"; }
 
   // show project view with overlay
   showView("wsProjectView");
+  _setGenStep(1);
   document.getElementById("genOverlay").style.display     = "flex";
-  document.getElementById("genOverlayMsg").textContent     = "Creating project…";
+  document.getElementById("genOverlayMsg").textContent    = "Creating project…";
   document.getElementById("codeEditor").value             = "";
-  document.getElementById("fileTabs").innerHTML            = "";
+  document.getElementById("fileTabs").innerHTML           = "";
   document.getElementById("editorFilename").textContent   = "Generating…";
+  _hideUnsavedIndicator();
 
   try {
-    const res  = await fetch("/workspace/generate", {
+    // STEP 1: Create project folder
+    const createRes  = await fetch("/workspace/project/create", {
       method:  "POST",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ prompt }),
+      body:    JSON.stringify({ name: prompt.slice(0, 60) }),
     });
-    const data = await res.json();
-    if (!data.success) throw new Error(data.error || "Generation failed");
+    const createData = await createRes.json();
+    if (!createData.success) throw new Error(createData.error || "Project creation failed");
+    const projectId   = createData.projectId;
+    const projectName = createData.name || prompt.slice(0, 50);
 
-    const id   = data.project?._id || data.project?.id;
-    const name = data.project?.name || prompt.slice(0, 50);
+    _setGenStep(2);
+    document.getElementById("genOverlayMsg").textContent = "AI generating files…";
 
-    STATE.projectId   = String(id);
-    STATE.projectFiles = data.files || [];
+    // STEP 2: Generate files
+    const genRes  = await fetch("/workspace/project/generate", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ projectId, prompt }),
+    });
+    const genData = await genRes.json();
+    if (!genData.success) throw new Error(genData.error || "Generation failed");
+
+    STATE.projectId    = String(projectId);
+    STATE.projectFiles = genData.files || [];
     STATE.dirtyFiles.clear();
 
-    input.value = "";
-    document.getElementById("topBreadcrumb").textContent = name;
+    document.getElementById("topBreadcrumb").textContent = projectName;
+
+    _setGenStep(3);
+    document.getElementById("genOverlayMsg").textContent = "Loading preview…";
 
     await loadProjectList();
     renderFileTabs(STATE.projectFiles);
 
-   const defaultFile = STATE.projectFiles.find(f => f === "index.html") || STATE.projectFiles[0];
+    const defaultFile = STATE.projectFiles.find(f => f === "index.html") || STATE.projectFiles[0];
+    if (defaultFile) {
+      await loadFile(defaultFile);
+      refreshPreview();
+    }
 
-if (defaultFile) {
-  await loadFile(defaultFile);
-  refreshPreview(); // ✅ THIS IS THE REAL FIX
-}
     document.getElementById("genOverlay").style.display = "none";
+    input.value = "";
     toast(`Project generated (${STATE.projectFiles.length} files)`, "success");
   } catch(e) {
     document.getElementById("genOverlay").style.display = "none";
     toast("Generation failed: " + e.message, "error");
     console.error("[AQ] generateProject:", e);
   } finally {
-    STATE.busy     = false;
-    btn.disabled   = false;
+    STATE.busy      = false;
+    btn.disabled    = false;
     btn.textContent = "⚡ Generate";
+    if (stickyBtn) { stickyBtn.disabled = false; stickyBtn.textContent = "⚡ Generate"; }
   }
 }
 
+function _setGenStep(n) {
+  [1,2,3].forEach(i => {
+    const el = document.getElementById("genStep"+i);
+    if (!el) return;
+    el.className = "aq-gen-step" + (i < n ? " done" : i === n ? " active" : "");
+  });
+}
+
+// [FIX] Correct endpoint: /workspace/project/:id/files
 async function openProject(id, name) {
   STATE.projectId    = String(id);
   STATE.dirtyFiles.clear();
+  _hideUnsavedIndicator();
   document.getElementById("topBreadcrumb").textContent = name || "Project";
   document.querySelectorAll(".aq-proj-item").forEach(el => el.classList.remove("active"));
   const row = document.getElementById("prow-" + id);
@@ -1111,7 +714,7 @@ async function openProject(id, name) {
   showView("wsProjectView");
   showLoading();
   try {
-    const res  = await fetch(`/workspace/files/${id}`);
+    const res  = await fetch(`/workspace/project/${encodeURIComponent(id)}/files`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Load failed");
     STATE.projectFiles = data.files || [];
@@ -1123,61 +726,92 @@ async function openProject(id, name) {
   if (window.innerWidth < 768) closeSidebar();
 }
 
+// [FIX] Correct endpoint: DELETE /workspace/project/:id
 async function deleteProject(id) {
   const ok = await showConfirm("Delete Project", "Permanently delete this project and all files?", "Delete");
   if (!ok) return;
   showLoading();
   try {
-    const res  = await fetch(`/workspace/projects`, { method:"DELETE", headers:{"Content-Type":"application/json"}, body:JSON.stringify({projectId: id}) });
-    // If service exposes a delete endpoint differently, try:
-    const res2 = await fetch(`/workspace/projects/${id}`, { method:"DELETE" });
+    const res = await fetch(`/workspace/project/${encodeURIComponent(id)}`, { method:"DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (data.success === false) throw new Error(data.error || "Delete failed");
     await loadProjectList();
     if (STATE.projectId === String(id)) {
       STATE.projectId = null; STATE.projectFiles = []; STATE.activeFile = null;
       showView("wsWelcome");
     }
     toast("Project deleted", "success");
-  } catch(e) { toast("Delete failed", "error"); }
+  } catch(e) { toast("Delete failed: " + e.message, "error"); }
   finally { hideLoading(); }
 }
 
 function renderFileTabs(files) {
   const tabs = document.getElementById("fileTabs");
+  if (!tabs) return;
   const extIcon = f => {
     const e = f.split(".").pop();
     return e === "html" ? "📄" : e === "css" ? "🎨" : e === "js" ? "⚙️" : e === "json" ? "📊" : "📄";
   };
-  tabs.innerHTML = files.map(f => `
-    <button class="aq-file-tab ${f === STATE.activeFile ? 'active' : ''}"
-            data-file="${esc(f)}" onclick="loadFile('${esc(f)}')">
+  tabs.innerHTML = files.map(f => {
+    const isDirty = STATE.dirtyFiles.has(f);
+    const isActive = f === STATE.activeFile;
+    return `
+    <button class="aq-file-tab ${isActive ? 'active' : ''}"
+            role="tab" aria-selected="${isActive}"
+            data-file="${esc(f)}" onclick="loadFile('${esc(f)}')"
+            title="${esc(f)}">
       ${extIcon(f)} ${esc(f)}
-      ${STATE.dirtyFiles.has(f) ? '<span style="color:var(--accent3);margin-left:3px;">●</span>' : ''}
-    </button>`).join("");
+      ${isDirty ? '<span class="aq-file-tab-dirty" title="Unsaved changes"></span>' : ''}
+    </button>`;
+  }).join("");
 }
 
+// [FIX] Correct endpoint: /workspace/file/:projectId/:filename
 async function loadFile(filename) {
   if (!STATE.projectId || !filename) return;
+
+  // Smooth file switch: fade out
+  const editor = document.getElementById("codeEditor");
+  editor.classList.add("loading");
+
   STATE.activeFile = filename;
   renderFileTabs(STATE.projectFiles);
   document.getElementById("editorFilename").textContent = filename;
   showLoading();
   try {
-    const res  = await fetch(`/workspace/file/${STATE.projectId}/${encodeURIComponent(filename)}`);
+    const res  = await fetch(`/workspace/file/${encodeURIComponent(STATE.projectId)}/${encodeURIComponent(filename)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Load failed");
-    const content = (data.file && data.file.content !== undefined) ? data.file.content : (data.file || "");
-    document.getElementById("codeEditor").value = typeof content === "string" ? content : JSON.stringify(content, null, 2);
+    const content = (data.file && data.file.content !== undefined) ? data.file.content : "";
+    editor.value = typeof content === "string" ? content : JSON.stringify(content, null, 2);
     refreshPreview();
+    // Update unsaved indicator
+    if (STATE.dirtyFiles.has(filename)) { _showUnsavedIndicator(); } else { _hideUnsavedIndicator(); }
   } catch(e) { toast("Error loading file: " + e.message, "error"); }
-  finally { hideLoading(); }
+  finally {
+    hideLoading();
+    editor.classList.remove("loading");
+  }
 }
 
 function markDirty() {
   if (!STATE.activeFile) return;
   STATE.dirtyFiles.add(STATE.activeFile);
   renderFileTabs(STATE.projectFiles);
+  _showUnsavedIndicator();
 }
 
+function _showUnsavedIndicator() {
+  const el = document.getElementById("editorUnsaved");
+  if (el) el.classList.add("visible");
+}
+function _hideUnsavedIndicator() {
+  const el = document.getElementById("editorUnsaved");
+  if (el) el.classList.remove("visible");
+}
+
+// [FIX] Correct endpoint: /workspace/save-file
 async function saveCurrentFile() {
   if (!STATE.projectId || !STATE.activeFile) { toast("No file to save", "info"); return; }
   const content = document.getElementById("codeEditor").value;
@@ -1192,12 +826,14 @@ async function saveCurrentFile() {
     if (!data.success) throw new Error(data.error || "Save failed");
     STATE.dirtyFiles.delete(STATE.activeFile);
     renderFileTabs(STATE.projectFiles);
+    _hideUnsavedIndicator();
     refreshPreview();
     toast("Saved ✓", "success");
   } catch(e) { toast("Save failed: " + e.message, "error"); }
   finally { hideLoading(); }
 }
 
+// [FIX] Correct endpoint: /workspace/edit-file
 async function aiEditFile() {
   if (!STATE.projectId || !STATE.activeFile) { toast("Open a file first", "info"); return; }
   const instruction = document.getElementById("aiEditInput").value.trim();
@@ -1216,7 +852,6 @@ async function aiEditFile() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Edit failed");
     document.getElementById("aiEditInput").value = "";
-    // Reload the file to show updated content
     await loadFile(STATE.activeFile);
     toast("Edit applied ✓", "success");
   } catch(e) { toast("AI edit failed: " + e.message, "error"); }
@@ -1226,17 +861,25 @@ async function aiEditFile() {
   }
 }
 
+// [FIX] Preview uses /workspace/project/:id/:file
 function refreshPreview() {
   if (!STATE.projectId || !STATE.activeFile) return;
   const frame  = document.getElementById("previewFrame");
   const urlEl  = document.getElementById("previewUrl");
-  const url    = `/workspace/project/${STATE.projectId}/${encodeURIComponent(STATE.activeFile)}`;
+  const url    = `/workspace/project/${encodeURIComponent(STATE.projectId)}/${encodeURIComponent(STATE.activeFile)}`;
+  frame.classList.add("loading");
   frame.src    = url + "?t=" + Date.now();
   if (urlEl) urlEl.textContent = url;
 }
 
+function openPreviewInTab() {
+  if (!STATE.projectId || !STATE.activeFile) { toast("No file to preview", "info"); return; }
+  const url = `/workspace/project/${encodeURIComponent(STATE.projectId)}/${encodeURIComponent(STATE.activeFile)}`;
+  window.open(url, "_blank", "noopener");
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
-   BUNDLE ENGINE (unchanged logic)
+   BUNDLE ENGINE
 ───────────────────────────────────────────────────────────────────────────── */
 
 async function selectBundle(bundle) {
@@ -1281,7 +924,8 @@ function renderExecPanel(b) {
   const outputs  = Array.isArray(b.outputs)  ? b.outputs  : [];
   const done  = progress.filter(p => p && p.status === "completed").length;
   const total = steps.length;
-  const pct   = total ? Math.round((done / total) * 100) : 0;
+  // [FIX] Guard pct against NaN
+  const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
   const scores = outputs.map(o => o && o.confidenceScore).filter(s => typeof s === "number");
   const avgConf = scores.length ? (scores.reduce((a,s)=>a+s,0)/scores.length*100).toFixed(0)+"%" : "—";
   document.getElementById("execTitle").textContent      = b.title  || "Untitled";
@@ -1291,10 +935,18 @@ function renderExecPanel(b) {
   document.getElementById("statPct").textContent        = pct + "%";
   document.getElementById("statStatus").textContent     = (b.status || "draft").toUpperCase();
   document.getElementById("statConfidence").textContent = avgConf;
-  document.getElementById("mainProgressFill").style.width = pct + "%";
-  document.getElementById("mainProgressGlow").style.left  = pct + "%";
-  const btnRun = document.getElementById("btnRun");
-  const btnPause = document.getElementById("btnPause");
+
+  const fill = document.getElementById("mainProgressFill");
+  fill.style.width = pct + "%";
+  // Add running shimmer if active
+  if (b.status === "active") fill.classList.add("running"); else fill.classList.remove("running");
+
+  const track = document.getElementById("mainProgressTrack");
+  if (track) track.setAttribute("aria-valuenow", pct);
+
+  document.getElementById("mainProgressGlow").style.left = pct + "%";
+  const btnRun    = document.getElementById("btnRun");
+  const btnPause  = document.getElementById("btnPause");
   const btnResume = document.getElementById("btnResume");
   btnRun.style.display = btnPause.style.display = btnResume.style.display = "none";
   if (b.status==="active") btnPause.style.display=""; else if(b.status==="paused") btnResume.style.display=""; else if(b.status!=="completed") btnRun.style.display="";
@@ -1312,13 +964,13 @@ function renderTimeline(steps, progress, currentStep) {
     const icon   = status==="completed" ? "✓" : status==="in-progress" ? "…" : (i+1);
     const lineCls = status==="completed" ? "done" : "";
     const conn = i < steps.length-1 ? `<div class="aq-tl-line ${lineCls}"></div>` : "";
-    return `<div class="aq-tl-step" title="${esc(step.title||'Step '+(i+1))}" onclick="jumpToStep(${i})"><div class="aq-tl-dot ${dotCls}">${icon}</div></div>${conn}`;
+    return `<div class="aq-tl-step" title="${esc(step.title||'Step '+(i+1))}" onclick="jumpToStep(${i})" role="listitem"><div class="aq-tl-dot ${dotCls}" tabindex="0" onkeydown="if(event.key==='Enter')jumpToStep(${i})">${icon}</div></div>${conn}`;
   }).join("");
 }
 
 function renderStepCards(steps, progress, outputs, currentStep) {
   const container = document.getElementById("execSteps");
-  if (!steps.length) { container.innerHTML=`<div class="aq-empty"><span class="aq-empty-icon">📋</span>No steps.</div>`; return; }
+  if (!steps.length) { container.innerHTML=`<div class="aq-empty"><span class="aq-empty-icon">📋</span>No steps defined.</div>`; return; }
   container.innerHTML = steps.map((step,i) => {
     const prog      = progress.find(p => p && p.step===i) || {};
     const status    = prog.status || (i===currentStep ? "in-progress" : "pending");
@@ -1344,18 +996,19 @@ function renderStepCards(steps, progress, outputs, currentStep) {
     }
     const ad = isRunning ? "disabled" : "";
     const actionHtml = status !== "completed"
-      ? `<button class="aq-step-act-btn run-step ${isRunning?'loading':''}" ${ad} onclick="event.stopPropagation();runStep(${i})">${isRunning?'<div class="aq-mini-spinner"></div> Running…':'▶ Run Step'}</button><button class="aq-step-act-btn" ${ad} onclick="event.stopPropagation();markStepDone(${i})">✅ Done</button>`
-      : `<button class="aq-step-act-btn" onclick="event.stopPropagation();rerunStep(${i})">↺ Re-run</button>`;
+      ? `<button class="aq-step-act-btn run-step ${isRunning?'loading':''}" ${ad} onclick="event.stopPropagation();runStep(${i})">${isRunning?'<div class="aq-mini-spinner"></div> Running…':'▶ Run Step'}</button><button class="aq-step-act-btn done-btn" ${ad} onclick="event.stopPropagation();markStepDone(${i})">✅ Done</button>`
+      : `<button class="aq-step-act-btn rerun" onclick="event.stopPropagation();rerunStep(${i})">↺ Re-run</button>`;
     return `
-      <div class="aq-step-card ${cardCls}" id="scard-${i}" data-step="${i}">
-        <div class="aq-step-hdr" onclick="toggleCard(${i})">
+      <div class="aq-step-card ${cardCls}" id="scard-${i}" data-step="${i}" role="listitem">
+        <div class="aq-step-hdr" onclick="toggleCard(${i})" role="button" tabindex="0" aria-expanded="false"
+             onkeydown="if(event.key==='Enter')toggleCard(${i})">
           <div class="aq-step-num ${numCls}">${numIcon}</div>
           <div class="aq-step-info">
             <div class="aq-step-title">${esc(step.title||'Step '+(i+1))}</div>
             <div class="aq-step-desc">${esc(step.description||'')}</div>
           </div>
           <span class="aq-badge ${badgeCls}">${badgeTxt}</span>
-          <span class="aq-step-toggle">▾</span>
+          <span class="aq-step-toggle" aria-hidden="true">▾</span>
         </div>
         <div class="aq-step-body" id="sbody-${i}" data-state="closed">
           <div class="aq-step-body-inner" id="sbody-inner-${i}">
@@ -1370,8 +1023,13 @@ function renderStepCards(steps, progress, outputs, currentStep) {
 
 /* ─── ACCORDION ─── */
 function toggleCard(idx) {
-  if (STATE.openSteps.has(idx)) _closeCard(idx);
-  else { Array.from(STATE.openSteps).filter(i=>i!==idx).forEach(i=>_closeCard(i)); _openCard(idx, true); }
+  const hdr = document.querySelector(`#scard-${idx} .aq-step-hdr`);
+  if (STATE.openSteps.has(idx)) { _closeCard(idx); if(hdr) hdr.setAttribute("aria-expanded","false"); }
+  else {
+    Array.from(STATE.openSteps).filter(i=>i!==idx).forEach(i=>{_closeCard(i); const h=document.querySelector(`#scard-${i} .aq-step-hdr`); if(h) h.setAttribute("aria-expanded","false");});
+    _openCard(idx, true);
+    if(hdr) hdr.setAttribute("aria-expanded","true");
+  }
 }
 function _openCard(idx, animate=true) {
   const body=document.getElementById("sbody-"+idx); const inner=document.getElementById("sbody-inner-"+idx);
@@ -1453,7 +1111,7 @@ function _patchStepCardRunning(stepIndex, isRunning) {
 /* ─── AUTO RUN ─── */
 async function autoRunSteps() {
   const b=STATE.bundle; if(!b||!b.steps){toast("Select a bundle","info");return;}
-  const ok=await showConfirm("Auto-Run All Steps",`Auto-run all ${b.steps.length} steps?`,"▶ Auto Run"); if(!ok) return;
+  const ok=await showConfirm("Auto-Run All Steps",`Auto-run all ${b.steps.length} steps sequentially?`,"▶ Auto Run"); if(!ok) return;
   for (let i=0;i<b.steps.length;i++) {
     const prog=(Array.isArray(STATE.bundle.progress)?STATE.bundle.progress:[]).find(p=>p&&p.step===i);
     if (prog&&prog.status==="completed") continue;
@@ -1530,7 +1188,7 @@ async function _togglePin(id) {
 }
 async function deleteCurrentBundle() {
   const b=STATE.bundle; const id=b&&b._id; if(!id) return;
-  const ok=await showConfirm("Delete Bundle","Delete this bundle?","Delete"); if(!ok) return;
+  const ok=await showConfirm("Delete Bundle","Delete this bundle? This cannot be undone.","Delete"); if(!ok) return;
   await _doDeleteBundle(id);
 }
 async function _doDeleteBundle(id) {
@@ -1562,11 +1220,11 @@ function renderInsightPanel(b) {
   const all=[];
   outputs.forEach(o=>{(o&&o.keyInsights?o.keyInsights:[]).forEach(k=>{if(k)all.push({text:k,confidence:o.confidenceScore||0});});});
   all.sort((a,b)=>b.confidence-a.confidence);
-  document.getElementById("insightList").innerHTML=all.length?all.map(({text,confidence})=>{const badge=confidence?`<span style="font-family:var(--mono);font-size:0.56rem;color:var(--accent2);margin-left:auto;flex-shrink:0;">${Math.round(confidence*100)}%</span>`:"";return`<div class="aq-insight-item">${esc(text)}${badge}</div>`;}).join(""):`<div class="aq-empty">No insights yet.</div>`;
+  document.getElementById("insightList").innerHTML=all.length?all.map(({text,confidence})=>{const badge=confidence?`<span style="font-family:var(--mono);font-size:0.56rem;color:var(--accent);margin-left:auto;flex-shrink:0;">${Math.round(confidence*100)}%</span>`:"";return`<div class="aq-insight-item">${esc(text)}${badge}</div>`;}).join(""):`<div class="aq-empty"><span class="aq-empty-icon">💡</span>No insights yet.</div>`;
 }
 function renderOutputFeed(outputs) {
   const feed=document.getElementById("outputFeed");
-  if (!outputs||!outputs.length){feed.innerHTML=`<div class="aq-empty">No outputs yet.</div>`;return;}
+  if (!outputs||!outputs.length){feed.innerHTML=`<div class="aq-empty"><span class="aq-empty-icon">📤</span>No outputs yet.</div>`;return;}
   feed.innerHTML=outputs.map(o=>`<div class="aq-feed-item"><div class="aq-feed-meta"><span class="aq-feed-step">Step ${(o.stepIndex??0)+1}${o.stepTitle?' · '+esc(o.stepTitle):''}</span><span class="aq-feed-bundle">${esc(o.bundleTitle||'')}</span></div><div class="aq-feed-preview">${esc(o.preview||o.content||'')}</div></div>`).join("");
 }
 function prependOutputFeed(bundleTitle,stepIndex,stepTitle,content) {
@@ -1589,7 +1247,8 @@ function updateBundleRowProgress(id,bundle) {
   const steps=Array.isArray(bundle.steps)?bundle.steps:[];
   const prog=Array.isArray(bundle.progress)?bundle.progress:[];
   const done=prog.filter(p=>p&&p.status==="completed").length;
-  const pct=steps.length?Math.round((done/steps.length)*100):0;
+  // [FIX] Guard pct against NaN
+  const pct=steps.length>0?Math.round((done/steps.length)*100):0;
   const fill=row.querySelector(".aq-bundle-fill"); const pctEl=row.querySelector(".aq-bundle-pct");
   if(fill) fill.style.width=pct+"%"; if(pctEl) pctEl.textContent=pct+"%";
   updateBundleRowDot(id,bundle.status);
@@ -1624,13 +1283,16 @@ const PALETTE_COMMANDS = [
   { label:"☆ Pin / Unpin",             hint:"PI", action:()=>pinCurrentBundle() },
   { label:"⌫ Delete Bundle",           hint:"D",  action:()=>deleteCurrentBundle() },
   { label:"💾 Save File",               hint:"S",  action:()=>saveCurrentFile() },
+  { label:"✦ AI Edit File",             hint:"AI", action:()=>focusAiEdit() },
+  { label:"↗ Open Preview in Tab",     hint:"PV", action:()=>openPreviewInTab() },
+  { label:"⟳ Reload Preview",          hint:"RP", action:()=>refreshPreview() },
   { label:"☰ Open Sidebar",            hint:"B",  action:()=>openSidebar() },
   { label:"← Go to Bundles",           hint:"GB", action:()=>{ window.location.href="/bundles"; } },
 ];
 function openPalette() { document.getElementById("aqPalette").classList.add("open"); document.getElementById("aqPaletteInput").value=""; renderPaletteList(PALETTE_COMMANDS); document.getElementById("aqPaletteInput").focus(); }
 function closePalette(e) { if(e&&e.target!==document.getElementById("aqPalette")) return; document.getElementById("aqPalette").classList.remove("open"); }
 function renderPaletteList(cmds) {
-  document.getElementById("aqPaletteList").innerHTML=cmds.map((c,i)=>`<div class="aq-palette-cmd" data-idx="${i}">${esc(c.label)}<span class="key">${esc(c.hint)}</span></div>`).join("");
+  document.getElementById("aqPaletteList").innerHTML=cmds.map((c,i)=>`<div class="aq-palette-cmd" data-idx="${i}" role="option">${esc(c.label)}<span class="key">${esc(c.hint)}</span></div>`).join("");
   document.querySelectorAll(".aq-palette-cmd").forEach(el=>{ el.onclick=()=>{ cmds[parseInt(el.dataset.idx)].action(); document.getElementById("aqPalette").classList.remove("open"); }; });
 }
 function filterPalette(val) { const lower=val.toLowerCase(); renderPaletteList(PALETTE_COMMANDS.filter(c=>c.label.toLowerCase().includes(lower))); }
@@ -1643,6 +1305,7 @@ document.addEventListener("keydown", e => {
     document.getElementById("aqPalette").classList.remove("open");
     document.getElementById("aqConfirm").classList.remove("open");
     document.getElementById("aqRunModal").classList.remove("open");
+    closeSidebar();
   }
 });
 

@@ -1,0 +1,15 @@
+{
+  "projectId": "3884e507-b298-4272-be6e-e3ae4b38e50b",
+  "userId": "69b6c6d87c83e9504c4e0cde",
+  "name": "build a journal website",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-04-29T02:05:37.714Z",
+  "updatedAt": "2026-04-29T02:05:37.916Z",
+  "prompt": "build a journal website",
+  "intent": "blog",
+  "source": "template"
+}
