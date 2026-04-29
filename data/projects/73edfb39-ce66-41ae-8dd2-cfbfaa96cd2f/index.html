@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AIDEX Directory</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <nav>
+      <ul>
+        <li><a href="#home">Home</a></li>
+        <li><a href="#about">About</a></li>
+        <li><a href="#directory">Directory</a></li>
+        <li><a href="#contact">Contact</a></li>
+      </ul>
+    </nav>
+  </header>
+  <main>
+    <section id="home">
+      <h1>AIDEX Directory</h1>
+      <p>A comprehensive directory of AI-related resources, organizations, and individuals.</p>
+      <button id="search-btn">Search the Directory</button>
+      <form id="search-form">
+        <input type="search" id="search-input" placeholder="Search...">
+        <button id="search-submit">Search</button>
+      </form>
+    </section>
+    <section id="about">
+      <h1>About AIDEX</h1>
+      <p>The AIDEX Directory is a volunteer-driven project aimed at promoting awareness, research, and development of artificial intelligence.</p>
+    </section>
+    <section id="directory">
+      <h1>Directory</h1>
+      <ul id="directory-list">
+        <li>
+          <h2>Organization XYZ</h2>
+          <p>A leading AI research institution with a focus on computer vision.</p>
+          <button class="more-info-btn">More Info</button>
+          <div class="more-info-container">
+            <p>Organization XYZ is a non-profit research institution dedicated to advancing the field of artificial intelligence. Their research focuses on developing innovative computer vision techniques for a variety of applications.</p>
+          </div>
+        </li>
+        <li>
+          <h2>AI Developer</h2>
+          <p>A highly skilled AI developer with expertise in natural language processing and machine learning.</p>
+          <button class="more-info-btn">More Info</button>
+          <div class="more-info-container">
+            <p>AI Developer is a skilled professional with years of experience in developing AI solutions. Their expertise lies in natural language processing and machine learning, and they have developed several successful projects in these areas.</p>
+          </div>
+        </li>
+        <!-- Add more directory entries here -->
+      </ul>
+    </section>
+    <section id="contact">
+      <h1>Get in Touch</h1>
+      <p>Have a question or want to contribute to the AIDEX Directory? Contact us at <a href="mailto:aidex.directory@example.com">aidex.directory@example.com</a>.</p>
+    </section>
+  </main>
+  <script src="script.js"></script>
+  <script>
+    let searchInput = document.getElementById('search-input');
+    let searchSubmit = document.getElementById('search-submit');
+    let searchList = document.getElementById('directory-list');
+
+    searchSubmit.addEventListener('click', (e) => {
+      e.preventDefault();
+      let searchString = searchInput.value.toLowerCase();
+      let listItems = searchList.children;
+      for (let i = 0; i < listItems.length; i++) {
+        let li = listItems[i];
+        let name = li.querySelector('h2').textContent.toLowerCase();
+        let desc = li.querySelector('p').textContent.toLowerCase();
+        if (name.includes(searchString) || desc.includes(searchString)) {
+          li.style.display = '';
+        } else {
+          li.style.display = 'none';
+        }
+      }
+    });
+
+    let moreInfoButtons = document.querySelectorAll('.more-info-btn');
+    let moreInfoContainers = document.querySelectorAll('.more-info-container');
+
+    moreInfoButtons.forEach((button, index) => {
+      button.addEventListener('click', () => {
+        let container = moreInfoContainers[index];
+        if (container.classList.contains('hidden')) {
+          container.classList.remove('hidden');
+          button.textContent = 'Less Info';
+        } else {
+          container.classList.add('hidden');
+          button.textContent = 'More Info';
+        }
+      });
+    });
+  </script>
+</body>
+</html>

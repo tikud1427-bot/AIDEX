@@ -1,17 +1,21 @@
 /**
- * workspace.service.js
- * AQUIPLEX Execution Engine — Production Grade (v4)
- * Drop in: services/workspace.service.js
+ * workspace.service.js — AQUIPLEX GOD MODE (v5)
  *
- * v4 upgrades:
- *  - saveProjectFiles: atomic write via temp file + rename, updates _index.json safely
- *  - writeSingleFile: atomic write, guaranteed _index.json sync
- *  - listProjects: enriched metadata (name, id, updatedAt, fileCount)
- *  - readProjectFiles: skips missing files gracefully, logs warnings
- *  - generateProject: ensures index.html, persists _index.json name field
- *  - editProjectFile: validates target file exists, atomic write
- *  - createProject: unified _index.json (single source of truth, no meta.json split)
- *  - getProjectList: normalized output with name, projectId, updatedAt
+ * UNIFIED AI GENERATION ENGINE
+ * Single pipeline: generateProjectUnified() handles ALL code/site generation.
+ * Builder service is eliminated — all routes converge here.
+ *
+ * PROVIDER WATERFALL:
+ *   OpenRouter → openai/gpt-4o-mini → mistralai/mixtral-8x7b
+ *   Groq       → llama-3.1-70b-versatile → llama-3.1-8b-instant
+ *   → guaranteed fallback UI if ALL providers fail
+ *
+ * GUARANTEES:
+ *   - generateProjectUnified() NEVER throws, NEVER returns empty
+ *   - Every result has { files: [...], source, intent }
+ *   - index.html is ALWAYS present
+ *   - Atomic file writes — no partial-write corruption
+ *   - Structured error logs: [AI ERROR] Provider | Model | Reason
  */
 
 "use strict";
@@ -41,6 +45,48 @@ const LLM_RETRY_DELAY = 600; // ms — doubles each retry
 (async () => {
   try { await fs.mkdir(PROJECTS_DIR, { recursive: true }); } catch {}
 })();
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PROVIDER REGISTRY — canonical, de-duplicated, no deprecated models
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildProviders() {
+  const providers = [];
+
+  if (process.env.OPENROUTER_API_KEY) {
+    providers.push({
+      name:    "OpenRouter",
+      url:     "https://openrouter.ai/api/v1/chat/completions",
+      headers: {
+        "Authorization":  `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type":   "application/json",
+        "HTTP-Referer":   process.env.OPENROUTER_REFERER || "https://aquiplex.com",
+        "X-Title":        "Aquiplex",
+      },
+      models: [
+        "openai/gpt-4o-mini",
+        "mistralai/mixtral-8x7b",
+      ],
+    });
+  }
+
+  if (process.env.GROQ_API_KEY) {
+    providers.push({
+      name:    "Groq",
+      url:     "https://api.groq.com/openai/v1/chat/completions",
+      headers: {
+        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+        "Content-Type":  "application/json",
+      },
+      models: [
+        "llama-3.1-70b-versatile",
+        "llama-3.1-8b-instant",
+      ],
+    });
+  }
+
+  return providers;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // APP-TYPE DETECTION
@@ -211,7 +257,6 @@ STATIC SITE REQUIREMENTS:
 // LLM HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Fetch with AbortController timeout. */
 async function _fetchWithTimeout(url, init, timeoutMs = LLM_TIMEOUT_MS) {
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -222,7 +267,6 @@ async function _fetchWithTimeout(url, init, timeoutMs = LLM_TIMEOUT_MS) {
   }
 }
 
-/** Call fn up to (1 + maxRetries) times with exponential back-off. */
 async function _withRetry(fn, maxRetries = LLM_MAX_RETRIES, label = "LLM") {
   let lastErr;
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
@@ -230,8 +274,9 @@ async function _withRetry(fn, maxRetries = LLM_MAX_RETRIES, label = "LLM") {
       return await fn();
     } catch (err) {
       lastErr = err;
+      if (err._skipModel) throw err; // 400 errors — don't retry, skip model
       const reason = err.name === "AbortError" ? "timeout" : err.message;
-      console.warn(`[LLM] ${label} attempt ${attempt} failed: ${reason}`);
+      console.warn(`[AI ERROR] ${label} | Attempt ${attempt} | ${reason}`);
       if (attempt <= maxRetries) {
         await new Promise(r => setTimeout(r, LLM_RETRY_DELAY * attempt));
       }
@@ -240,131 +285,15 @@ async function _withRetry(fn, maxRetries = LLM_MAX_RETRIES, label = "LLM") {
   throw lastErr;
 }
 
-/** Returns true when the text looks like usable LLM output. */
 function _isUsable(text) {
   return typeof text === "string" && text.trim().length > 30;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// LLM INTEGRATION
+// NUCLEAR FALLBACK PAGE — returned when ALL providers fail
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Calls OpenRouter → Groq with retry + timeout on each provider.
- * ALWAYS returns a string that contains at least one === FILE: === block.
- *
- * @param {string} prompt
- * @param {string} appType
- * @param {object} options  { previousFiles, editCommand, targetFile }
- * @returns {Promise<string>}
- */
-async function generateCodeWithLLM(prompt, appType = "static", options = {}) {
-  const systemPrompt = buildSystemPromptForType(appType);
-
-  let userMessage;
-  if (options.editCommand && options.targetFile && options.previousFiles) {
-    const fileContent = options.previousFiles[options.targetFile] || "";
-    userMessage =
-      `Edit this file:\n\n${fileContent}\n\n` +
-      `Instruction: ${options.editCommand}\n\n` +
-      `Return ONLY:\n=== FILE: ${options.targetFile} ===\n[updated content]`;
-  } else {
-    userMessage =
-      `Build this web project: ${prompt}\n\n` +
-      `STRICT FORMAT — start immediately with the delimiter, no preamble:\n` +
-      `=== FILE: index.html ===\n(full HTML)\n\n` +
-      `=== FILE: style.css ===\n(full CSS)\n\n` +
-      `=== FILE: script.js ===\n(full JS)`;
-  }
-
-  const body = (model, messages) =>
-    JSON.stringify({ model, messages, max_tokens: 4096 });
-
-  let lastError = null;
-
-  // ── 1. OPENROUTER ──────────────────────────────────────────────────────────
-  if (process.env.OPENROUTER_API_KEY) {
-    try {
-      const text = await _withRetry(async () => {
-        const res = await _fetchWithTimeout(
-          "https://openrouter.ai/api/v1/chat/completions",
-          {
-            method:  "POST",
-            headers: {
-              "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-              "Content-Type":  "application/json",
-            },
-            body: body("openai/gpt-4o-mini", [
-              { role: "system", content: systemPrompt },
-              { role: "user",   content: userMessage  },
-            ]),
-          }
-        );
-
-        if (!res.ok) {
-          const errText = await res.text().catch(() => `HTTP ${res.status}`);
-          throw new Error(`OpenRouter ${res.status}: ${errText.slice(0, 200)}`);
-        }
-
-        let data;
-        try { data = await res.json(); }
-        catch { throw new Error("OpenRouter returned non-JSON body"); }
-
-        const content = data?.choices?.[0]?.message?.content;
-        if (!_isUsable(content)) throw new Error("OpenRouter returned empty content");
-        return content;
-      }, LLM_MAX_RETRIES, "OpenRouter");
-
-      if (_isUsable(text)) return text;
-    } catch (err) {
-      console.error("[LLM] OpenRouter exhausted:", err.message);
-      lastError = err;
-    }
-  }
-
-  // ── 2. GROQ ────────────────────────────────────────────────────────────────
-  if (process.env.GROQ_API_KEY) {
-    try {
-      const text = await _withRetry(async () => {
-        const res = await _fetchWithTimeout(
-          "https://api.groq.com/openai/v1/chat/completions",
-          {
-            method:  "POST",
-            headers: {
-              "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
-              "Content-Type":  "application/json",
-            },
-            body: body("llama3-70b-8192", [
-              { role: "system", content: systemPrompt },
-              { role: "user",   content: userMessage  },
-            ]),
-          }
-        );
-
-        if (!res.ok) {
-          const errText = await res.text().catch(() => `HTTP ${res.status}`);
-          throw new Error(`Groq ${res.status}: ${errText.slice(0, 200)}`);
-        }
-
-        let data;
-        try { data = await res.json(); }
-        catch { throw new Error("Groq returned non-JSON body"); }
-
-        const content = data?.choices?.[0]?.message?.content;
-        if (!_isUsable(content)) throw new Error("Groq returned empty content");
-        return content;
-      }, LLM_MAX_RETRIES, "Groq");
-
-      if (_isUsable(text)) return text;
-    } catch (err) {
-      console.error("[LLM] Groq exhausted:", err.message);
-      lastError = err;
-    }
-  }
-
-  // ── 3. GUARANTEED FALLBACK ─────────────────────────────────────────────────
-  console.error("[LLM] All providers failed. Returning built-in fallback.", lastError?.message);
-
+function _buildFallbackOutput(prompt, lastError) {
   const safePrompt = String(prompt || "your request")
     .replace(/</g, "&lt;").replace(/>/g, "&gt;").slice(0, 120);
   const safeError  = String(lastError?.message || "All AI providers are currently unavailable")
@@ -383,9 +312,7 @@ async function generateCodeWithLLM(prompt, appType = "static", options = {}) {
   <div class="card">
     <div class="icon">⚡</div>
     <h1>Generation Unavailable</h1>
-    <p class="subtitle">
-      Could not generate: <strong>${safePrompt}</strong>
-    </p>
+    <p class="subtitle">Could not generate: <strong>${safePrompt}</strong></p>
     <div class="detail">${safeError}</div>
     <div class="actions">
       <button class="btn-primary" onclick="location.reload()">Retry</button>
@@ -423,121 +350,151 @@ button {
   cursor: pointer; border: none; transition: opacity .15s;
 }
 button:hover { opacity: .85; }
-.btn-primary  { background: #6366f1; color: #fff; }
+.btn-primary   { background: #6366f1; color: #fff; }
 .btn-secondary { background: #1e1e2e; color: #94a3b8; border: 1px solid #2d2d3d; }
 
 === FILE: script.js ===
-console.log("[Aquiplex] Fallback page loaded.");`;
+"use strict";
+console.log("[Aquiplex] Fallback page loaded — all providers failed.");`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PARSER
+// UNIFIED AI GENERATION ENGINE — THE ONE TRUE PIPELINE
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Parse multi-file LLM output into an array of { fileName, content, language }.
- * ALWAYS returns a non-empty array.
+ * generateProjectUnified({ prompt, mode, editMode, previousFiles })
+ *
+ * THE single entry point for ALL AI generation in AQUIPLEX.
+ * Replaces: generateCodeWithLLM (workspace.service v4)
+ *           generateWebsiteFiles (builder.service / ai.service)
+ *           builder.service generate()
+ *
+ * @param {object} params
+ * @param {string}  params.prompt         - User's intent / edit instruction
+ * @param {string}  [params.mode]         - "generate" | "edit" (default: "generate")
+ * @param {boolean} [params.editMode]     - true → single-file edit prompt
+ * @param {object}  [params.previousFiles]- { "filename": "content", ... } for edit mode
+ * @param {string}  [params.targetFile]   - filename being edited (edit mode)
+ * @param {string}  [params.appType]      - override detected app type
+ *
+ * @returns {Promise<{ rawOutput: string, source: string, intent: string }>}
+ *   NEVER throws. NEVER returns undefined. rawOutput is ALWAYS a parseable string.
  */
-function parseMultiFileOutput(raw) {
-  if (!raw || typeof raw !== "string") {
-    console.warn("[parser] Received empty/null output — using fallback");
-    return [_fallbackFile("LLM returned no output")];
+async function generateProjectUnified({
+  prompt,
+  mode         = "generate",
+  editMode     = false,
+  previousFiles = null,
+  targetFile   = null,
+  appType      = null,
+}) {
+  const isEdit  = editMode || mode === "edit";
+  const intent  = appType || detectAppType(prompt);
+  const sysPrompt = buildSystemPromptForType(intent);
+
+  // ── Build user message ────────────────────────────────────────────────────
+  let userMessage;
+  if (isEdit && targetFile && previousFiles) {
+    const fileContent = previousFiles[targetFile] || "";
+    userMessage =
+      `Edit this file:\n\n${fileContent}\n\n` +
+      `Instruction: ${prompt}\n\n` +
+      `Return ONLY:\n=== FILE: ${targetFile} ===\n[updated content here]`;
+  } else {
+    userMessage =
+      `Build this web project: ${prompt}\n\n` +
+      `STRICT FORMAT — start immediately with the delimiter, no preamble:\n` +
+      `=== FILE: index.html ===\n(full HTML)\n\n` +
+      `=== FILE: style.css ===\n(full CSS)\n\n` +
+      `=== FILE: script.js ===\n(full JS)`;
   }
 
-  // ── 1. Strip markdown code fences ─────────────────────────────────────────
-  let cleaned = raw
-    .replace(/^```[\w]*\n?/gm, "")
-    .replace(/^```\s*$/gm, "")
-    .trim();
+  const messages = [
+    { role: "system", content: sysPrompt },
+    { role: "user",   content: userMessage },
+  ];
 
-  // ── 2. Auto-repair common delimiter variants ───────────────────────────────
-  cleaned = cleaned
-    .replace(/={2,}\s*FILE\s*:\s*/gi, "=== FILE: ")
-    .replace(/\s*={2,}\s*$/gm, " ===");
+  const buildBody = (model) =>
+    JSON.stringify({ model, messages, max_tokens: 4096 });
 
-  // ── 3. Find all FILE delimiters ────────────────────────────────────────────
-  const delimiterRe = /^={3}\s*FILE:\s*(.+?)\s*={3}\s*$/gm;
-  const matches     = [];
-  let   m;
-  while ((m = delimiterRe.exec(cleaned)) !== null) {
-    matches.push({ fileName: m[1].trim(), start: m.index, end: m.index + m[0].length });
+  const PROVIDERS = buildProviders();
+
+  if (PROVIDERS.length === 0) {
+    console.error("[AI ERROR] No providers configured — OPENROUTER_API_KEY and GROQ_API_KEY are both missing");
+    return {
+      rawOutput: _buildFallbackOutput(prompt, new Error("No API keys configured. Set OPENROUTER_API_KEY or GROQ_API_KEY.")),
+      source:    "nuclear_fallback",
+      intent,
+    };
   }
 
-  // ── 4a. No delimiters found ────────────────────────────────────────────────
-  if (matches.length === 0) {
-    const trimmed = cleaned.trim();
+  let lastError = null;
 
-    // Plain HTML — wrap as index.html
-    if (trimmed.toLowerCase().includes("<!doctype") || trimmed.toLowerCase().includes("<html")) {
-      console.warn("[parser] No FILE delimiters but found raw HTML — wrapping as index.html");
-      return [{
-        fileName: "index.html",
-        content:  trimmed,
-        language: "html",
-      }];
+  for (const provider of PROVIDERS) {
+    for (const model of provider.models) {
+      const label = `${provider.name} | ${model}`;
+      try {
+        const text = await _withRetry(async () => {
+          const res = await _fetchWithTimeout(provider.url, {
+            method:  "POST",
+            headers: provider.headers,
+            body:    buildBody(model),
+          });
+
+          if (res.status === 400) {
+            const errText = await res.text().catch(() => "HTTP 400");
+            const err     = new Error(`HTTP 400: ${errText.slice(0, 200)}`);
+            err._skipModel = true;
+            throw err;
+          }
+
+          if (!res.ok) {
+            const errText = await res.text().catch(() => `HTTP ${res.status}`);
+            throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
+          }
+
+          let data;
+          try { data = await res.json(); }
+          catch { throw new Error("Non-JSON response body"); }
+
+          const content = data?.choices?.[0]?.message?.content;
+          if (!_isUsable(content)) throw new Error("Empty or unusable response content");
+          return content;
+
+        }, LLM_MAX_RETRIES, label);
+
+        if (_isUsable(text)) {
+          console.log(`[AI ENGINE] ✅ Success | ${label}`);
+          return { rawOutput: text, source: "ai", intent };
+        }
+
+        console.warn(`[AI ERROR] ${label} | Unusable response after retry`);
+
+      } catch (err) {
+        if (err._skipModel) {
+          console.warn(`[AI ERROR] ${label} | 400 — model skipped permanently`);
+        } else {
+          console.warn(`[AI ERROR] ${label} | ${err.message}`);
+        }
+        lastError = err;
+        console.log(`[AI ENGINE] Switching to next model...`);
+      }
     }
-
-    // Anything else — still return something
-    console.warn("[parser] No FILE delimiters and no HTML detected — wrapping as index.html");
-    return [_fallbackFile("LLM output had no recognisable file delimiters", trimmed)];
+    console.warn(`[AI ENGINE] Provider exhausted: ${provider.name} — trying next provider...`);
   }
 
-  // ── 4b. Extract content between delimiters ─────────────────────────────────
-  const files = [];
-  for (let i = 0; i < matches.length; i++) {
-    const cur  = matches[i];
-    const next = matches[i + 1];
-    let content = next
-      ? cleaned.slice(cur.end, next.start)
-      : cleaned.slice(cur.end);
-
-    content = content.trim();
-
-    // Skip genuinely empty file blocks
-    if (!content) continue;
-
-    const safeFileName = sanitizeFileName(cur.fileName);
-    if (!safeFileName) continue;
-
-    files.push({
-      fileName: safeFileName,
-      content,
-      language: inferLanguage(safeFileName),
-    });
-  }
-
-  // ── 5. Guarantee at least one file ────────────────────────────────────────
-  if (files.length === 0) {
-    console.warn("[parser] All parsed file blocks were empty — using fallback");
-    return [_fallbackFile("All file blocks were empty after parsing")];
-  }
-
-  return files;
-}
-
-/** Returns a minimal valid index.html file entry. */
-function _fallbackFile(reason = "", content = null) {
-  const safeReason = String(reason).replace(/</g, "&lt;").replace(/>/g, "&gt;").slice(0, 200);
+  // ── NUCLEAR FALLBACK — always returns valid HTML ──────────────────────────
+  console.error(`[AI ERROR] ALL PROVIDERS FAILED | Last error: ${lastError?.message}`);
   return {
-    fileName: "index.html",
-    content: content || `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><title>Aquiplex</title></head>
-<body style="font-family:system-ui;text-align:center;padding:60px;background:#0f0f13;color:#e2e8f0;">
-  <h1 style="margin-bottom:16px;">⚠️ Output Error</h1>
-  <p style="color:#94a3b8;margin-bottom:24px;">${safeReason || "The AI returned an unrecognisable response."}</p>
-  <button onclick="location.reload()"
-    style="background:#6366f1;color:#fff;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;">
-    Retry
-  </button>
-</body>
-</html>`,
-    language: "html",
+    rawOutput: _buildFallbackOutput(prompt, lastError),
+    source:    "nuclear_fallback",
+    intent,
   };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FILE HELPERS
+// PARSER
 // ─────────────────────────────────────────────────────────────────────────────
 
 function sanitizeFileName(name) {
@@ -560,18 +517,90 @@ function inferLanguage(fileName) {
   return map[ext] || "plaintext";
 }
 
+function _fallbackFile(reason = "", content = null) {
+  const safeReason = String(reason).replace(/</g, "&lt;").replace(/>/g, "&gt;").slice(0, 200);
+  return {
+    fileName: "index.html",
+    content: content || `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Aquiplex</title></head>
+<body style="font-family:system-ui;text-align:center;padding:60px;background:#0f0f13;color:#e2e8f0;">
+  <h1 style="margin-bottom:16px;">⚠️ Output Error</h1>
+  <p style="color:#94a3b8;margin-bottom:24px;">${safeReason || "The AI returned an unrecognisable response."}</p>
+  <button onclick="location.reload()"
+    style="background:#6366f1;color:#fff;border:none;padding:10px 24px;border-radius:8px;cursor:pointer;font-size:14px;">
+    Retry
+  </button>
+</body>
+</html>`,
+    language: "html",
+  };
+}
+
+/**
+ * Parse multi-file LLM output into an array of { fileName, content, language }.
+ * ALWAYS returns a non-empty array.
+ */
+function parseMultiFileOutput(raw) {
+  if (!raw || typeof raw !== "string") {
+    console.warn("[parser] Received empty/null output — using fallback");
+    return [_fallbackFile("LLM returned no output")];
+  }
+
+  let cleaned = raw
+    .replace(/^```[\w]*\n?/gm, "")
+    .replace(/^```\s*$/gm, "")
+    .trim();
+
+  cleaned = cleaned
+    .replace(/={2,}\s*FILE\s*:\s*/gi, "=== FILE: ")
+    .replace(/\s*={2,}\s*$/gm, " ===");
+
+  const delimiterRe = /^={3}\s*FILE:\s*(.+?)\s*={3}\s*$/gm;
+  const matches     = [];
+  let   m;
+  while ((m = delimiterRe.exec(cleaned)) !== null) {
+    matches.push({ fileName: m[1].trim(), start: m.index, end: m.index + m[0].length });
+  }
+
+  if (matches.length === 0) {
+    const trimmed = cleaned.trim();
+    if (trimmed.toLowerCase().includes("<!doctype") || trimmed.toLowerCase().includes("<html")) {
+      console.warn("[parser] No FILE delimiters — raw HTML detected, wrapping as index.html");
+      return [{ fileName: "index.html", content: trimmed, language: "html" }];
+    }
+    console.warn("[parser] No FILE delimiters and no HTML — using fallback page");
+    return [_fallbackFile("LLM output had no recognisable file delimiters", trimmed)];
+  }
+
+  const files = [];
+  for (let i = 0; i < matches.length; i++) {
+    const cur     = matches[i];
+    const next    = matches[i + 1];
+    let   content = next ? cleaned.slice(cur.end, next.start) : cleaned.slice(cur.end);
+    content       = content.trim();
+    if (!content) continue;
+    const safeFileName = sanitizeFileName(cur.fileName);
+    if (!safeFileName) continue;
+    files.push({ fileName: safeFileName, content, language: inferLanguage(safeFileName) });
+  }
+
+  if (files.length === 0) {
+    console.warn("[parser] All parsed file blocks were empty — using fallback");
+    return [_fallbackFile("All file blocks were empty after parsing")];
+  }
+
+  return files;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// PROJECT FILE STORAGE  (filesystem, per-bundle)
+// FILE SYSTEM HELPERS — atomic writes, path safety
 // ─────────────────────────────────────────────────────────────────────────────
 
 function projectDir(projectId) {
   return path.join(PROJECTS_DIR, String(projectId));
 }
 
-/**
- * Atomically write a file using a temp file + rename pattern.
- * Prevents corruption from partial writes.
- */
 async function _atomicWrite(filePath, content) {
   const dir     = path.dirname(filePath);
   const tmpPath = path.join(dir, `.tmp_${Date.now()}_${Math.random().toString(36).slice(2)}`);
@@ -580,18 +609,13 @@ async function _atomicWrite(filePath, content) {
   await fs.rename(tmpPath, filePath);
 }
 
-/**
- * Save all project files and update _index.json.
- * Uses atomic writes for every file.
- */
 async function saveProjectFiles(projectId, files, meta = {}) {
   const dir = projectDir(projectId);
   await fs.mkdir(dir, { recursive: true });
 
-  // Build the merged index, preserving any existing metadata fields (name, userId, etc.)
   let existingIndex = {};
   try {
-    const raw = await fs.readFile(path.join(dir, "_index.json"), "utf8");
+    const raw     = await fs.readFile(path.join(dir, "_index.json"), "utf8");
     existingIndex = JSON.parse(raw);
   } catch { /* first save — no existing index */ }
 
@@ -604,7 +628,6 @@ async function saveProjectFiles(projectId, files, meta = {}) {
     createdAt:  existingIndex.createdAt || new Date().toISOString(),
   };
 
-  // Write all files atomically in parallel
   await Promise.all(
     files.map(async file => {
       const filePath = path.join(dir, file.fileName);
@@ -617,16 +640,10 @@ async function saveProjectFiles(projectId, files, meta = {}) {
     })
   );
 
-  // Write index last — only after all files are safely written
   await _atomicWrite(path.join(dir, "_index.json"), JSON.stringify(index, null, 2));
-
   return index;
 }
 
-/**
- * Read all files for a project using the _index.json manifest.
- * Missing files are skipped with a warning rather than crashing.
- */
 async function readProjectFiles(projectId) {
   const dir = projectDir(projectId);
   try {
@@ -643,7 +660,6 @@ async function readProjectFiles(projectId) {
       }
     }
 
-    // Always try to include index.html if it exists but wasn't in the manifest
     if (!index.files.includes("index.html")) {
       try {
         const content = await fs.readFile(path.join(dir, "index.html"), "utf8");
@@ -668,15 +684,11 @@ async function readSingleFile(projectId, fileName) {
   if (!filePath.startsWith(dir)) throw new Error("Forbidden path");
   try {
     return await fs.readFile(filePath, "utf8");
-  } catch (err) {
+  } catch {
     throw new Error(`File not found: ${safeFile}`);
   }
 }
 
-/**
- * Write a single file and keep _index.json in sync.
- * Uses atomic write to prevent partial-write corruption.
- */
 async function writeSingleFile(projectId, fileName, content) {
   const safeFile = sanitizeFileName(fileName);
   if (!safeFile) throw new Error("Invalid file name");
@@ -687,7 +699,6 @@ async function writeSingleFile(projectId, fileName, content) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await _atomicWrite(filePath, content);
 
-  // Update _index.json manifest
   const indexPath = path.join(dir, "_index.json");
   try {
     const indexRaw = await fs.readFile(indexPath, "utf8");
@@ -696,8 +707,7 @@ async function writeSingleFile(projectId, fileName, content) {
     if (!index.files.includes(safeFile)) index.files.push(safeFile);
     index.updatedAt = new Date().toISOString();
     await _atomicWrite(indexPath, JSON.stringify(index, null, 2));
-  } catch (indexErr) {
-    // Index missing — create a minimal one
+  } catch {
     const fallbackIndex = {
       projectId: String(projectId),
       files:     [safeFile],
@@ -709,14 +719,9 @@ async function writeSingleFile(projectId, fileName, content) {
 }
 
 async function deleteProject(projectId) {
-  const dir = projectDir(projectId);
-  await fs.rm(dir, { recursive: true, force: true });
+  await fs.rm(projectDir(projectId), { recursive: true, force: true });
 }
 
-/**
- * List all projects, returning enriched metadata.
- * Output: [{ projectId, name, userId, files, fileCount, createdAt, updatedAt }]
- */
 async function listProjects() {
   try {
     const entries  = await fs.readdir(PROJECTS_DIR, { withFileTypes: true });
@@ -730,22 +735,19 @@ async function listProjects() {
             path.join(PROJECTS_DIR, entry.name, "_index.json"), "utf8"
           );
           const index = JSON.parse(indexRaw);
-
-          // Normalise the shape so consumers always see consistent fields
           projects.push({
-            projectId:  index.projectId  || entry.name,
-            name:       index.name       || "Untitled Project",
-            userId:     index.userId     || null,
-            files:      Array.isArray(index.files) ? index.files : [],
-            fileCount:  Array.isArray(index.files) ? index.files.length : 0,
-            createdAt:  index.createdAt  || null,
-            updatedAt:  index.updatedAt  || null,
+            projectId: index.projectId  || entry.name,
+            name:      index.name       || "Untitled Project",
+            userId:    index.userId     || null,
+            files:     Array.isArray(index.files) ? index.files : [],
+            fileCount: Array.isArray(index.files) ? index.files.length : 0,
+            createdAt: index.createdAt  || null,
+            updatedAt: index.updatedAt  || null,
           });
         } catch { /* malformed or missing index — skip silently */ }
       })
     );
 
-    // Sort newest first
     projects.sort((a, b) => {
       const ta = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
       const tb = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
@@ -759,7 +761,7 @@ async function listProjects() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FALLBACK TEMPLATE ENGINE
+// FALLBACK TEMPLATE ENGINE — bundle step outputs
 // ─────────────────────────────────────────────────────────────────────────────
 
 const INSIGHT_TEMPLATES = [
@@ -808,11 +810,11 @@ const OUTPUT_TEMPLATES = [
 ];
 
 function generateStepOutput(step, bundle, stepIndex) {
-  const seed    = stepIndex % OUTPUT_TEMPLATES.length;
-  const content = OUTPUT_TEMPLATES[seed](step, bundle.goal || bundle.title);
+  const seed     = stepIndex % OUTPUT_TEMPLATES.length;
+  const content  = OUTPUT_TEMPLATES[seed](step, bundle.goal || bundle.title);
   const insights = generateInsights(step.title || `Step ${stepIndex + 1}`, stepIndex);
-  const memory  = extractMemoryFromStep(step, stepIndex, bundle);
-  const score   = 0.72 + ((stepIndex * 7) % 23) / 100;
+  const memory   = extractMemoryFromStep(step, stepIndex, bundle);
+  const score    = 0.72 + ((stepIndex * 7) % 23) / 100;
   return {
     stepIndex,
     stepTitle:       step.title || `Step ${stepIndex + 1}`,
@@ -857,7 +859,7 @@ function extractMemoryFromStep(step, stepIndex, bundle) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// INTERNAL HELPERS
+// INTERNAL WORKSPACE HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function getOrCreateWorkspace(userId) {
@@ -918,13 +920,9 @@ function validateBundleId(bundleId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROJECT SERVICES
+// PROJECT SERVICES — all AI generation routed through generateProjectUnified
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Create a new project directory and _index.json.
- * This is the single source of truth — no separate meta.json needed.
- */
 async function createProject(userId, name, projectId = null) {
   if (!userId) throw new Error("Unauthorized");
   const id  = projectId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -943,28 +941,31 @@ async function createProject(userId, name, projectId = null) {
 }
 
 /**
- * Generate a complete multi-file project using the LLM.
- * Guarantees:
- *  - index.html is always present
- *  - _index.json includes name field from existing metadata
- *  - Single atomic save after normalisation
+ * Generate a complete multi-file project using the unified AI engine.
+ * Guarantees: index.html is always present, _index.json is always saved.
  */
 async function generateProject(userId, projectId, prompt) {
   if (!userId)               throw new Error("Unauthorized");
   if (!projectId || !prompt) throw new Error("projectId and prompt are required");
 
-  const appType   = detectAppType(prompt);
-  const rawOutput = await generateCodeWithLLM(prompt, appType);
-  let   files     = parseMultiFileOutput(rawOutput); // never empty
+  const appType = detectAppType(prompt);
 
-  // Normalise: ensure index.html is the entry point
+  // ── Single unified AI call ─────────────────────────────────────────────────
+  const { rawOutput, source, intent } = await generateProjectUnified({
+    prompt,
+    mode:    "generate",
+    appType,
+  });
+
+  let files = parseMultiFileOutput(rawOutput); // ALWAYS non-empty
+
+  // ── Normalise: guarantee index.html ────────────────────────────────────────
   const hasIndex = files.some(f => f.fileName === "index.html");
   if (!hasIndex) {
     const htmlFile = files.find(f => f.fileName.endsWith(".html"));
     if (htmlFile) {
       htmlFile.fileName = "index.html";
     } else {
-      // Inject a minimal index.html that loads the first file
       files.unshift({
         fileName: "index.html",
         content: `<!DOCTYPE html>
@@ -978,10 +979,10 @@ async function generateProject(userId, projectId, prompt) {
     }
   }
 
-  // Retrieve existing metadata (name, userId) to preserve in index
+  // ── Preserve existing metadata ─────────────────────────────────────────────
   let existingMeta = {};
   try {
-    const raw = await fs.readFile(path.join(projectDir(projectId), "_index.json"), "utf8");
+    const raw    = await fs.readFile(path.join(projectDir(projectId), "_index.json"), "utf8");
     existingMeta = JSON.parse(raw);
   } catch { /* no existing index — fine */ }
 
@@ -989,24 +990,25 @@ async function generateProject(userId, projectId, prompt) {
     name:   existingMeta.name   || String(prompt).slice(0, 80) || "Generated Project",
     userId: existingMeta.userId || String(userId),
     prompt: String(prompt).slice(0, 500),
+    source,
+    intent,
   };
 
-  // Single atomic save after all normalisation
   const index = await saveProjectFiles(projectId, files, meta);
 
   return {
     success:  true,
     projectId,
-    appType,
+    appType:  intent,
     name:     index.name,
     files:    files.map(f => f.fileName),
     fileData: files,
+    source,
   };
 }
 
 /**
- * Edit a single project file using the LLM.
- * Validates the file exists before editing and uses atomic writes.
+ * Edit a single project file using the unified AI engine.
  */
 async function editProjectFile(userId, projectId, filename, command) {
   if (!userId)   throw new Error("Unauthorized");
@@ -1017,21 +1019,22 @@ async function editProjectFile(userId, projectId, filename, command) {
   if (!existingFiles.length) throw new Error("Project not found or has no files");
 
   const targetExists = existingFiles.some(f => f.fileName === filename);
-  if (!targetExists) {
-    throw new Error(`File not found in project: ${filename}`);
-  }
+  if (!targetExists) throw new Error(`File not found in project: ${filename}`);
 
   const previousFiles = {};
   existingFiles.forEach(f => { previousFiles[f.fileName] = f.content; });
 
-  const rawOutput = await generateCodeWithLLM(command, "static", {
-    editCommand:   command,
-    targetFile:    filename,
+  // ── Single unified AI call ─────────────────────────────────────────────────
+  const { rawOutput } = await generateProjectUnified({
+    prompt:        command,
+    mode:          "edit",
+    editMode:      true,
     previousFiles,
+    targetFile:    filename,
   });
 
   const parsed = parseMultiFileOutput(rawOutput);
-  if (!parsed.length) throw new Error("LLM returned no file content for edit");
+  if (!parsed.length) throw new Error("AI returned no file content for edit");
 
   for (const file of parsed) {
     const targetName = (file.fileName === filename || parsed.length === 1)
@@ -1048,36 +1051,27 @@ async function editProjectFile(userId, projectId, filename, command) {
   };
 }
 
-/**
- * List all projects for a user.
- * Returns normalized, sorted metadata suitable for a project list UI.
- */
 async function getProjectList(userId) {
   if (!userId) throw new Error("Unauthorized");
   const all      = await listProjects();
   const projects = all
     .filter(p => !p.userId || p.userId === String(userId))
     .map(p => ({
-      projectId:  p.projectId,
-      name:       p.name,
-      fileCount:  p.fileCount,
-      files:      p.files,
-      createdAt:  p.createdAt,
-      updatedAt:  p.updatedAt,
+      projectId: p.projectId,
+      name:      p.name,
+      fileCount: p.fileCount,
+      files:     p.files,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
     }));
   return { success: true, projects };
 }
 
-/**
- * Get all files for a project.
- * Always attempts to include index.html as the primary file.
- */
 async function getProjectFiles(userId, projectId) {
   if (!projectId) throw new Error("projectId is required");
   const { index, files } = await readProjectFiles(projectId);
   if (!index) throw new Error("Project not found");
 
-  // Sort so index.html is always first
   const sorted = [
     ...files.filter(f => f.fileName === "index.html"),
     ...files.filter(f => f.fileName !== "index.html"),
@@ -1122,18 +1116,32 @@ async function getWorkspaceState(userId) {
   const ws         = await getOrCreateWorkspace(userId);
   const allBundles = await Bundle.find({ userId }).sort({ updatedAt: -1 }).lean();
   const bundles    = allBundles.map((b) => {
-    const mem            = b.memory instanceof Map ? Object.fromEntries(b.memory) : (b.memory || {});
-    const completedCount = (b.progress || []).filter((p) => p && p.status === "completed").length;
-    const totalSteps     = (b.steps || []).length;
+    const steps    = Array.isArray(b.steps)    ? b.steps    : [];
+    const progress = Array.isArray(b.progress) ? b.progress : [];
+    const completed = progress.filter((p) => p && p.status === "completed").length;
     return {
-      ...b, memory: mem,
-      outputs:  Array.isArray(b.outputs)  ? b.outputs  : [],
-      progress: Array.isArray(b.progress) ? b.progress : [],
-      steps:    Array.isArray(b.steps)    ? b.steps    : [],
-      completionPercent: totalSteps ? Math.round((completedCount / totalSteps) * 100) : 0,
+      _id:               b._id,
+      title:             b.title             || "Untitled",
+      goal:              b.goal              || "",
+      status:            b.status            || "active",
+      currentStep:       b.currentStep       ?? 0,
+      stepsTotal:        steps.length,
+      completionPercent: steps.length ? Math.round((completed / steps.length) * 100) : 0,
+      createdAt:         b.createdAt,
+      updatedAt:         b.updatedAt,
     };
   });
-  return { workspace: sanitizeWorkspaceForClient(ws), bundles };
+
+  const mem = ws.workspaceMemory instanceof Map
+    ? Object.fromEntries(ws.workspaceMemory)
+    : ws.workspaceMemory || {};
+
+  return {
+    success:    true,
+    workspace:  sanitizeWorkspaceForClient(ws),
+    bundles,
+    workspaceMemory: mem,
+  };
 }
 
 async function getBundleState(userId, bundleId) {
@@ -1147,26 +1155,6 @@ async function getBundleState(userId, bundleId) {
 async function runBundle(userId, bundleId) {
   validateBundleId(bundleId);
   if (!userId) throw new Error("Unauthorized");
-  const [ws, bundle] = await Promise.all([
-    getOrCreateWorkspace(userId),
-    Bundle.findOne({ _id: bundleId, userId }),
-  ]);
-  if (!bundle) throw new Error("Bundle not found");
-  if (bundle.status === "completed") throw new Error("Bundle already completed");
-  const steps        = Array.isArray(bundle.steps) ? bundle.steps : [];
-  bundle.status      = "active";
-  bundle.currentStep = 0;
-  bundle.progress    = buildProgressArray(steps, bundle.progress);
-  if (!Array.isArray(bundle.outputs)) bundle.outputs = [];
-  ws.openSession(bundleId, steps.length);
-  ws.lastOpenBundleId = bundle._id;
-  await Promise.all([bundle.save(), ws.save()]);
-  return { success: true, bundle: sanitizeBundleForClient(bundle), workspace: sanitizeWorkspaceForClient(ws) };
-}
-
-async function completeStep(userId, bundleId, stepIndex, payload = {}) {
-  validateBundleId(bundleId);
-  if (!userId) throw new Error("Unauthorized");
 
   const [ws, bundle] = await Promise.all([
     getOrCreateWorkspace(userId),
@@ -1175,74 +1163,92 @@ async function completeStep(userId, bundleId, stepIndex, payload = {}) {
   if (!bundle) throw new Error("Bundle not found");
 
   const steps = Array.isArray(bundle.steps) ? bundle.steps : [];
-  const idx   = Number(stepIndex);
-  if (isNaN(idx) || idx < 0 || idx >= steps.length) throw new Error(`Invalid step index: ${stepIndex}`);
+  if (!steps.length) throw new Error("Bundle has no steps");
+
+  bundle.progress    = buildProgressArray(steps, bundle.progress);
+  bundle.currentStep = 0;
+  bundle.status      = "active";
+
+  if (typeof ws.openSession === "function") ws.openSession(bundleId, steps.length);
+  else {
+    if (!Array.isArray(ws.executionSessions)) ws.executionSessions = [];
+    ws.executionSessions = ws.executionSessions
+      .filter((s) => s && s.bundleId?.toString() !== bundleId.toString())
+      .slice(-(MAX_SESSIONS - 1));
+    ws.executionSessions.push({
+      bundleId: bundle._id,
+      totalSteps: steps.length,
+      currentStep: 0,
+      status: "running",
+      startedAt: new Date(),
+    });
+  }
+
+  ws.lastOpenBundleId = bundle._id;
+  await Promise.all([bundle.save(), ws.save()]);
+
+  return {
+    success:   true,
+    bundle:    sanitizeBundleForClient(bundle),
+    workspace: sanitizeWorkspaceForClient(ws),
+  };
+}
+
+async function completeStep(userId, bundleId, stepIndex, payload = {}) {
+  validateBundleId(bundleId);
+  if (!userId) throw new Error("Unauthorized");
+
+  const idx = typeof stepIndex === "string" ? parseInt(stepIndex, 10) : stepIndex;
+  if (isNaN(idx) || idx < 0) throw new Error("Invalid step index");
+
+  const [ws, bundle] = await Promise.all([
+    getOrCreateWorkspace(userId),
+    Bundle.findOne({ _id: bundleId, userId }),
+  ]);
+  if (!bundle) throw new Error("Bundle not found");
+
+  const steps = Array.isArray(bundle.steps) ? bundle.steps : [];
+  if (idx >= steps.length) throw new Error(`Step ${idx} does not exist`);
 
   if (!Array.isArray(bundle.progress) || bundle.progress.length !== steps.length) {
     bundle.progress = buildProgressArray(steps, bundle.progress);
   }
-  if (!Array.isArray(bundle.outputs)) bundle.outputs = [];
 
   let outputEntry;
-  const isCodeBundle = bundle.type === "code_generation" ||
-    (bundle.goal && /\b(build|create|generate|make)\b.*\b(site|app|game|tool|dashboard|page)\b/i.test(bundle.goal));
 
-  if (isCodeBundle && !payload.content) {
-    const prompt    = steps[idx].description || steps[idx].title || bundle.goal || bundle.title;
-    const appType   = detectAppType(bundle.goal || bundle.title || "");
-    const projectId = String(bundle._id);
+  if (payload.useAI) {
+    // AI-powered step — uses the unified engine's generateAI shim
+    const stepPrompt = `
+${steps[idx].description || steps[idx].title}
+
+PROJECT GOAL: ${bundle.goal || bundle.title}
+STEP ${idx + 1} of ${steps.length}: ${steps[idx].title}
+
+Deliver a concrete, actionable output. No filler.
+`.trim();
 
     try {
-      if (idx === 0) {
-        await fs.mkdir(projectDir(projectId), { recursive: true });
-        const initIndex = {
-          projectId, name: bundle.title || "Generated Project",
-          userId: String(userId), files: [],
-          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
-        };
-        await _atomicWrite(
-          path.join(projectDir(projectId), "_index.json"),
-          JSON.stringify(initIndex, null, 2)
-        );
-      }
+      const { rawOutput } = await generateProjectUnified({
+        prompt:  stepPrompt,
+        mode:    "generate",
+        appType: "static",
+      });
 
-      const rawOutput = await generateCodeWithLLM(bundle.goal || prompt, appType, {});
-      let   files     = parseMultiFileOutput(rawOutput);
-
-      // Ensure index.html exists
-      const hasIndex = files.some(f => f.fileName === "index.html");
-      if (!hasIndex) {
-        const htmlFile = files.find(f => f.fileName.endsWith(".html"));
-        if (htmlFile) htmlFile.fileName = "index.html";
-      }
-
-      if (files.length) {
-        await saveProjectFiles(projectId, files, {
-          name:   bundle.title || "Generated Project",
-          userId: String(userId),
-        });
-      }
-
-      const filesSummary = files.map(f => `- \`${f.fileName}\` (${f.content.length} chars)`).join("\n");
       outputEntry = {
-        stepIndex,
-        stepTitle: steps[idx].title || `Step ${idx + 1}`,
-        content: `## ⚡ Code Generated\n\n**App type:** ${appType}\n**Files generated:** ${files.length}\n\n${filesSummary}\n\n**Preview:** /workspace/project/${projectId}/index.html`,
-        keyInsights: [
-          `Generated ${files.length} file(s) for a ${appType} project.`,
-          `Primary entry: index.html`,
-          `Live preview available in the File Explorer panel.`,
-        ],
+        stepIndex:       idx,
+        stepTitle:       steps[idx].title || `Step ${idx + 1}`,
+        content:         rawOutput,
+        keyInsights:     generateInsights(steps[idx].title || `Step ${idx + 1}`, idx),
         nextStepHints:   generateNextHints(steps[idx], steps, idx),
         confidenceScore: 0.95,
         tokensUsed:      rawOutput.length / 4 | 0,
         durationMs:      null,
-        projectId,
-        files:           files.map(f => ({ fileName: f.fileName, language: f.language })),
+        projectId:       bundleId,
+        files:           [],
         createdAt:       new Date(),
       };
     } catch (llmErr) {
-      console.error("[WS] LLM generation error:", llmErr.message);
+      console.error("[AI ERROR] completeStep | AI generation error:", llmErr.message);
       const fallback = generateStepOutput(steps[idx] || {}, bundle, idx);
       outputEntry = {
         ...fallback,
@@ -1288,10 +1294,12 @@ async function completeStep(userId, bundleId, stepIndex, payload = {}) {
     bundle.currentStep = allDone ? steps.length - 1 : bundle.currentStep;
   }
 
-  ws.pushRecentOutput({
-    bundleId, bundleTitle: bundle.title || "Untitled",
-    stepIndex: idx, stepTitle: outputEntry.stepTitle, content: outputEntry.content || "",
-  });
+  if (typeof ws.pushRecentOutput === "function") {
+    ws.pushRecentOutput({
+      bundleId, bundleTitle: bundle.title || "Untitled",
+      stepIndex: idx, stepTitle: outputEntry.stepTitle, content: outputEntry.content || "",
+    });
+  }
   if (typeof ws.mergeWorkspaceMemory === "function") ws.mergeWorkspaceMemory(memEntries);
 
   if (bundle.status === "completed") {
@@ -1388,7 +1396,7 @@ async function autoProgressNext(userId, bundleId) {
     if (next === -1 || next >= steps.length) return null;
     return await completeStep(userId, bundleId, next, {});
   } catch (err) {
-    console.error("[WS] autoProgressNext error:", err.message);
+    console.error("[AI ERROR] autoProgressNext |", err.message);
     return null;
   }
 }
@@ -1398,7 +1406,10 @@ async function autoProgressNext(userId, bundleId) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
-  // Original workspace services
+  // ── UNIFIED AI ENGINE (primary export) ───────────────────────────────────
+  generateProjectUnified,
+
+  // ── Workspace services ────────────────────────────────────────────────────
   getWorkspaceState,
   getBundleState,
   runBundle,
@@ -1410,7 +1421,7 @@ module.exports = {
   updateWorkspaceMemory,
   autoProgressNext,
 
-  // Project / code-gen services
+  // ── Project / code-gen services ───────────────────────────────────────────
   createProject,
   generateProject,
   editProjectFile,
@@ -1420,7 +1431,7 @@ module.exports = {
   saveProjectFile,
   deleteProjectById,
 
-  // Exported helpers
+  // ── Exported helpers ──────────────────────────────────────────────────────
   detectAppType,
   parseMultiFileOutput,
   readSingleFile,

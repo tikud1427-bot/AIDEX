@@ -1,0 +1,15 @@
+{
+  "projectId": "1cc293e8-3a69-44e7-994d-951e13a6275c",
+  "name": "build a tic tac toe game",
+  "userId": "69b6c6d87c83e9504c4e0cde",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-04-29T13:42:27.692Z",
+  "updatedAt": "2026-04-29T13:44:09.824Z",
+  "prompt": "build a tic tac toe game",
+  "source": "ai",
+  "intent": "game"
+}

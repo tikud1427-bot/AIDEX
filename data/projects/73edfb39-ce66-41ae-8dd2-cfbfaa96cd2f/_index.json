@@ -1,0 +1,15 @@
+{
+  "projectId": "73edfb39-ce66-41ae-8dd2-cfbfaa96cd2f",
+  "name": "build a ai directory website",
+  "userId": "69b6c6d87c83e9504c4e0cde",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-04-29T13:44:58.412Z",
+  "updatedAt": "2026-04-29T13:47:12.720Z",
+  "prompt": "build a ai directory website",
+  "source": "ai",
+  "intent": "static"
+}

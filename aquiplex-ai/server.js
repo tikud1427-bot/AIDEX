@@ -33,19 +33,24 @@ app.post("/chat", async (req, res) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "llama3-70b-8192",
+        model: "llama-3.1-8b-instant", // ✅ FIXED MODEL
         messages: [{ role: "user", content: message }],
       }),
     });
 
     const data = await response.json();
+
+    if (!data.choices || !data.choices[0]) {
+      throw new Error("Invalid response from Groq");
+    }
+
     res.json({ reply: data.choices[0].message.content });
 
   } catch (err) {
+    console.error("CHAT ERROR:", err.message);
     res.json({ reply: "Error getting response" });
   }
 });
-
 /* =========================
 📄 ROUTES
 ========================= */

@@ -1,0 +1,15 @@
+{
+  "projectId": "6acde15c-2ec6-4bbb-a28c-95ea70d36dd8",
+  "name": "E-commerce product page",
+  "userId": "69b6c6d87c83e9504c4e0cde",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-04-29T13:47:32.862Z",
+  "updatedAt": "2026-04-29T13:48:18.010Z",
+  "prompt": "E-commerce product page",
+  "source": "ai",
+  "intent": "saas"
+}

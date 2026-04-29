@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tic Tac Toe</title>
+    <link rel="stylesheet" href="data:,/*body{font-family:'Poppins', sans-serif;text-align:center;*//*width:100%;background-color:#f4f4f4;*/}" type="text/css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="sticky">
+        <h1 id="game-title">Tic Tac Toe</h1>
+    </header>
+    <main>
+        <section id="game-container">
+            <h2 id="game-status"></h2>
+            <div id="game-board" class="grid">
+                <div class="square" id="square-0" onclick="makeMove(this, 0)">X</div>
+                <div class="square" id="square-1" onclick="makeMove(this, 1)">X</div>
+                <div class="square" id="square-2" onclick="makeMove(this, 2)">X</div>
+                <div class="square" id="square-3" onclick="makeMove(this, 3)">X</div>
+                <div class="square" id="square-4" onclick="makeMove(this, 4)">X</div>
+                <div class="square" id="square-5" onclick="makeMove(this, 5)">X</div>
+                <div class="square" id="square-6" onclick="makeMove(this, 6)">X</div>
+                <div class="square" id="square-7" onclick="makeMove(this, 7)">X</div>
+                <div class="square" id="square-8" onclick="makeMove(this, 8)">X</div>
+            </div>
+        </section>
+        <section id="controls">
+            <button id="reset-button" class="button" onclick="resetGame()">Reset Game</button>
+            <p id="score-display"></p>
+        </section>
+        <p id="game-message"></p>
+    </main>
+    <script>
+        const storage = localforage || {};
+        let currentPlayer = 'X';
+        let gameBoard = Array(9).fill(null);
+        let gameOver = false;
+        
+        function makeMove(square, index) {
+            if (gameOver) return;
+            if (gameBoard[index]) return;
+            document.getElementById('square-' + index).innerHTML = currentPlayer;
+            gameBoard[index] = currentPlayer;
+            checkForWin();
+            switchPlayer();
+            storeGame();
+        }
+        
+        function resetGame() {
+            currentPlayer = 'X';
+            gameBoard = Array(9).fill(null);
+            gameOver = false;
+            updateBoard();
+            updateScore();
+            restoreGame();
+            document.getElementById('game-message').innerHTML = '';
+        }
+        
+        function updateBoard() {
+            for (let i = 0; i < 9; i++) {
+                document.getElementById('square-' + i).innerHTML = '';
+            }
+        }
+        
+        function updateScore() {
+            document.getElementById('score-display').innerHTML = `Player X: ${storage.xWins}, Player O: ${storage.oWins}`;
+        }
+        
+        function storeGame() {
+            storage.setItem('gameState', JSON.stringify(gameBoard));
+            storage.setItem('xWins', storage.xWins ? storage.xWins : 0);
+            storage.setItem('oWins', storage.oWins ? storage.oWins : 0);
+            if (gameOver) {
+                if (checkForWin()) {
+                    if (currentPlayer === 'X') {
+                        storage.xWins++;
+                    } else {
+                        storage.oWins++;
+                    }
+                    gameOver = false;
+                } else {
+                    gameOver = true;
+                    document.getElementById('game-status').innerHTML = 'Draw!';
+                    document.getElementById('square-0').innerHTML = 'draw';
+                }
+                updateScore();
+            }
+        }
+        
+        function restoreGame() {
+            let storedBoard = storage.getItem('gameState');
+            if (storedBoard) {
+                gameBoard = JSON.parse(storedBoard);
+            }
+            let storedWins = storage.getItem('xWins');
+            if (storedWins) {
+                storage.xWins = parseInt(storedWins);
+            }
+            let storedLosses = storage.getItem('oWins');
+            if (storedLosses) {
+                storage.oWins = parseInt(storedLosses);
+            }
+            updateScore();
+        }
+        
+        function switchPlayer() {
+            currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+        }
+        
+        function checkForWin() {
+            for (let i = 0; i < 7; i++) {
+                if (gameBoard[i] && gameBoard[i] === gameBoard[i+1] && gameBoard[i] === gameBoard[i+2]) {
+                    gameOver = true;
+                    return true;
+                }
+            }
+            for (let i = 0; i < 3; i++) {
+                if (gameBoard[i] && gameBoard[i] === gameBoard[i+3] && gameBoard[i] === gameBoard[i+6]) {
+                    gameOver = true;
+                    return true;
+                }
+            }
+            if (gameBoard[0] && gameBoard[0] === gameBoard[4] && gameBoard[0] === gameBoard[8]) {
+                gameOver = true;
+                return true;
+            }
+            if (gameBoard[2] && gameBoard[2] === gameBoard[4] && gameBoard[2] === gameBoard[6]) {
+                gameOver = true;
+                return true;
+            }
+            return false;
+        }
+        localforage.config({ driver: window.indexedDB });
+    </script>
+    <script src="data:text/javascript,/*function localForageStorage(){
+    // polyfill LocalForage
+    const storage = {
+      getItem: function(key){
+        return localStorage.getItem(key);
+      },
+      setItem: function(key, value){
+        localStorage.setItem(key, value);
+      },
+      removeItem: function(key){
+        localStorage.removeItem(key);
+      },
+      clear: function(){
+        localStorage.clear();
+      }
+    };
+    return storage;
+  }()/">
+    <script src="data:text/javascript,/*const LocalForage = localForageStorage();
+  if (typeof window !== undefined ) {
+    window.LocalForage = LocalForage;
+  } else {
+    global.LocalForage = LocalForage;
+  }/">
+</body>
+</html>
