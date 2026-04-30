@@ -1,0 +1,15 @@
+{
+  "projectId": "46c8426e-eba3-49a8-b2df-886999f650ad",
+  "name": "build a calculator",
+  "userId": "69b6c6d87c83e9504c4e0cde",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-04-30T10:56:04.912Z",
+  "updatedAt": "2026-04-30T10:56:07.546Z",
+  "prompt": "build a calculator",
+  "source": "ai_two_pass",
+  "intent": "tool"
+}

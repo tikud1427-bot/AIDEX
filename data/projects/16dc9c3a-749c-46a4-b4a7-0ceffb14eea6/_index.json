@@ -1,0 +1,15 @@
+{
+  "projectId": "16dc9c3a-749c-46a4-b4a7-0ceffb14eea6",
+  "name": "build a website",
+  "userId": "69b6c6d87c83e9504c4e0cde",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-04-30T10:55:23.292Z",
+  "updatedAt": "2026-04-30T10:55:24.962Z",
+  "prompt": "build a website",
+  "source": "ai",
+  "intent": "static"
+}

@@ -178,6 +178,30 @@ CRITICAL RULES — if you break any, the output is discarded:
 12. Escape all double quotes inside file content as \\"`;
 
 // ─────────────────────────────────────────────────────────────────────────────
+// INTERACTIVE PROMPT DETECTION
+// ─────────────────────────────────────────────────────────────────────────────
+
+function isInteractivePrompt(prompt) {
+  if (!prompt) return false;
+  const keywords = [
+    "timer", "calculator", "game", "todo", "clock", "quiz", "tracker", "pomodoro",
+  ];
+  const lower = prompt.toLowerCase();
+  return keywords.some(k => lower.includes(k));
+}
+
+const INTERACTIVE_SYSTEM_ADDENDUM = `
+
+CRITICAL FUNCTIONALITY REQUIREMENTS:
+- ALL buttons MUST work
+- ALL event listeners MUST be implemented
+- Timers must run in real time using setInterval or requestAnimationFrame
+- Calculators must perform correct arithmetic operations
+- Do NOT generate placeholder logic
+- Do NOT leave incomplete functions
+- Every feature must be fully functional`;
+
+// ─────────────────────────────────────────────────────────────────────────────
 // HTTP helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -434,19 +458,223 @@ button:hover{opacity:.85}`,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TWO-PASS INTERACTIVE GENERATION
+// Pass 1: UI skeleton (HTML + CSS, no JS)
+// Pass 2: Logic layer (script.js only, referencing real IDs from Pass 1)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function _getInteractiveTokens(modelId) {
+  if (modelId.includes("groq"))     return 3000;
+  if (modelId.includes("gemini"))   return 3000;
+  if (modelId.includes("deepseek")) return 2500;
+  return 2000;
+}
+
+async function _callModelRaw(model, messages, tokenOverride) {
+  if (model.isGemini) {
+    const geminiKey = model.apiKey || process.env.Gemini_API_Key || process.env.GEMINI_API_KEY;
+    if (!geminiKey) throw new Error("Gemini API key not configured");
+    const systemMsg = messages.find(m => m.role === "system");
+    const userMsg   = messages.find(m => m.role === "user");
+    const res = await _fetchWithTimeout(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+      {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({
+          contents: [{ role: "user", parts: [
+            { text: systemMsg?.content || "" },
+            { text: userMsg?.content   || "" },
+          ]}],
+          generationConfig: { temperature: 0.2, maxOutputTokens: tokenOverride || _getInteractiveTokens("gemini") },
+        }),
+      }
+    );
+    if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
+    const data = await res.json();
+    const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!content || content.trim().length < 20) throw new Error("Gemini empty response");
+    return content;
+  }
+
+  const bodyBase = model.buildBody(messages);
+  const body     = { ...bodyBase, temperature: 0.2, max_tokens: tokenOverride || _getInteractiveTokens(model.id) };
+  const res = await _fetchWithTimeout(model.url, {
+    method:  "POST",
+    headers: model.headers,
+    body:    JSON.stringify(body),
+  });
+  if (res.status === 402) { const e = new Error("CREDIT_LIMIT"); e._skipModel = true; throw e; }
+  const rawText = await res.text().catch(() => `HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`HTTP ${res.status}: ${rawText.slice(0, 100)}`);
+  let data;
+  try { data = JSON.parse(rawText); } catch { throw new Error("Non-JSON response"); }
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content || content.trim().length < 20) throw new Error("Empty response content");
+  return content;
+}
+
+async function _runModelPool(models, messages, label, tokenOverride) {
+  for (const model of models) {
+    if (!_isModelHealthy(model.id)) continue;
+    try {
+      const result = await _callModelRaw(model, messages, tokenOverride);
+      _recordModelSuccess(model.id);
+      return result;
+    } catch (err) {
+      console.warn(`[AI Service][${label}] ${model.id} failed: ${err.message}`);
+      if (err._dead)      _markModelDead(model.id, err.message);
+      else if (err._skipModel) _recordModelFailure(model.id);
+      else                _recordModelFailure(model.id);
+    }
+  }
+  throw new Error(`[${label}] All models failed`);
+}
+
+async function generateInteractiveProject(prompt) {
+  const allModels = buildModelRegistry();
+  if (allModels.length === 0) throw new Error("No models configured");
+
+  // Pass 1: prefer groq (fast) for UI skeleton
+  const pass1Models = [
+    ...allModels.filter(m => m.id.includes("groq")),
+    ...allModels.filter(m => !m.id.includes("groq")),
+  ];
+
+  const pass1System = `You are an expert web developer. Generate ONLY index.html and style.css — NO JavaScript whatsoever.
+
+RULES:
+1. Respond ONLY with valid JSON. No prose, no markdown, no code fences.
+2. Schema: { "files": { "index.html": "...", "style.css": "..." } }
+3. Add unique IDs to ALL interactive elements (buttons, inputs, displays).
+4. Clean semantic HTML5, modern CSS3.
+5. Link stylesheet: <link rel="stylesheet" href="style.css">
+6. Add placeholder: <script src="script.js"></script> at end of body.
+7. NO inline JavaScript. NO onclick attributes.
+8. Escape all double quotes inside file content as \\"`;
+
+  const pass1User = `Build the UI structure (HTML + CSS only, NO JS) for: ${prompt}
+
+Return ONLY the JSON object.`;
+
+  const pass1Messages = [
+    { role: "system", content: pass1System },
+    { role: "user",   content: pass1User },
+  ];
+
+  console.log("[AI Service][Interactive] Pass 1 — UI skeleton");
+  const raw1 = await _runModelPool(pass1Models, pass1Messages, "Pass1-UI", null);
+  const parsed1 = extractJSON(raw1);
+  if (!parsed1?.files?.["index.html"]) throw new Error("Pass 1 returned no index.html");
+  const uiSkeleton = parsed1.files;
+
+  // Pass 2: prefer deepseek/gemini (stronger logic) for script.js
+  const pass2Models = [
+    ...allModels.filter(m => m.id.includes("deepseek")),
+    ...allModels.filter(m => m.id.includes("gemini")),
+    ...allModels.filter(m => !m.id.includes("deepseek") && !m.id.includes("gemini")),
+  ];
+
+  const pass2System = `You are an expert JavaScript developer. Generate ONLY a script.js file.
+
+STRICT RULES:
+1. Return ONLY raw JavaScript code — no JSON wrapper, no markdown, no explanations.
+2. DO NOT change any HTML IDs or structure.
+3. Use document.getElementById / querySelector to reference elements.
+4. Add complete event listeners for ALL interactive elements.
+5. Implement full state management and DOM updates.
+6. Timers MUST use setInterval or requestAnimationFrame and run in real time.
+7. Calculators MUST perform correct arithmetic and update the display.
+8. Every button MUST have a working event listener.
+9. No empty functions, no placeholder logic.`;
+
+  const pass2User = `Given this HTML:
+
+${uiSkeleton["index.html"]}
+
+Generate ONLY script.js with complete, working functionality for: ${prompt}
+
+Return ONLY the JavaScript code.`;
+
+  const pass2Messages = [
+    { role: "system", content: pass2System },
+    { role: "user",   content: pass2User },
+  ];
+
+  console.log("[AI Service][Interactive] Pass 2 — Logic generation");
+  const scriptJS = await _runModelPool(pass2Models, pass2Messages, "Pass2-Logic", _getInteractiveTokens("deepseek"));
+
+  // Strip any accidental markdown fences
+  const cleanedJS = scriptJS
+    .replace(/^```(?:javascript|js)?\s*/i, "")
+    .replace(/```\s*$/i, "")
+    .trim();
+
+  console.log("[AI Service][Interactive] ✅ Two-pass generation complete");
+  return {
+    files: {
+      "index.html": uiSkeleton["index.html"],
+      "style.css":  uiSkeleton["style.css"] || "/* Generated */",
+      "script.js":  cleanedJS,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Main: generateWebsiteFiles(prompt)
 // GUARANTEES: NEVER returns null
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function generateWebsiteFiles(prompt) {
-  const userPrompt = `Build this website: ${prompt}\n\nIMPORTANT: Respond with ONLY the JSON object. No text before or after the JSON. No markdown code fences.`;
+  // Two-pass path for interactive prompts
+  if (isInteractivePrompt(prompt)) {
+    try {
+      console.log("[AI Service] Interactive prompt detected — using two-pass generation");
+      const result = await generateInteractiveProject(prompt);
+      if (result?.files?.["index.html"]) return sanitizeOutput(result) || result;
+    } catch (err) {
+      console.warn(`[AI Service] Two-pass failed, falling back to single-pass: ${err.message}`);
+    }
+  }
+
+  const isInteractive = isInteractivePrompt(prompt);
+  const systemContent = isInteractive
+    ? SYSTEM_PROMPT + INTERACTIVE_SYSTEM_ADDENDUM
+    : SYSTEM_PROMPT;
+
+  const selfValidation = isInteractive
+    ? `\n\nFINAL CHECK BEFORE OUTPUT: Simulate the app mentally:\n- If it's a timer → verify it counts every second\n- If it's a calculator → verify calculations work correctly\n- If any feature is broken → fix it before output\n\nIMPORTANT: All JavaScript must include: proper event listeners (addEventListener), real state updates, working functions (no empty handlers), DOM updates that reflect user actions.`
+    : "";
+
+  const userPrompt = `Build this website: ${prompt}${selfValidation}\n\nIMPORTANT: Respond with ONLY the JSON object. No text before or after the JSON. No markdown code fences.`;
 
   const messages = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: systemContent },
     { role: "user",   content: userPrompt },
   ];
 
-  const models = buildModelRegistry();
+  let models = buildModelRegistry();
+
+  // Interactive: prioritize deepseek → qwen → groq for stronger JS logic
+  if (isInteractive) {
+    models = [
+      ...models.filter(m => m.id.includes("deepseek")),
+      ...models.filter(m => m.id.includes("qwen")),
+      ...models.filter(m => m.id.includes("groq")),
+      ...models.filter(m => !m.id.includes("deepseek") && !m.id.includes("qwen") && !m.id.includes("groq")),
+    ];
+    // Lower temperature for deterministic, correct logic
+    models = models.map(m => {
+      if (!m.isGemini && m.buildBody) {
+        const origBuildBody = m.buildBody;
+        return {
+          ...m,
+          buildBody: (msgs) => ({ ...origBuildBody(msgs), temperature: 0.2 }),
+        };
+      }
+      return m;
+    });
+  }
 
   if (models.length === 0) {
     console.error("[AI Service] No API keys configured — returning safe fallback");

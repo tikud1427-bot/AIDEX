@@ -1,0 +1,15 @@
+{
+  "projectId": "7163fdc1-cbe3-43b5-945b-bc370599c471",
+  "name": "build a functional calculator",
+  "userId": "69b6c6d87c83e9504c4e0cde",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-04-30T09:53:51.875Z",
+  "updatedAt": "2026-04-30T09:54:33.945Z",
+  "prompt": "build a functional calculator",
+  "source": "ai",
+  "intent": "tool"
+}
