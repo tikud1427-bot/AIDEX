@@ -1755,6 +1755,9 @@ body {
   word-break: break-word;
 }
 
+/* Mobile editor toggle tabs — hidden on desktop, shown by mobile layer */
+.aq-mobile-tab-bar { display: none; }
+
 /* ── MOBILE BOTTOM NAV ────────────────────────────────────────── */
 .aq-bottom-nav {
   display: none;
@@ -2488,7 +2491,7 @@ body {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   RESPONSIVE
+   RESPONSIVE — DESKTOP BREAKPOINTS (unchanged desktop behaviour)
 ══════════════════════════════════════════════════════════════ */
 @media (max-width: 1100px) {
   .aq-body         { grid-template-columns: 200px 1fr; }
@@ -2521,271 +2524,544 @@ body {
   .aq-right-panel  { display: none !important; }
   .aq-bottom-nav   { display: flex; }
 
-  /* Preview pane: hide on narrow screens */
   .aq-preview-pane { display: none; }
 }
 
-@media (max-width: 600px) {
-  .aq-exec-hdr-top { flex-direction: column; gap: 10px; }
-  .aq-exec-actions { width: 100%; flex-wrap: wrap; }
-  .aq-exec-actions .aq-btn { flex: 1; min-height: 44px; font-size: 0.6rem; }
-  .aq-stats-row    { flex-wrap: wrap; gap: 12px; }
-  .aq-topbar       { padding: 0 12px; gap: 8px; }
-  .aq-breadcrumb   { display: none; }
-  .aq-status-pill  { display: none; }
-
-  .aq-sb-generate-bar,
-  .aq-sb-edit-bar {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 8px;
-  }
-  .aq-sb-input {
-    width: 100%;
-    height: 48px;
-    font-size: 0.82rem;
-  }
-  .aq-sb-file-select { width: 100%; }
-  .aq-sb-generate-bar .aq-btn,
-  .aq-sb-edit-bar .aq-btn {
-    width: 100%;
-    min-height: 48px;
-  }
-}
-
 /* ══════════════════════════════════════════════════════════════
-   MOBILE OPTIMIZATIONS — v5.0
+   ADAPTIVE MOBILE LAYER — v6.0
+   Strategy: separate experience, not compressed desktop.
+   All overrides scoped to max-width: 768px.
+   Desktop layout UNCHANGED above this breakpoint.
 ══════════════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
 
-  /* ── TOPBAR ── */
+  /* ─────────────────────────────────────────────────────────────
+     GLOBAL OVERFLOW GUARD
+     Eliminates horizontal scroll at root level.
+  ───────────────────────────────────────────────────────────── */
+  .aq-workspace,
+  .aq-body,
+  .aq-main,
+  .aq-exec,
+  .aq-welcome,
+  .aq-site-builder,
+  #wsProjectView {
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     TOPBAR — minimal chrome on mobile
+     Keep: logo + menu button + status dot
+     Hide: breadcrumb, status text, switcher, generate bar
+  ───────────────────────────────────────────────────────────── */
   .aq-topbar {
     padding: 0 12px;
-    gap: 8px;
+    gap: 10px;
     height: 52px;
     --topbar-h: 52px;
   }
+
   .aq-menu-btn {
     display: flex;
     width: 44px;
     height: 44px;
     font-size: 1.1rem;
+    flex-shrink: 0;
   }
-  .aq-breadcrumb { display: none; }
-  .aq-status-pill { display: none; }
-  .aq-switcher { max-width: 120px; }
 
-  /* Prompt input — min touch height */
+  /* Collapse generate bar in topbar — moved to welcome/action bar */
+  .aq-topbar-prompt {
+    flex: 1;
+    min-width: 0;
+  }
   .aq-topbar-prompt input,
-  #topPromptInput { height: 40px; }
+  #topPromptInput {
+    height: 40px;
+    font-size: 0.72rem;
+  }
 
-  /* ── BODY LAYOUT ── */
+  /* Hide generate button in topbar — redundant with action bar */
+  #topGenBtn { display: none; }
+
+  .aq-breadcrumb  { display: none; }
+  .aq-status-pill { display: none; }
+  .aq-switcher    { display: none; }
+
+  /* Command palette button — keep but shrink */
+  #paletteBtn { padding: 6px 10px; min-height: 40px; }
+
+  /* ─────────────────────────────────────────────────────────────
+     BODY LAYOUT
+     Single column. Sidebar becomes drawer only.
+  ───────────────────────────────────────────────────────────── */
   .aq-body {
     grid-template-columns: 1fr;
     overflow: hidden;
   }
 
-  /* ── SIDEBAR — slide-in drawer ── */
+  /* ─────────────────────────────────────────────────────────────
+     SIDEBAR — slide-in drawer
+     Never a fixed left panel on mobile.
+  ───────────────────────────────────────────────────────────── */
   .aq-sidebar {
     position: fixed;
     top: 52px;
-    left: 0; bottom: 0;
-    width: 280px;
-    max-width: 85vw;
+    left: 0;
+    bottom: 60px; /* above bottom nav */
+    width: 300px;
+    max-width: 88vw;
     transform: translateX(-100%);
-    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
-    z-index: 200;
+    transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 400;
+    box-shadow: none;
   }
   .aq-sidebar.open {
     transform: translateX(0);
-    box-shadow: 4px 0 24px rgba(0,0,0,0.5);
+    box-shadow: 6px 0 32px rgba(0, 0, 0, 0.6);
   }
   .aq-sidebar-close { display: flex; }
 
-  /* Touch-friendly items */
-  .aq-bundle-item    { min-height: 52px; padding: 12px 10px; }
-  .aq-sidebar-tab    { min-height: 44px; padding: 10px 4px; }
-  .aq-tool-item      { min-height: 48px; padding: 12px 10px; }
-  .aq-site-item      { min-height: 48px; padding: 12px 10px; }
-  .aq-proj-item      { min-height: 48px; padding: 10px 10px; }
+  /* Touch-friendly sidebar items — min 48px targets */
+  .aq-bundle-item     { min-height: 56px; padding: 14px 12px; }
+  .aq-sidebar-tab     { min-height: 48px; padding: 12px 4px; font-size: 0.6rem; }
+  .aq-tool-item       { min-height: 52px; padding: 14px 12px; }
+  .aq-site-item       { min-height: 52px; padding: 14px 12px; }
+  .aq-proj-item       { min-height: 52px; padding: 12px 12px; }
+  .aq-sidebar-new-btn { min-height: 48px; font-size: 0.72rem; }
 
-  /* Always-visible actions (no hover on touch) */
+  /* Always-visible actions — no hover on touch */
   .aq-bundle-actions { opacity: 1; }
   .aq-tool-btns      { opacity: 1; }
   .aq-site-item-del  { opacity: 1; }
   .aq-proj-del       { opacity: 1; }
+  .aq-step-toggle    { opacity: 1; }
 
-  /* ── MAIN AREA ── */
+  /* ─────────────────────────────────────────────────────────────
+     MAIN AREA
+  ───────────────────────────────────────────────────────────── */
   .aq-main {
     width: 100%;
     min-width: 0;
     overflow: hidden;
+    /* Account for bottom nav */
+    padding-bottom: 60px;
   }
 
-  /* ── EXEC HEADER ── */
-  .aq-exec-hdr { padding: 14px 14px 12px; }
-  .aq-exec-hdr-top { flex-direction: column; gap: 10px; align-items: stretch; }
-  .aq-exec-title { font-size: 0.95rem; }
-  .aq-exec-goal  { font-size: 0.68rem; }
-  .aq-exec-actions {
-    width: 100%;
-    flex-wrap: wrap;
+  /* ─────────────────────────────────────────────────────────────
+     WELCOME SCREEN — vertically centered, full-width actions
+  ───────────────────────────────────────────────────────────── */
+  .aq-welcome {
+    padding: 48px 20px 32px;
+    justify-content: flex-start;
+    padding-top: 60px;
+  }
+
+  .aq-welcome-glyph {
+    width: 52px;
+    height: 52px;
+    font-size: 1.4rem;
+    margin-bottom: 20px;
+  }
+
+  .aq-welcome h2 {
+    font-size: 1.4rem;
+    margin-bottom: 10px;
+  }
+
+  .aq-welcome p {
+    font-size: 0.86rem;
+    margin-bottom: 28px;
+    max-width: 100%;
+  }
+
+  .aq-welcome-prompts {
     gap: 6px;
+    margin-bottom: 28px;
+    max-width: 100%;
+  }
+
+  .aq-welcome-prompt-chip {
+    font-size: 0.66rem;
+    padding: 8px 14px;
+    /* allow wrapping naturally */
+    white-space: normal;
+    text-align: center;
+  }
+
+  .aq-welcome-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .aq-welcome-actions .aq-btn {
+    width: 100%;
+    min-height: 52px;
+    font-size: 0.76rem;
+    max-width: none;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     PROJECT VIEW — Editor + Preview
+     CRITICAL: Never side-by-side. Toggle system.
+  ───────────────────────────────────────────────────────────── */
+  #wsProjectView {
+    flex-direction: column;
+    position: relative;
+  }
+
+  /* Mobile editor/preview toggle tabs — injected via mobile-tab-bar */
+  .aq-mobile-tab-bar {
+    display: flex;
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .aq-mobile-tab-bar-btn {
+    flex: 1;
+    padding: 12px 8px;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s;
+    min-height: 48px;
+  }
+  .aq-mobile-tab-bar-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* Sticky action bar — becomes full-width bottom action bar */
+  .aq-sticky-action-bar {
+    position: fixed;
+    bottom: 60px; /* sits above bottom nav */
+    left: 0;
+    right: 0;
+    z-index: 50;
+    padding: 10px 12px;
+    gap: 8px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    border-bottom: none;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+    /* hide the label on mobile to save space */
+  }
+  .aq-sticky-action-bar-label { display: none; }
+  .aq-sticky-sep { display: none; }
+
+  .aq-sticky-action-bar .aq-btn {
+    min-height: 44px;
+    flex: 1 1 auto;
+    font-size: 0.58rem;
+    white-space: nowrap;
+    justify-content: center;
+  }
+
+  /* Push editor content above fixed action bar */
+  .aq-editor-pane {
+    /* subtract sticky bar height + bottom nav */
+    height: calc(100dvh - 52px - 48px - 60px);
+    max-height: calc(100dvh - 52px - 48px - 60px);
+    border-right: none;
+  }
+
+  /* Editor textarea — comfortable touch typing */
+  .aq-code-editor {
+    font-size: 0.82rem;
+    line-height: 1.7;
+    padding: 14px 14px;
+  }
+
+  /* File tabs — horizontally scrollable, taller targets */
+  .aq-file-tab {
+    min-height: 44px;
+    height: 44px;
+    padding: 0 16px;
+    font-size: 0.7rem;
+  }
+
+  /* Editor toolbar — tighter */
+  .aq-editor-toolbar {
+    height: 44px;
+    padding: 0 12px;
+  }
+
+  /* AI edit bar — full width stacked */
+  .aq-ai-edit-bar {
+    flex-direction: column;
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .aq-ai-edit-bar input,
+  #aiEditInput {
+    width: 100%;
+    height: 44px;
+    font-size: 0.8rem;
+  }
+  .aq-ai-edit-bar .aq-btn {
+    width: 100%;
+    min-height: 44px;
+  }
+
+  /* Preview pane — NEVER side-by-side
+     Only shown when toggled via mobile tab bar */
+  .aq-preview-pane {
+    display: none;
+    width: 100%;
+    height: calc(100dvh - 52px - 48px - 60px);
+    border-left: none;
+    flex-shrink: 0;
+  }
+  .aq-preview-pane.mob-active {
+    display: flex;
+  }
+  .aq-editor-pane.mob-hidden {
+    display: none;
+  }
+
+  /* ─────────────────────────────────────────────────────────────
+     EXEC VIEW — Bundle runner
+  ───────────────────────────────────────────────────────────── */
+  .aq-exec-hdr {
+    padding: 14px 14px 12px;
+  }
+  .aq-exec-hdr-top {
+    flex-direction: column;
+    gap: 10px;
+    align-items: stretch;
+  }
+  .aq-exec-title { font-size: 0.95rem; }
+  .aq-exec-goal  { font-size: 0.7rem; white-space: normal; }
+
+  .aq-exec-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
   }
   .aq-exec-actions .aq-btn {
-    flex: 1 1 auto;
-    min-height: 44px;
+    min-height: 48px;
     justify-content: center;
-    font-size: 0.6rem;
+    font-size: 0.62rem;
+    width: 100%;
   }
-  .aq-stats-row { gap: 12px; flex-wrap: wrap; }
 
-  /* ── EXEC CONTENT ── */
+  .aq-stats-row {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .aq-stat { gap: 4px; }
+  .aq-stat-val { font-size: 0.9rem; }
+
+  /* Exec content — single column, right panel becomes bottom drawer */
   .aq-exec-content {
     grid-template-columns: 1fr;
     overflow: hidden;
   }
 
-  /* ── RIGHT PANEL ── */
+  /* Right panel — shown as bottom sheet on mobile */
   .aq-right-panel {
-    display: none !important;
-    width: 0 !important;
+    display: flex !important;
+    width: 100% !important;
+    max-height: 220px;
     border-left: none !important;
+    border-top: 1px solid var(--border);
+    flex-shrink: 0;
+    overflow: hidden;
   }
 
-  /* ── STEPS PANEL ── */
+  .aq-right-body {
+    padding: 10px 12px;
+  }
+
+  /* Steps panel — full width, leaves room for right panel below */
   .aq-steps-panel {
     border-right: none;
     min-width: 0;
     width: 100%;
+    overflow: hidden;
   }
-  .aq-steps-scroll { padding: 12px 12px; }
 
-  /* ── STEP CARDS — touch-friendly ── */
-  .aq-step-hdr { padding: 14px 12px; gap: 10px; }
-  .aq-step-title { font-size: 0.82rem; }
-  .aq-step-desc  { font-size: 0.68rem; }
-  .aq-step-toggle { opacity: 1; }
+  .aq-steps-scroll { padding: 10px 12px; }
+
+  /* Step cards — touch-friendly */
+  .aq-step-hdr   { padding: 14px 12px; gap: 10px; }
+  .aq-step-title { font-size: 0.84rem; }
+  .aq-step-desc  { font-size: 0.7rem; white-space: normal; }
+
   .aq-step-actions {
     opacity: 1;
     flex-wrap: wrap;
     gap: 8px;
   }
   .aq-step-act-btn {
-    min-height: 44px;
-    padding: 8px 14px;
+    min-height: 48px;
+    padding: 10px 14px;
     flex: 1 1 auto;
     justify-content: center;
+    font-size: 0.62rem;
   }
 
-  /* ── TIMELINE ── */
+  /* Timeline — scrollable strip */
   .aq-timeline { padding: 10px 12px; }
+  .aq-tl-dot   { width: 28px; height: 28px; font-size: 0.6rem; }
 
-  /* ── WELCOME STATE ── */
-  .aq-welcome { padding: 40px 20px; }
-  .aq-welcome h2 { font-size: 1.3rem; }
-  .aq-welcome p  { font-size: 0.84rem; }
-  .aq-welcome-actions {
-    flex-direction: column;
-    align-items: center;
-    width: 100%;
+  /* ─────────────────────────────────────────────────────────────
+     BOTTOM NAV — main mobile navigation
+  ───────────────────────────────────────────────────────────── */
+  .aq-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 300;
+    height: 60px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    box-shadow: 0 -2px 16px rgba(0,0,0,0.3);
   }
-  .aq-welcome-actions .aq-btn {
-    width: 100%;
-    max-width: 280px;
-    min-height: 48px;
+
+  .aq-bottom-tab {
+    min-height: 60px;
+    gap: 4px;
+    font-size: 0.52rem;
+    letter-spacing: 0.04em;
+    position: relative;
+    transition: color 0.15s, background 0.15s;
   }
-  .aq-welcome-prompt-chip { font-size: 0.64rem; }
+  .aq-bottom-tab .icon { font-size: 1.1rem; }
 
-  /* ── BOTTOM NAV ── */
-  .aq-bottom-nav { display: flex; }
-  .aq-bottom-tab { min-height: 56px; }
+  /* Active indicator — dot above icon */
+  .aq-bottom-tab.active::before {
+    content: '';
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 18px;
+    height: 2px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
 
-  /* ── TOAST ── */
+  /* ─────────────────────────────────────────────────────────────
+     TOAST — above bottom nav
+  ───────────────────────────────────────────────────────────── */
   #aq-toast-root {
-    bottom: 68px;
+    bottom: 72px;
     left: 12px;
     right: 12px;
     width: auto;
-    align-items: center;
+    align-items: stretch;
   }
-  .aq-toast { width: 100%; text-align: left; }
+  .aq-toast {
+    width: 100%;
+    font-size: 0.72rem;
+  }
 
-  /* ── SITE BUILDER ── */
+  /* ─────────────────────────────────────────────────────────────
+     SITE BUILDER — vertical layout
+  ───────────────────────────────────────────────────────────── */
   .aq-sb-header { padding: 14px 14px 12px; gap: 10px; }
   .aq-sb-title-row { flex-wrap: wrap; gap: 8px; }
   .aq-sb-title { font-size: 0.9rem; }
-  .aq-sb-actions .aq-btn { min-height: 44px; }
+  .aq-sb-actions .aq-btn { min-height: 48px; }
   .aq-sb-suggestions { gap: 8px; }
-  .aq-sb-chip { min-height: 40px; }
+  .aq-sb-chip { min-height: 44px; }
 
-  .aq-sb-body {
-    flex-direction: column;
-    overflow: hidden;
-  }
+  .aq-sb-body { flex-direction: column; overflow: hidden; }
   .aq-sb-filetree {
     width: 100%;
-    max-height: 130px;
+    max-height: 120px;
     border-right: none;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
   .aq-sb-filetree-list { overflow-y: auto; }
-  .aq-sb-file-item { min-height: 42px; }
-  .aq-sb-preview-panel {
-    flex: 1;
-    min-height: 0;
-    width: 100%;
-  }
+  .aq-sb-file-item { min-height: 46px; }
+  .aq-sb-preview-panel { flex: 1; min-height: 0; width: 100%; }
 
-  /* Empty state — tighter on mobile */
   .aq-sb-empty { padding: 40px 20px; }
   .aq-sb-empty-title { font-size: 1.1rem; }
-  .aq-sb-empty-sub   { font-size: 0.8rem; max-width: 100%; }
+  .aq-sb-empty-sub   { font-size: 0.82rem; max-width: 100%; }
   .aq-sb-empty-examples { gap: 6px; max-width: 100%; }
-  .aq-sb-empty-cta { flex-direction: column; align-items: center; }
-  .aq-sb-empty-cta .aq-btn { width: 100%; max-width: 280px; min-height: 48px; }
+  .aq-sb-empty-cta { flex-direction: column; align-items: stretch; gap: 10px; }
+  .aq-sb-empty-cta .aq-btn { width: 100%; max-width: none; min-height: 52px; }
 
-  /* ── COMMAND PALETTE ── */
-  .aq-palette-backdrop { padding-top: 60px; padding-left: 12px; padding-right: 12px; }
-  .aq-palette { max-width: 100%; border-radius: var(--r); }
-  .aq-palette-input { font-size: 0.9rem; padding: 16px; }
-  .aq-palette-cmd { min-height: 48px; font-size: 0.78rem; }
+  .aq-sb-generate-bar,
+  .aq-sb-edit-bar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .aq-sb-input    { width: 100%; height: 48px; font-size: 0.84rem; }
+  .aq-sb-file-select { width: 100%; }
+  .aq-sb-generate-bar .aq-btn,
+  .aq-sb-edit-bar .aq-btn { width: 100%; min-height: 48px; }
 
-  /* ── CONFIRM MODAL ── */
-  .aq-confirm-box { padding: 22px 18px; width: 92%; }
-  .aq-confirm-actions .aq-btn { min-height: 48px; flex: 1; }
-
-  /* ── EDITOR ── */
-  .aq-sticky-action-bar { flex-wrap: wrap; gap: 6px; }
-  .aq-sticky-action-bar .aq-btn { min-height: 40px; }
-
-  /* ── MISC OVERFLOW GUARDS ── */
-  .aq-exec,
-  .aq-site-builder,
-  .aq-welcome,
-  .aq-sb-body,
-  .aq-sb-preview-panel {
-    max-width: 100vw;
-    overflow-x: hidden;
+  /* ─────────────────────────────────────────────────────────────
+     COMMAND PALETTE
+  ───────────────────────────────────────────────────────────── */
+  .aq-palette-backdrop {
+    padding-top: 0;
+    padding-left: 0;
+    padding-right: 0;
+    align-items: flex-end; /* sheet slides from bottom */
   }
-}
+  .aq-palette {
+    max-width: 100%;
+    width: 100%;
+    border-radius: var(--r) var(--r) 0 0;
+    border-bottom: none;
+    /* slide-up from bottom */
+    animation: aq-slide-up 0.2s ease;
+  }
+  .aq-palette-input   { font-size: 0.9rem; padding: 18px 16px; }
+  .aq-palette-cmd     { min-height: 52px;  font-size: 0.8rem; }
+  .aq-palette-list    { max-height: 50vh; padding-bottom: 12px; }
 
-/* ── 480px and below ── */
+  /* ─────────────────────────────────────────────────────────────
+     CONFIRM MODAL
+  ───────────────────────────────────────────────────────────── */
+  .aq-confirm-box { padding: 24px 18px; width: 92%; }
+  .aq-confirm-actions { flex-direction: column; gap: 8px; }
+  .aq-confirm-actions .aq-btn { min-height: 52px; width: 100%; }
+
+  /* ─────────────────────────────────────────────────────────────
+     RUN MODAL — already full-screen, just ensure good spacing
+  ───────────────────────────────────────────────────────────── */
+  .aq-modal-body { padding: 18px; }
+
+} /* end @media (max-width: 768px) */
+
+/* ─────────────────────────────────────────────────────────────
+   480px and below — extra compression
+───────────────────────────────────────────────────────────── */
 @media (max-width: 480px) {
-  .aq-topbar { padding: 0 10px; height: 52px; }
-  .aq-switcher { display: none; }
-  .aq-exec-hdr { padding: 12px 12px 10px; }
-  .aq-steps-scroll { padding: 10px 10px; }
-  .aq-step-hdr { padding: 12px 10px; gap: 8px; }
-  .aq-step-num  { width: 24px; height: 24px; font-size: 0.58rem; }
-  .aq-stats-row { gap: 10px; }
-  .aq-stat-val  { font-size: 0.9rem; }
-  .aq-sb-filetree { max-height: 110px; }
-  .aq-welcome { padding: 32px 16px; }
-  .aq-welcome h2 { font-size: 1.15rem; }
-  .aq-sb-empty { padding: 32px 16px; }
-  #aq-toast-root { bottom: 62px; }
+  .aq-topbar       { padding: 0 10px; }
+  .aq-exec-hdr     { padding: 12px 12px 10px; }
+  .aq-steps-scroll { padding: 8px 10px; }
+  .aq-step-hdr     { padding: 12px 10px; gap: 8px; }
+  .aq-step-num     { width: 24px; height: 24px; font-size: 0.58rem; }
+  .aq-stats-row    { gap: 8px; }
+  .aq-stat-val     { font-size: 0.82rem; }
+  .aq-sb-filetree  { max-height: 100px; }
+  .aq-welcome      { padding: 32px 16px 24px; }
+  .aq-welcome h2   { font-size: 1.2rem; }
+  .aq-sb-empty     { padding: 32px 16px; }
+  #aq-toast-root   { bottom: 66px; }
+
+  .aq-exec-actions { grid-template-columns: 1fr 1fr; }
 }
 
 /* ══════════════════════════════════════════════════════════════

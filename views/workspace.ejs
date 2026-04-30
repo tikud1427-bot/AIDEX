@@ -168,6 +168,18 @@
       <!-- ─── PROJECT VIEW (code editor + preview) ─── -->
       <div id="wsProjectView" style="display:none;flex:1;min-width:0;min-height:0;">
 
+        <!-- Mobile Code/Preview toggle tabs (hidden on desktop via CSS) -->
+        <div class="aq-mobile-tab-bar" id="mobileEditorTabs" aria-label="Editor mode">
+          <button class="aq-mobile-tab-bar-btn active" id="mobTabCode"
+                  onclick="switchMobileEditorTab('code',this)" aria-selected="true">
+            ⌨ Code
+          </button>
+          <button class="aq-mobile-tab-bar-btn" id="mobTabPreview"
+                  onclick="switchMobileEditorTab('preview',this)" aria-selected="false">
+            ↗ Preview
+          </button>
+        </div>
+
         <!-- Sticky Action Bar -->
         <div class="aq-sticky-action-bar" id="projectActionBar">
           <span class="aq-sticky-action-bar-label">Actions</span>
@@ -493,6 +505,25 @@ function mobileNavSwitch(view, btn) {
   if (view === "projects")     { openSidebar(); switchLeftTab("projects"); }
   else if (view === "bundles") { openSidebar(); switchLeftTab("bundles"); }
   else { closeSidebar(); }
+}
+
+/* ─── MOBILE EDITOR TABS ─── */
+function switchMobileEditorTab(tab, btn) {
+  document.querySelectorAll(".aq-mobile-tab-bar-btn").forEach(b => {
+    b.classList.remove("active");
+    b.setAttribute("aria-selected", "false");
+  });
+  if (btn) { btn.classList.add("active"); btn.setAttribute("aria-selected", "true"); }
+  const editor  = document.getElementById("editorPane");
+  const preview = document.getElementById("previewPane");
+  if (!editor || !preview) return;
+  if (tab === "preview") {
+    editor.classList.add("mob-hidden");
+    preview.classList.add("mob-active");
+  } else {
+    editor.classList.remove("mob-hidden");
+    preview.classList.remove("mob-active");
+  }
 }
 
 /* ─── PROMPT HELPERS ─── */
