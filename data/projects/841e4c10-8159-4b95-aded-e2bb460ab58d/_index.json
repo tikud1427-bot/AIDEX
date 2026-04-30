@@ -1,0 +1,15 @@
+{
+  "projectId": "841e4c10-8159-4b95-aded-e2bb460ab58d",
+  "name": "build a pomodoro timer",
+  "userId": "69b6c6d87c83e9504c4e0cde",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-04-30T06:43:51.304Z",
+  "updatedAt": "2026-04-30T06:44:45.728Z",
+  "prompt": "build a pomodoro timer",
+  "source": "ai",
+  "intent": "tool"
+}

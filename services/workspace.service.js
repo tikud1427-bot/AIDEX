@@ -1,26 +1,17 @@
-/**
- * workspace.service.js — AQUIPLEX GOD MODE (v7)
- *
- * PRODUCTION-HARDENED AI GENERATION ENGINE
- *
- * HARDENING GUARANTEES:
- *   - generateProjectUnified() NEVER returns success on invalid AI output
- *   - Output MUST contain "=== FILE:" or an error is thrown (no silent fallback in edit mode)
- *   - max_tokens capped at 2500 — no more 4096 overflow crashes
- *   - Exponential backoff retry with AbortController timeout
- *   - Provider health system: disabled after 2 consecutive failures, rotated intelligently
- *   - FREE MODEL STACK: deepseek-chat (primary) → llama-3.3-70b (secondary) → mixtral-8x7b (creative/fallback)
- *   - No paid models (no GPT-4, no Claude, no Mistral-Large)
- *   - Consistent provider definitions across ai.service.js and workspace.service.js
- *   - editProjectFile: NEVER overwrites files on invalid AI output
- *   - parseMultiFileOutput: NEVER returns empty array, ALWAYS guarantees index.html
- *   - Atomic file writes — no partial-write corruption
- *   - Structured logs: [AI ENGINE] | [PROJECT ENGINE] | [AI ERROR]
- *   - Path traversal prevention on all file operations
- *   - Allowed file extension whitelist enforced at write time
- */
-
 "use strict";
+
+/**
+ * workspace.service.js — AQUIPLEX V4.1 SELF-HEALING AI ENGINE
+ *
+ * V4.1 UPGRADES:
+ * - Model priority reordered: groq → gemini → openrouter (free-first)
+ * - LLM_MAX_TOKENS reduced: 2500 → 900 (cost-efficient)
+ * - Dynamic token fn per model (groq/gemini: 1200, deepseek: 800)
+ * - HTTP 402 handling: _skipModel=true, no retry, immediate model switch
+ * - Gemini request body fixed: separate system + user parts, no string concat
+ * - Retry logic: no retry on _skipModel, _dead, 402, or deprecation
+ * - All V4 features preserved: health tracking, cooldown, fallback, parser
+ */
 
 const fs        = require("fs").promises;
 const fsSync    = require("fs");
@@ -38,12 +29,14 @@ const MAX_RECENT_OUTPUTS = 20;
 const MAX_INSIGHTS       = 4;
 const PROJECTS_DIR       = path.join(__dirname, "../data/projects");
 
-const LLM_TIMEOUT_MS       = 35_000;
-const LLM_MAX_RETRIES      = 2;
-const LLM_RETRY_BASE_MS    = 800;   // doubles each retry (800 → 1600 → 3200)
-const LLM_MAX_TOKENS       = 2500;  // safe ceiling — prevents token overflow
-const PROVIDER_FAIL_LIMIT  = 2;     // disable provider after N consecutive failures
-const OUTPUT_MIN_LENGTH    = 100;
+const LLM_TIMEOUT_MS      = 35_000;
+const LLM_MAX_RETRIES     = 2;
+const LLM_RETRY_BASE_MS   = 800;
+const LLM_MAX_TOKENS      = 900;   // V4.1: reduced from 2500
+const MODEL_FAIL_LIMIT    = 2;
+const MODEL_COOL_TTL_MS   = 60_000;
+const MODEL_DEAD_TTL_MS   = 24 * 60 * 60 * 1000;
+const OUTPUT_MIN_LENGTH   = 100;
 const FILE_DELIMITER_REGEX = /={3}\s*FILE:\s*(.+?)\s*={3}/;
 
 const ALLOWED_EXTENSIONS = new Set([
@@ -53,93 +46,124 @@ const ALLOWED_EXTENSIONS = new Set([
   ".woff", ".woff2", ".ttf",
 ]);
 
+const DEPRECATION_SIGNALS = [
+  "decommissioned",
+  "no longer supported",
+  "not supported",
+  "model not found",
+  "model_not_found",
+];
+
 // Ensure projects dir exists on startup
 (async () => {
   try { await fs.mkdir(PROJECTS_DIR, { recursive: true }); } catch {}
 })();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROVIDER REGISTRY — strong models only, health tracking per process
+// Dynamic token limits — cost-optimized per provider
 // ─────────────────────────────────────────────────────────────────────────────
 
-// In-process provider health state (resets on restart — intentional)
-const _providerHealth = new Map(); // key: "ProviderName" → { failures: 0, disabledUntil: 0 }
-
-function _getHealth(providerName) {
-  if (!_providerHealth.has(providerName)) {
-    _providerHealth.set(providerName, { failures: 0, disabledUntil: 0 });
-  }
-  return _providerHealth.get(providerName);
+function getDynamicTokens(modelId) {
+  if (modelId.includes("groq"))     return 1200;
+  if (modelId.includes("gemini"))   return 1200;
+  if (modelId.includes("deepseek")) return 800;
+  return 600;
 }
 
-function _isProviderHealthy(providerName) {
-  const h = _getHealth(providerName);
-  if (h.disabledUntil > Date.now()) return false;
-  return true;
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// UNIFIED MODEL REGISTRY — priority: groq → gemini → openrouter
+// ─────────────────────────────────────────────────────────────────────────────
 
-function _recordProviderSuccess(providerName) {
-  const h = _getHealth(providerName);
-  h.failures     = 0;
-  h.disabledUntil = 0;
-  console.log(`[AI ENGINE] ✅ Provider healthy: ${providerName}`);
-}
+function buildModelRegistry() {
+  const models = [];
 
-function _recordProviderFailure(providerName) {
-  const h = _getHealth(providerName);
-  h.failures += 1;
-  if (h.failures >= PROVIDER_FAIL_LIMIT) {
-    const cooldownMs  = 60_000 * h.failures; // 1min * failure count
-    h.disabledUntil   = Date.now() + cooldownMs;
-    console.error(
-      `[AI ERROR] Provider disabled: ${providerName} | ` +
-      `failures: ${h.failures} | cooldown: ${cooldownMs / 1000}s`
-    );
-  }
-}
-
-function buildProviders() {
-  const providers = [];
-
-  // ── OpenRouter (primary) ─────────────────────────────────────────────────
-  // Priority order: deepseek-chat (structure/coding) → mixtral-8x7b (creative/UI)
-  if (process.env.OPENROUTER_API_KEY) {
-    providers.push({
-      name:    "OpenRouter",
-      url:     "https://openrouter.ai/api/v1/chat/completions",
-      headers: {
-        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type":  "application/json",
-        "HTTP-Referer":  process.env.OPENROUTER_REFERER || "https://aquiplex.com",
-        "X-Title":       "Aquiplex",
-      },
-      // Free models only — priority order enforced
-      models: [
-        "deepseek/deepseek-chat",          // #1 — best for structured multi-file code generation
-        "mistralai/mixtral-8x7b-instruct", // #2 — creative UI, reliable fallback
-      ],
-    });
-  }
-
-  // ── Groq (secondary) ─────────────────────────────────────────────────────
-  // Priority order: llama-3.3-70b (general/reliable) → mixtral-8x7b (fallback)
+  // 1st: Groq — free, fast, primary
   if (process.env.GROQ_API_KEY) {
-    providers.push({
-      name:    "Groq",
-      url:     "https://api.groq.com/openai/v1/chat/completions",
-      headers: {
-        "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
-        "Content-Type":  "application/json",
-      },
-      // Free models only — priority order enforced
-      models: [
-        "llama-3.3-70b-versatile", // #1 — strong general model, high reliability
-        "mixtral-8x7b-32768",      // #2 — long context fallback
-      ],
+    const headers = {
+      "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
+      "Content-Type":  "application/json",
+    };
+    models.push({
+      id:        "groq:llama-3.1-8b-instant",
+      url:       "https://api.groq.com/openai/v1/chat/completions",
+      headers,
+      modelName: "llama-3.1-8b-instant",
     });
   }
 
-  return providers;
+  // 2nd: Gemini — free tier
+  const geminiKey = process.env.Gemini_API_Key || process.env.GEMINI_API_KEY;
+  if (geminiKey) {
+    models.push({
+      id:       "gemini:gemini-1.5-flash",
+      isGemini: true,
+      apiKey:   geminiKey,
+    });
+  }
+
+  // 3rd: OpenRouter deepseek — paid fallback only
+  if (process.env.OPENROUTER_API_KEY) {
+    const headers = {
+      "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      "Content-Type":  "application/json",
+      "HTTP-Referer":  process.env.OPENROUTER_REFERER || "https://aquiplex.com",
+      "X-Title":       "Aquiplex",
+    };
+    models.push({
+      id:        "openrouter:deepseek-chat",
+      url:       "https://openrouter.ai/api/v1/chat/completions",
+      headers,
+      modelName: "deepseek/deepseek-chat",
+    });
+  }
+
+  return models;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MODEL HEALTH SYSTEM
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _modelHealth = new Map();
+
+function _getModelHealth(modelId) {
+  if (!_modelHealth.has(modelId)) {
+    _modelHealth.set(modelId, { failures: 0, disabledUntil: 0 });
+  }
+  return _modelHealth.get(modelId);
+}
+
+function _isModelHealthy(modelId) {
+  return _getModelHealth(modelId).disabledUntil <= Date.now();
+}
+
+function _markModelDead(modelId, reason) {
+  const h = _getModelHealth(modelId);
+  h.failures      = 99;
+  h.disabledUntil = Date.now() + MODEL_DEAD_TTL_MS;
+  console.error(`[AI ENGINE] ☠ Model DEAD (24h): ${modelId} | ${reason}`);
+}
+
+function _recordModelFailure(modelId) {
+  const h = _getModelHealth(modelId);
+  h.failures += 1;
+  if (h.failures >= MODEL_FAIL_LIMIT) {
+    h.disabledUntil = Date.now() + MODEL_COOL_TTL_MS * h.failures;
+    console.error(`[AI ERROR] Model in cooldown: ${modelId} | failures: ${h.failures}`);
+  }
+}
+
+function _recordModelSuccess(modelId) {
+  const h = _getModelHealth(modelId);
+  h.failures      = 0;
+  h.disabledUntil = 0;
+  console.log(`[AI ENGINE] ✅ Model healthy: ${modelId}`);
+}
+
+function _isDeprecationError(text) {
+  if (!text || typeof text !== "string") return false;
+  const lower = text.toLowerCase();
+  return DEPRECATION_SIGNALS.some(sig => lower.includes(sig));
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -195,6 +219,10 @@ function detectAppType(prompt) {
   }
   return "static";
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SYSTEM PROMPT BUILDER
+// ─────────────────────────────────────────────────────────────────────────────
 
 function buildSystemPromptForType(appType) {
   const base = `You are an expert full-stack web developer. Generate complete, production-quality, self-contained web projects.
@@ -321,33 +349,14 @@ async function _fetchWithTimeout(url, init, timeoutMs = LLM_TIMEOUT_MS) {
   }
 }
 
-async function _withRetry(fn, maxRetries = LLM_MAX_RETRIES, label = "LLM") {
-  let lastErr;
-  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-    try {
-      return await fn();
-    } catch (err) {
-      lastErr = err;
-      if (err._skipModel) throw err; // 400/model errors — don't retry
-      const reason = err.name === "AbortError" ? "timeout" : err.message;
-      console.warn(`[AI ERROR] ${label} | Attempt ${attempt} | ${reason}`);
-      if (attempt <= maxRetries) {
-        const delay = LLM_RETRY_BASE_MS * Math.pow(2, attempt - 1); // exponential backoff
-        await new Promise(r => setTimeout(r, delay));
-      }
-    }
-  }
-  throw lastErr;
+async function _sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
 }
 
 function _isUsable(text) {
   return typeof text === "string" && text.trim().length > OUTPUT_MIN_LENGTH;
 }
 
-/**
- * Strict output validation — throws if AI output cannot be used.
- * This is the enforcement point for the "NEVER return success on bad output" guarantee.
- */
 function _validateRawOutput(text, context = "generation") {
   if (!text || typeof text !== "string") {
     throw new Error(`AI output is null or non-string [${context}]`);
@@ -366,13 +375,166 @@ function _validateRawOutput(text, context = "generation") {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NUCLEAR FALLBACK PAGE — only used for generate mode when ALL providers fail
+// MODEL CALLERS
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function _callOpenRouterOrGroq(model, messages) {
+  const body = JSON.stringify({
+    model:      model.modelName,
+    messages,
+    max_tokens: getDynamicTokens(model.id),
+  });
+
+  const res = await _fetchWithTimeout(model.url, {
+    method:  "POST",
+    headers: model.headers,
+    body,
+  });
+
+  // HTTP 402 — credit limit: skip model immediately, no retry
+  if (res.status === 402) {
+    const errText = await res.text().catch(() => "HTTP 402");
+    const err = new Error(`CREDIT_LIMIT: ${errText.slice(0, 200)}`);
+    err._skipModel = true;
+    throw err;
+  }
+
+  const rawText = await res.text().catch(() => `HTTP ${res.status}`);
+
+  if (_isDeprecationError(rawText)) {
+    const err = new Error(`Deprecation detected: ${rawText.slice(0, 120)}`);
+    err._dead = true;
+    throw err;
+  }
+
+  if (res.status === 400) {
+    const err      = new Error(`HTTP 400: ${rawText.slice(0, 200)}`);
+    err._skipModel = true;
+    throw err;
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    const err      = new Error(`Auth error HTTP ${res.status} — ${rawText.slice(0, 100)}`);
+    err._skipModel = true;
+    throw err;
+  }
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${rawText.slice(0, 200)}`);
+  }
+
+  let data;
+  try { data = JSON.parse(rawText); }
+  catch { throw new Error("Non-JSON response body"); }
+
+  const content = data?.choices?.[0]?.message?.content;
+  if (!_isUsable(content)) throw new Error("Empty or unusable response content");
+
+  if (_isDeprecationError(content)) {
+    const err = new Error(`Deprecation in response content: ${content.slice(0, 120)}`);
+    err._dead = true;
+    throw err;
+  }
+
+  return content;
+}
+
+async function _callGemini(model, messages) {
+  const key = model.apiKey;
+  if (!key) throw new Error("Gemini API key not configured");
+
+  // Separate system and user prompts — do NOT concatenate into one string
+  const systemMsg    = messages.find(m => m.role === "system");
+  const userMsg      = messages.find(m => m.role === "user");
+  const systemPrompt = systemMsg?.content || "";
+  const userPrompt   = userMsg?.content   || "";
+
+  const res = await _fetchWithTimeout(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+    {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: systemPrompt },
+              { text: userPrompt },
+            ],
+          },
+        ],
+        generationConfig: {
+          temperature:     0.4,
+          maxOutputTokens: getDynamicTokens("gemini"),
+        },
+      }),
+    }
+  );
+
+  // HTTP 402 — quota exceeded
+  if (res.status === 402) {
+    const errText = await res.text().catch(() => "HTTP 402");
+    const err = new Error(`CREDIT_LIMIT: ${errText.slice(0, 200)}`);
+    err._skipModel = true;
+    throw err;
+  }
+
+  if (!res.ok) {
+    const rawText = await res.text().catch(() => `HTTP ${res.status}`);
+    if (_isDeprecationError(rawText)) {
+      const err = new Error(`Gemini deprecation: ${rawText.slice(0, 120)}`);
+      err._dead = true;
+      throw err;
+    }
+    throw new Error(`Gemini HTTP ${res.status}: ${rawText.slice(0, 100)}`);
+  }
+
+  let data;
+  try { data = await res.json(); }
+  catch { throw new Error("Gemini non-JSON response"); }
+
+  const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+  if (!_isUsable(content)) throw new Error("Gemini empty response");
+  return content;
+}
+
+async function _callModel(model, messages) {
+  if (model.isGemini) return _callGemini(model, messages);
+  return _callOpenRouterOrGroq(model, messages);
+}
+
+/**
+ * Retry wrapper — no retry on _skipModel, _dead, or 402.
+ * Immediate throw → triggers model rotation in caller.
+ */
+async function _withModelRetry(model, messages, label) {
+  let lastErr;
+  for (let attempt = 1; attempt <= LLM_MAX_RETRIES + 1; attempt++) {
+    try {
+      return await _callModel(model, messages);
+    } catch (err) {
+      lastErr = err;
+      // No retry: credit limit, deprecation, auth/skip
+      if (err._dead || err._skipModel) throw err;
+      const reason = err.name === "AbortError" ? "timeout" : err.message;
+      console.warn(`[AI ERROR] ${label} | Attempt ${attempt} | ${reason}`);
+      if (attempt <= LLM_MAX_RETRIES) {
+        await _sleep(LLM_RETRY_BASE_MS * Math.pow(2, attempt - 1));
+      }
+    }
+  }
+  throw lastErr;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NUCLEAR FALLBACK PAGE — used when ALL models fail in generate mode
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _buildFallbackOutput(prompt, lastError) {
   const safePrompt = String(prompt || "your request")
     .replace(/</g, "&lt;").replace(/>/g, "&gt;").slice(0, 120);
-  const safeError  = String(lastError?.message || "All AI providers are currently unavailable")
+  const safeError  = String(lastError?.message || "All AI models are currently unavailable")
     .replace(/</g, "&lt;").replace(/>/g, "&gt;").slice(0, 200);
 
   return `=== FILE: index.html ===
@@ -431,25 +593,18 @@ button:hover { opacity: .85; }
 
 === FILE: script.js ===
 "use strict";
-console.log("[Aquiplex] Fallback page loaded — all providers failed.");`;
+console.log("[Aquiplex] Fallback page loaded — all AI models failed.");`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UNIFIED AI GENERATION ENGINE
+// UNIFIED AI GENERATION ENGINE — MODEL-FIRST
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
  * generateProjectUnified({ prompt, mode, editMode, previousFiles, targetFile, appType })
  *
- * THE single entry point for ALL AI generation in AQUIPLEX.
- *
- * BEHAVIOUR BY MODE:
- *   generate → on all-provider failure: returns nuclear fallback HTML (guaranteed safe)
- *   edit     → on all-provider failure: THROWS — never silently "succeeds" on edit
- *
- * @returns {Promise<{ rawOutput: string, source: string, intent: string }>}
- *   In generate mode: NEVER throws. rawOutput is ALWAYS a parseable string.
- *   In edit mode: THROWS on AI failure. Caller must handle.
+ * - generate mode: NEVER throws. Returns nuclear fallback on full failure.
+ * - edit mode: THROWS on failure. File is never touched.
  */
 async function generateProjectUnified({
   prompt,
@@ -464,7 +619,6 @@ async function generateProjectUnified({
   const sysPrompt = buildSystemPromptForType(intent);
   const context   = isEdit ? `edit:${targetFile}` : "generate";
 
-  // ── Build user message ──────────────────────────────────────────────────────
   let userMessage;
   if (isEdit && targetFile && previousFiles) {
     const fileContent = previousFiles[targetFile] || "";
@@ -486,18 +640,11 @@ async function generateProjectUnified({
     { role: "user",   content: userMessage },
   ];
 
-  const buildBody = (model) =>
-    JSON.stringify({
-      model,
-      messages,
-      max_tokens: LLM_MAX_TOKENS, // HARD CAP — prevents 4096 overflow crashes
-    });
+  const MODELS = buildModelRegistry();
 
-  const PROVIDERS = buildProviders();
-
-  if (PROVIDERS.length === 0) {
-    const err = new Error("No API keys configured. Set OPENROUTER_API_KEY or GROQ_API_KEY.");
-    console.error(`[AI ERROR] No providers configured`);
+  if (MODELS.length === 0) {
+    const err = new Error("No API keys configured. Set GROQ_API_KEY, GEMINI_API_KEY, or OPENROUTER_API_KEY.");
+    console.error(`[AI ERROR] No models configured`);
     if (isEdit) throw err;
     return {
       rawOutput: _buildFallbackOutput(prompt, err),
@@ -508,85 +655,50 @@ async function generateProjectUnified({
 
   let lastError = null;
 
-  for (const provider of PROVIDERS) {
-    // Skip providers that are in cooldown
-    if (!_isProviderHealthy(provider.name)) {
-      console.warn(`[AI ENGINE] Skipping unhealthy provider: ${provider.name}`);
+  for (const model of MODELS) {
+    if (!_isModelHealthy(model.id)) {
+      console.warn(`[AI ENGINE] Skipping unhealthy model: ${model.id}`);
       continue;
     }
 
-    for (const model of provider.models) {
-      const label = `${provider.name} | ${model}`;
-      try {
-        const text = await _withRetry(async () => {
-          const res = await _fetchWithTimeout(provider.url, {
-            method:  "POST",
-            headers: provider.headers,
-            body:    buildBody(model),
-          });
+    const label = model.id;
+    console.log(`[AI ENGINE] Trying model: ${label}`);
 
-          if (res.status === 400) {
-            const errText  = await res.text().catch(() => "HTTP 400");
-            const err      = new Error(`HTTP 400: ${errText.slice(0, 200)}`);
-            err._skipModel = true;
-            throw err;
-          }
+    try {
+      const text = await _withModelRetry(model, messages, label);
 
-          if (res.status === 401 || res.status === 403) {
-            const err      = new Error(`Auth error HTTP ${res.status} — check API key for ${provider.name}`);
-            err._skipModel = true;
-            throw err;
-          }
+      _validateRawOutput(text, context);
 
-          if (!res.ok) {
-            const errText = await res.text().catch(() => `HTTP ${res.status}`);
-            throw new Error(`HTTP ${res.status}: ${errText.slice(0, 200)}`);
-          }
+      _recordModelSuccess(model.id);
+      console.log(`[AI ENGINE] ✅ Success | ${label} | ${text.length} chars`);
+      return { rawOutput: text, source: "ai", intent };
 
-          let data;
-          try { data = await res.json(); }
-          catch { throw new Error("Non-JSON response body"); }
+    } catch (err) {
+      lastError = err;
 
-          const content = data?.choices?.[0]?.message?.content;
-          if (!_isUsable(content)) throw new Error("Empty or unusable response content");
-          return content;
-
-        }, LLM_MAX_RETRIES, label);
-
-        // ── Strict output validation before declaring success ─────────────────
-        _validateRawOutput(text, context); // throws if invalid
-
-        _recordProviderSuccess(provider.name);
-        console.log(`[AI ENGINE] ✅ Success | ${label} | output: ${text.length} chars`);
-        return { rawOutput: text, source: "ai", intent };
-
-      } catch (err) {
-        lastError = err;
-        if (err._skipModel) {
-          console.warn(`[AI ERROR] ${label} | Model skipped: ${err.message}`);
-        } else {
-          console.warn(`[AI ERROR] ${label} | ${err.message}`);
-          _recordProviderFailure(provider.name);
-        }
-        console.log(`[AI ENGINE] Rotating to next model/provider...`);
+      if (err._dead) {
+        _markModelDead(model.id, err.message);
+      } else if (err._skipModel) {
+        console.warn(`[AI ERROR] ${label} | Model skipped (credit/auth): ${err.message}`);
+        _recordModelFailure(model.id);
+      } else {
+        console.warn(`[AI ERROR] ${label} | ${err.message}`);
+        _recordModelFailure(model.id);
       }
-    }
 
-    console.warn(`[AI ENGINE] Provider exhausted: ${provider.name}`);
+      console.log(`[AI ENGINE] Rotating to next model...`);
+    }
   }
 
-  // ── ALL PROVIDERS FAILED ───────────────────────────────────────────────────
-  console.error(`[AI ERROR] ALL PROVIDERS FAILED | Last error: ${lastError?.message}`);
+  console.error(`[AI ERROR] ALL MODELS FAILED | Last: ${lastError?.message}`);
 
-  // Edit mode: NEVER silently succeed — throw so the caller does NOT overwrite files
   if (isEdit) {
     throw new Error(
-      `AI edit failed — all providers exhausted. File was NOT modified. ` +
+      `AI edit failed — all models exhausted. File was NOT modified. ` +
       `Last error: ${lastError?.message || "unknown"}`
     );
   }
 
-  // Generate mode: return clean fallback UI
   return {
     rawOutput: _buildFallbackOutput(prompt, lastError),
     source:    "nuclear_fallback",
@@ -604,7 +716,7 @@ function sanitizeFileName(name) {
     .replace(/\\/g, "/")
     .replace(/^\/+/, "")
     .replace(/\0/g, "")
-    .replace(/\.\.\//g, "") // prevent path traversal
+    .replace(/\.\.\//g, "")
     .trim();
   if (!cleaned) return "";
   const ext = path.extname(cleaned).toLowerCase();
@@ -650,18 +762,6 @@ function _fallbackFile(reason = "", content = null) {
   };
 }
 
-/**
- * parseMultiFileOutput — strict parser.
- *
- * GUARANTEES:
- *   - NEVER returns an empty array
- *   - ALWAYS includes index.html
- *   - Rejects malformed output (files with no content)
- *   - Rejects files with disallowed extensions
- *
- * NOTE: This parser trusts that _validateRawOutput() was called first.
- * It still handles edge cases defensively but does NOT produce silent successes.
- */
 function parseMultiFileOutput(raw) {
   if (!raw || typeof raw !== "string") {
     console.warn("[PROJECT ENGINE] Parser received empty/null output — using fallback");
@@ -673,7 +773,6 @@ function parseMultiFileOutput(raw) {
     .replace(/^```\s*$/gm, "")
     .trim();
 
-  // Normalise delimiter variants: == FILE:, ==FILE:, === FILE :, etc.
   cleaned = cleaned
     .replace(/={2,}\s*FILE\s*:\s*/gi, "=== FILE: ")
     .replace(/\s*={2,}\s*$/gm, " ===");
@@ -721,7 +820,6 @@ function parseMultiFileOutput(raw) {
     return [_fallbackFile("All file blocks were empty or had disallowed extensions")];
   }
 
-  // ── Guarantee index.html is always present ──────────────────────────────────
   const hasIndex = files.some(f => f.fileName === "index.html");
   if (!hasIndex) {
     const htmlFile = files.find(f => f.fileName.endsWith(".html"));
@@ -750,7 +848,6 @@ function parseMultiFileOutput(raw) {
     }
   }
 
-  // ── Guarantee style.css and script.js ───────────────────────────────────────
   if (!files.some(f => f.fileName === "style.css")) {
     files.push({ fileName: "style.css", content: "/* Generated stylesheet */\n", language: "css" });
   }
@@ -763,7 +860,7 @@ function parseMultiFileOutput(raw) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FILE SYSTEM HELPERS — atomic writes, path safety, extension whitelist
+// FILE SYSTEM HELPERS
 // ─────────────────────────────────────────────────────────────────────────────
 
 function projectDir(projectId) {
@@ -788,13 +885,11 @@ async function saveProjectFiles(projectId, files, meta = {}) {
   try {
     const raw     = await fs.readFile(path.join(dir, "_index.json"), "utf8");
     existingIndex = JSON.parse(raw);
-  } catch { /* first save — no existing index */ }
+  } catch {}
 
-  // ── Write all files atomically (all-or-nothing via tmp files) ───────────────
   const writeResults = await Promise.allSettled(
     files.map(async file => {
       const filePath = path.join(dir, file.fileName);
-      // Double-check path is within project dir
       if (!filePath.startsWith(dir + path.sep) && filePath !== dir) {
         throw new Error(`Path traversal rejected: ${file.fileName}`);
       }
@@ -854,8 +949,8 @@ async function readProjectFiles(projectId) {
         const content = await fs.readFile(path.join(dir, "index.html"), "utf8");
         files.unshift({ fileName: "index.html", content, language: "html" });
         index.files = ["index.html", ...index.files];
-        console.warn(`[PROJECT ENGINE] index.html found on disk but missing from manifest — recovered`);
-      } catch { /* no index.html on disk either */ }
+        console.warn(`[PROJECT ENGINE] index.html recovered from disk`);
+      } catch {}
     }
 
     return { index, files };
@@ -939,7 +1034,7 @@ async function listProjects() {
             createdAt: index.createdAt  || null,
             updatedAt: index.updatedAt  || null,
           });
-        } catch { /* malformed or missing index — skip */ }
+        } catch {}
       })
     );
 
@@ -956,7 +1051,7 @@ async function listProjects() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROJECT SERVICES — all AI generation routed through generateProjectUnified
+// PROJECT SERVICES
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function createProject(userId, name, projectId = null) {
@@ -977,15 +1072,6 @@ async function createProject(userId, name, projectId = null) {
   return { success: true, projectId: id, name: index.name };
 }
 
-/**
- * generateProject — full multi-file AI generation.
- *
- * Guarantees:
- *   - index.html, style.css, script.js are ALWAYS written
- *   - _index.json is ALWAYS saved on success
- *   - On nuclear fallback: success: true with fallback HTML (user sees UI, not crash)
- *   - On actual AI success: validated output only
- */
 async function generateProject(userId, projectId, prompt) {
   if (!userId)               throw new Error("Unauthorized");
   if (!projectId || !prompt) throw new Error("projectId and prompt are required");
@@ -1000,16 +1086,13 @@ async function generateProject(userId, projectId, prompt) {
     appType,
   });
 
-  // For nuclear_fallback, rawOutput is pre-validated and contains === FILE: ===
-  // For ai source, _validateRawOutput was already called inside generateProjectUnified
-  const files = parseMultiFileOutput(rawOutput); // ALWAYS non-empty, always has index.html
+  const files = parseMultiFileOutput(rawOutput);
 
-  // ── Preserve existing metadata ──────────────────────────────────────────────
   let existingMeta = {};
   try {
     const raw    = await fs.readFile(path.join(projectDir(projectId), "_index.json"), "utf8");
     existingMeta = JSON.parse(raw);
-  } catch { /* no existing index — fine */ }
+  } catch {}
 
   const meta = {
     name:   (existingMeta.name || String(prompt).slice(0, 80) || "Generated Project"),
@@ -1037,14 +1120,6 @@ async function generateProject(userId, projectId, prompt) {
   };
 }
 
-/**
- * editProjectFile — AI single-file edit.
- *
- * CRITICAL GUARANTEE:
- *   - If AI output is invalid → throws → file is NEVER overwritten
- *   - Only writes to disk after full validation passes
- *   - Returns { success: false } path is handled at route level via thrown error
- */
 async function editProjectFile(userId, projectId, filename, command) {
   if (!userId)   throw new Error("Unauthorized");
   if (!filename) throw new Error("filename is required");
@@ -1064,7 +1139,6 @@ async function editProjectFile(userId, projectId, filename, command) {
   const previousFiles = {};
   existingFiles.forEach(f => { previousFiles[f.fileName] = f.content; });
 
-  // generateProjectUnified in edit mode THROWS on failure — file will NOT be touched
   const { rawOutput } = await generateProjectUnified({
     prompt:        command,
     mode:          "edit",
@@ -1073,21 +1147,17 @@ async function editProjectFile(userId, projectId, filename, command) {
     targetFile:    safeFilename,
   });
 
-  // rawOutput was already validated inside generateProjectUnified (throws on invalid)
-  // Parse to get the updated file content
   const parsed = parseMultiFileOutput(rawOutput);
 
   if (!parsed.length) {
     throw new Error("AI returned no file content for edit — file was NOT modified");
   }
 
-  // Verify parsed output actually contains meaningful content
   const editedFile = parsed.find(f => f.fileName === safeFilename) || parsed[0];
   if (!editedFile || !editedFile.content || editedFile.content.trim().length < 10) {
     throw new Error(`AI returned empty content for ${safeFilename} — file was NOT modified`);
   }
 
-  // ── Only now do we write to disk — ALL validation passed ────────────────────
   const writtenFiles = [];
   for (const file of parsed) {
     const targetName = (file.fileName === safeFilename || parsed.length === 1)
@@ -1172,7 +1242,7 @@ async function deleteProjectById(userId, projectId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FALLBACK TEMPLATE ENGINE — bundle step outputs (unchanged)
+// BUNDLE STEP FALLBACK TEMPLATES
 // ─────────────────────────────────────────────────────────────────────────────
 
 const INSIGHT_TEMPLATES = [
@@ -1414,7 +1484,7 @@ async function completeStep(userId, bundleId, stepIdx, payload = {}) {
   let outputEntry;
   if (payload.useAI) {
     try {
-      const step     = steps[idx];
+      const step       = steps[idx];
       const stepPrompt =
         `Complete this step for the project bundle titled "${bundle.title || "Untitled"}":\n` +
         `Goal: ${bundle.goal || "Not specified"}\n` +
@@ -1422,7 +1492,7 @@ async function completeStep(userId, bundleId, stepIdx, payload = {}) {
         `Description: ${step.description || "No description"}\n\n` +
         `Provide a detailed, actionable output for this step.`;
 
-      const aiRes  = await generateProjectUnified({ prompt: stepPrompt, mode: "generate" });
+      const aiRes     = await generateProjectUnified({ prompt: stepPrompt, mode: "generate" });
       const rawOutput = aiRes.rawOutput;
 
       outputEntry = {
@@ -1597,10 +1667,7 @@ async function autoProgressNext(userId, bundleId) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
-  // ── UNIFIED AI ENGINE ─────────────────────────────────────────────────────
   generateProjectUnified,
-
-  // ── Workspace services ────────────────────────────────────────────────────
   getWorkspaceState,
   getBundleState,
   runBundle,
@@ -1611,8 +1678,6 @@ module.exports = {
   unpinBundle,
   updateWorkspaceMemory,
   autoProgressNext,
-
-  // ── Project / code-gen services ───────────────────────────────────────────
   createProject,
   generateProject,
   editProjectFile,
@@ -1621,8 +1686,6 @@ module.exports = {
   getProjectFile,
   saveProjectFile,
   deleteProjectById,
-
-  // ── Exported helpers ──────────────────────────────────────────────────────
   detectAppType,
   parseMultiFileOutput,
   readSingleFile,

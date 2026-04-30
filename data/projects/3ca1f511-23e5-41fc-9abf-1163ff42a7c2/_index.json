@@ -1,0 +1,15 @@
+{
+  "projectId": "3ca1f511-23e5-41fc-9abf-1163ff42a7c2",
+  "name": "build a pomodoro timer with premium functions and ui",
+  "userId": "69b6c6d87c83e9504c4e0cde",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-04-30T06:48:18.102Z",
+  "updatedAt": "2026-04-30T06:48:21.100Z",
+  "prompt": "build a pomodoro timer with premium functions and ui",
+  "source": "nuclear_fallback",
+  "intent": "tool"
+}

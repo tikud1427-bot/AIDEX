@@ -1,0 +1,75 @@
+body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+    margin: 0;
+    padding: 0;
+}
+
+.header {
+    background-color: #007bff;
+    color: #ffffff;
+    padding: 20px;
+    text-align: center;
+}
+
+.main {
+    max-width: 600px;
+    margin: 40px auto;
+}
+
+.timer-container {
+    text-align: center;
+    padding: 20px;
+    border-bottom: 1px solid #ddd;
+}
+
+.timer-container button {
+    margin: 10px;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+.timer-container button:hover {
+    background-color: #007bff;
+    color: #ffffff;
+}
+
+.settings-container {
+    padding: 20px;
+    border-bottom: 1px solid #ddd;
+}
+
+.settings-container label {
+    display: inline-block;
+    width: 100px;
+    text-align: right;
+    margin: 10px;
+}
+
+.settings-container input {
+    margin: 10px;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.history-container {
+    padding: 20px;
+}
+
+.history-container ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.history-container li {
+    padding: 10px;
+    border-bottom: 1px solid #ddd;
+}
+
+.history-container li:last-child {
+    border-bottom: none;
+}
