@@ -27,7 +27,7 @@
       <button id="search-btn">Search the Directory</button>
       <form id="search-form">
         <input type="search" id="search-input" placeholder="Search...">
-        <button id="search-submit">Search</button>
+        <button type="submit" id="search-submit">Search</button>
       </form>
     </section>
     <section id="about">
@@ -38,22 +38,21 @@
       <h1>Directory</h1>
       <ul id="directory-list">
         <li>
-          <h2>Organization XYZ</h2>
+          <h2>Aquiplex</h2>
           <p>A leading AI research institution with a focus on computer vision.</p>
           <button class="more-info-btn">More Info</button>
-          <div class="more-info-container">
-            <p>Organization XYZ is a non-profit research institution dedicated to advancing the field of artificial intelligence. Their research focuses on developing innovative computer vision techniques for a variety of applications.</p>
+          <div class="more-info-container hidden">
+            <p>Aquiplex is a non-profit research institution dedicated to advancing the field of artificial intelligence. Their research focuses on developing innovative computer vision techniques for a variety of applications.</p>
           </div>
         </li>
         <li>
           <h2>AI Developer</h2>
           <p>A highly skilled AI developer with expertise in natural language processing and machine learning.</p>
           <button class="more-info-btn">More Info</button>
-          <div class="more-info-container">
+          <div class="more-info-container hidden">
             <p>AI Developer is a skilled professional with years of experience in developing AI solutions. Their expertise lies in natural language processing and machine learning, and they have developed several successful projects in these areas.</p>
           </div>
         </li>
-        <!-- Add more directory entries here -->
       </ul>
     </section>
     <section id="contact">
@@ -63,39 +62,23 @@
   </main>
   <script src="script.js"></script>
   <script>
-    let searchInput = document.getElementById('search-input');
-    let searchSubmit = document.getElementById('search-submit');
-    let searchList = document.getElementById('directory-list');
-
-    searchSubmit.addEventListener('click', (e) => {
+    document.getElementById('search-submit').addEventListener('click', (e) => {
       e.preventDefault();
-      let searchString = searchInput.value.toLowerCase();
-      let listItems = searchList.children;
-      for (let i = 0; i < listItems.length; i++) {
-        let li = listItems[i];
-        let name = li.querySelector('h2').textContent.toLowerCase();
-        let desc = li.querySelector('p').textContent.toLowerCase();
-        if (name.includes(searchString) || desc.includes(searchString)) {
-          li.style.display = '';
-        } else {
-          li.style.display = 'none';
-        }
-      }
+      const searchInput = document.getElementById('search-input').value.toLowerCase();
+      const listItems = document.querySelectorAll('#directory-list li');
+      
+      listItems.forEach(li => {
+        const name = li.querySelector('h2').textContent.toLowerCase();
+        const desc = li.querySelector('p').textContent.toLowerCase();
+        li.style.display = (name.includes(searchInput) || desc.includes(searchInput)) ? '' : 'none';
+      });
     });
 
-    let moreInfoButtons = document.querySelectorAll('.more-info-btn');
-    let moreInfoContainers = document.querySelectorAll('.more-info-container');
-
-    moreInfoButtons.forEach((button, index) => {
+    document.querySelectorAll('.more-info-btn').forEach((button, index) => {
       button.addEventListener('click', () => {
-        let container = moreInfoContainers[index];
-        if (container.classList.contains('hidden')) {
-          container.classList.remove('hidden');
-          button.textContent = 'Less Info';
-        } else {
-          container.classList.add('hidden');
-          button.textContent = 'More Info';
-        }
+        const container = document.querySelectorAll('.more-info-container')[index];
+        container.classList.toggle('hidden');
+        button.textContent = container.classList.contains('hidden') ? 'More Info' : 'Less Info';
       });
     });
   </script>

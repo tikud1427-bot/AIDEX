@@ -1,0 +1,15 @@
+{
+  "projectId": "dddaa3c5-bbb4-4839-959a-fd9b2e7af592",
+  "name": "build a game",
+  "userId": "69b6c6d87c83e9504c4e0cde",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-04-30T02:47:31.823Z",
+  "updatedAt": "2026-04-30T03:00:45.937Z",
+  "prompt": "build a game",
+  "source": "ai",
+  "intent": "game"
+}

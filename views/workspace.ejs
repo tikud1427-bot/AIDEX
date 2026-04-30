@@ -307,7 +307,6 @@
         <h2>Aquiplex Workspace</h2>
         <p>Generate a project with AI, monitor execution bundles, or pick up where you left off.</p>
 
-        <!-- Example prompts -->
         <div class="aq-welcome-prompts" id="welcomePrompts">
           <span class="aq-welcome-prompt-chip" onclick="_fillPrompt(this.textContent)">Landing page for a SaaS product</span>
           <span class="aq-welcome-prompt-chip" onclick="_fillPrompt(this.textContent)">Portfolio site with dark mode</span>
@@ -378,7 +377,6 @@ const STATE = {
   lastBundleId: null,
   stepRunning:  new Set(),
   allBundles:   [],
-  // project state
   projectId:    null,
   projectFiles: [],
   activeFile:   null,
@@ -389,13 +387,15 @@ const STATE = {
 const _ejsBundles = JSON.parse(decodeURIComponent("<%- encodeURIComponent(JSON.stringify(bundles || [])) %>"));
 STATE.allBundles = _ejsBundles.slice();
 
-// Handle server-side auto-open (when navigating to /workspace/project/:id)
 const _openProjectId   = "<%= typeof openProjectId !== 'undefined' && openProjectId ? openProjectId : '' %>";
 const _openProjectName = "<%= typeof openProjectName !== 'undefined' && openProjectName ? openProjectName : '' %>";
 
 /* ─── LOADING BAR ─── */
-function showLoading()  { document.getElementById("aqLoadingBar").classList.add("visible");    STATE.loading = true; }
-function hideLoading()  { document.getElementById("aqLoadingBar").classList.remove("visible"); STATE.loading = false; }
+function showLoading() { document.getElementById("aqLoadingBar").classList.add("visible");    STATE.loading = true; }
+function hideLoading() { document.getElementById("aqLoadingBar").classList.remove("visible"); STATE.loading = false; }
+
+/* ─── STATUS / UX FEEDBACK ─── */
+function showStatus(msg, type = "info") { toast(msg, type); }
 
 /* ─── VIEW HELPERS ─── */
 function showView(id) {
@@ -405,7 +405,12 @@ function showView(id) {
     el.style.display = (v === id) ? "flex" : "none";
   });
 }
-function retryLoad() { if (STATE.lastBundleId) { const b = STATE.allBundles.find(x=>String(x._id)===String(STATE.lastBundleId)); if(b) selectBundle(b); } }
+function retryLoad() {
+  if (STATE.lastBundleId) {
+    const b = STATE.allBundles.find(x => String(x._id) === String(STATE.lastBundleId));
+    if (b) selectBundle(b);
+  }
+}
 
 /* ─── CONFIRM ─── */
 let _confirmResolve = null;
@@ -441,7 +446,7 @@ function showRunModalOutput(content) {
 function closeRunModal() { document.getElementById("aqRunModal").classList.remove("open"); }
 
 /* ─── SIDEBAR ─── */
-function openSidebar()  {
+function openSidebar() {
   document.getElementById("aqSidebar").classList.add("open");
   document.getElementById("sidebarCloseBtn").style.display = "flex";
   document.getElementById("aqDrawerOverlay").classList.add("visible");
@@ -463,7 +468,7 @@ function switchLeftTab(tab, btn) {
     btn.setAttribute("aria-selected", "true");
   } else {
     document.querySelectorAll(".aq-sidebar-tab").forEach(b => {
-      if(b.textContent.trim().toLowerCase().startsWith(tab[0])) {
+      if (b.textContent.trim().toLowerCase().startsWith(tab[0])) {
         b.classList.add("active");
         b.setAttribute("aria-selected", "true");
       }
@@ -476,16 +481,16 @@ function switchRightTab(tab, btn) {
   document.querySelectorAll(".aq-right-tab").forEach(b => b.classList.remove("active"));
   document.querySelectorAll(".aq-right-section").forEach(s => s.classList.remove("active"));
   if (btn) btn.classList.add("active");
-  else { const t = document.querySelector(`.aq-right-tab[data-tab="${tab}"]`); if(t) t.classList.add("active"); }
+  else { const t = document.querySelector(`.aq-right-tab[data-tab="${tab}"]`); if (t) t.classList.add("active"); }
   const sec = document.getElementById("rtab-" + tab);
-  if (sec) { sec.classList.add("active"); sec.style.opacity="0"; requestAnimationFrame(()=>requestAnimationFrame(()=>sec.style.opacity="1")); }
+  if (sec) { sec.classList.add("active"); sec.style.opacity = "0"; requestAnimationFrame(() => requestAnimationFrame(() => sec.style.opacity = "1")); }
 }
 
 /* ─── MOBILE NAV ─── */
 function mobileNavSwitch(view, btn) {
   document.querySelectorAll(".aq-bottom-tab").forEach(b => b.classList.remove("active"));
   if (btn) btn.classList.add("active");
-  if (view === "projects") { openSidebar(); switchLeftTab("projects"); }
+  if (view === "projects")     { openSidebar(); switchLeftTab("projects"); }
   else if (view === "bundles") { openSidebar(); switchLeftTab("bundles"); }
   else { closeSidebar(); }
 }
@@ -493,11 +498,11 @@ function mobileNavSwitch(view, btn) {
 /* ─── PROMPT HELPERS ─── */
 function focusPrompt() {
   const i = document.getElementById("topPromptInput");
-  if(i){ i.focus(); i.select(); }
+  if (i) { i.focus(); i.select(); }
 }
 function focusAiEdit() {
   const i = document.getElementById("aiEditInput");
-  if(i){ i.focus(); i.select(); }
+  if (i) { i.focus(); i.select(); }
 }
 function _fillPrompt(text) {
   const i = document.getElementById("topPromptInput");
@@ -506,7 +511,7 @@ function _fillPrompt(text) {
 let _promptHintTimer;
 function _debouncePromptHint(val) {
   clearTimeout(_promptHintTimer);
-  // no-op placeholder for future prompt suggestions
+  // placeholder for future prompt suggestions
 }
 
 /* ─── INIT ─── */
@@ -514,7 +519,6 @@ window.addEventListener("DOMContentLoaded", async () => {
   initBundleSwitcher();
   await loadProjectList();
 
-  // Auto-open a project if navigated to /workspace/project/:id
   if (_openProjectId) {
     await openProject(_openProjectId, _openProjectName || "Project");
     switchLeftTab("projects");
@@ -557,17 +561,17 @@ function initBundleSwitcher() {
     const saved = localStorage.getItem("aq_activeBundle");
     if (saved) sw.value = saved;
     sw.onchange = () => {
-      const id = sw.value; const found = STATE.allBundles.find(b => String(b._id) === id);
+      const id = sw.value;
+      const found = STATE.allBundles.find(b => String(b._id) === id);
       if (found) { localStorage.setItem("aq_activeBundle", id); selectBundle(found); }
     };
   }
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
+/* ═════════════════════════════════════════════════════════════════════════════
    PROJECT ENGINE
-───────────────────────────────────────────────────────────────────────────── */
+═════════════════════════════════════════════════════════════════════════════*/
 
-// [FIX] Correct endpoint: /workspace/project/list
 async function loadProjectList() {
   try {
     const res  = await fetch("/workspace/project/list");
@@ -596,13 +600,16 @@ function renderProjectList(projects) {
     </div>`).join("");
 }
 
-// [FIX] Two-step: create project first, then generate using returned projectId
 async function promptNewProject() {
   const name = window.prompt("Project name:");
   if (!name || !name.trim()) return;
   showLoading();
   try {
-    const res  = await fetch("/workspace/project/create", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ name: name.trim() }) });
+    const res  = await fetch("/workspace/project/create", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ name: name.trim() }),
+    });
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Create failed");
     await loadProjectList();
@@ -613,7 +620,6 @@ async function promptNewProject() {
   finally { hideLoading(); }
 }
 
-// [FIX] Full corrected flow: create → generate → load files → preview
 async function generateProject() {
   const input  = document.getElementById("topPromptInput");
   const prompt = input.value.trim();
@@ -627,14 +633,13 @@ async function generateProject() {
   btn.textContent = "⏳ Generating…";
   if (stickyBtn) { stickyBtn.disabled = true; stickyBtn.textContent = "⏳…"; }
 
-  // show project view with overlay
   showView("wsProjectView");
   _setGenStep(1);
-  document.getElementById("genOverlay").style.display     = "flex";
-  document.getElementById("genOverlayMsg").textContent    = "Creating project…";
-  document.getElementById("codeEditor").value             = "";
-  document.getElementById("fileTabs").innerHTML           = "";
-  document.getElementById("editorFilename").textContent   = "Generating…";
+  document.getElementById("genOverlay").style.display   = "flex";
+  document.getElementById("genOverlayMsg").textContent  = "Creating project…";
+  document.getElementById("codeEditor").value           = "";
+  document.getElementById("fileTabs").innerHTML         = "";
+  document.getElementById("editorFilename").textContent = "Generating…";
   _hideUnsavedIndicator();
 
   try {
@@ -664,7 +669,6 @@ async function generateProject() {
     STATE.projectId    = String(projectId);
     STATE.projectFiles = genData.files || [];
     STATE.dirtyFiles.clear();
-
     document.getElementById("topBreadcrumb").textContent = projectName;
 
     _setGenStep(3);
@@ -676,6 +680,7 @@ async function generateProject() {
     const defaultFile = STATE.projectFiles.find(f => f === "index.html") || STATE.projectFiles[0];
     if (defaultFile) {
       await loadFile(defaultFile);
+      // loadFile is awaited — file is confirmed written; safe to refresh now
       refreshPreview();
     }
 
@@ -695,16 +700,15 @@ async function generateProject() {
 }
 
 function _setGenStep(n) {
-  [1,2,3].forEach(i => {
-    const el = document.getElementById("genStep"+i);
+  [1, 2, 3].forEach(i => {
+    const el = document.getElementById("genStep" + i);
     if (!el) return;
     el.className = "aq-gen-step" + (i < n ? " done" : i === n ? " active" : "");
   });
 }
 
-// [FIX] Correct endpoint: /workspace/project/:id/files
 async function openProject(id, name) {
-  STATE.projectId    = String(id);
+  STATE.projectId = String(id);
   STATE.dirtyFiles.clear();
   _hideUnsavedIndicator();
   document.getElementById("topBreadcrumb").textContent = name || "Project";
@@ -720,19 +724,21 @@ async function openProject(id, name) {
     STATE.projectFiles = data.files || [];
     renderFileTabs(STATE.projectFiles);
     const defaultFile = STATE.projectFiles.find(f => f === "index.html") || STATE.projectFiles[0];
-    if (defaultFile) await loadFile(defaultFile);
+    if (defaultFile) {
+      await loadFile(defaultFile);
+      refreshPreview();
+    }
   } catch(e) { toast("Error loading project: " + e.message, "error"); }
   finally { hideLoading(); }
   if (window.innerWidth < 768) closeSidebar();
 }
 
-// [FIX] Correct endpoint: DELETE /workspace/project/:id
 async function deleteProject(id) {
   const ok = await showConfirm("Delete Project", "Permanently delete this project and all files?", "Delete");
   if (!ok) return;
   showLoading();
   try {
-    const res = await fetch(`/workspace/project/${encodeURIComponent(id)}`, { method:"DELETE" });
+    const res  = await fetch(`/workspace/project/${encodeURIComponent(id)}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (data.success === false) throw new Error(data.error || "Delete failed");
     await loadProjectList();
@@ -753,7 +759,7 @@ function renderFileTabs(files) {
     return e === "html" ? "📄" : e === "css" ? "🎨" : e === "js" ? "⚙️" : e === "json" ? "📊" : "📄";
   };
   tabs.innerHTML = files.map(f => {
-    const isDirty = STATE.dirtyFiles.has(f);
+    const isDirty  = STATE.dirtyFiles.has(f);
     const isActive = f === STATE.activeFile;
     return `
     <button class="aq-file-tab ${isActive ? 'active' : ''}"
@@ -766,14 +772,10 @@ function renderFileTabs(files) {
   }).join("");
 }
 
-// [FIX] Correct endpoint: /workspace/file/:projectId/:filename
 async function loadFile(filename) {
   if (!STATE.projectId || !filename) return;
-
-  // Smooth file switch: fade out
   const editor = document.getElementById("codeEditor");
   editor.classList.add("loading");
-
   STATE.activeFile = filename;
   renderFileTabs(STATE.projectFiles);
   document.getElementById("editorFilename").textContent = filename;
@@ -785,8 +787,6 @@ async function loadFile(filename) {
     if (!data.success) throw new Error(data.error || "Load failed");
     const content = (data.file && data.file.content !== undefined) ? data.file.content : "";
     editor.value = typeof content === "string" ? content : JSON.stringify(content, null, 2);
-    refreshPreview();
-    // Update unsaved indicator
     if (STATE.dirtyFiles.has(filename)) { _showUnsavedIndicator(); } else { _hideUnsavedIndicator(); }
   } catch(e) { toast("Error loading file: " + e.message, "error"); }
   finally {
@@ -811,7 +811,7 @@ function _hideUnsavedIndicator() {
   if (el) el.classList.remove("visible");
 }
 
-// [FIX] Correct endpoint: /workspace/save-file
+/* ─── SAVE: await backend → safeRefreshPreview() ─── */
 async function saveCurrentFile() {
   if (!STATE.projectId || !STATE.activeFile) { toast("No file to save", "info"); return; }
   const content = document.getElementById("codeEditor").value;
@@ -827,13 +827,14 @@ async function saveCurrentFile() {
     STATE.dirtyFiles.delete(STATE.activeFile);
     renderFileTabs(STATE.projectFiles);
     _hideUnsavedIndicator();
-    refreshPreview();
+    // Backend confirmed write — safe to refresh immediately
+    safeRefreshPreview();
     toast("Saved ✓", "success");
   } catch(e) { toast("Save failed: " + e.message, "error"); }
   finally { hideLoading(); }
 }
 
-// [FIX] Correct endpoint: /workspace/edit-file
+/* ─── AI EDIT: await full response → reload file → safeRefreshPreview() ─── */
 async function aiEditFile() {
   if (!STATE.projectId || !STATE.activeFile) { toast("Open a file first", "info"); return; }
   const instruction = document.getElementById("aiEditInput").value.trim();
@@ -852,7 +853,10 @@ async function aiEditFile() {
     const data = await res.json();
     if (!data.success) throw new Error(data.error || "Edit failed");
     document.getElementById("aiEditInput").value = "";
+    // Await the file reload — confirms the new content is readable from disk
     await loadFile(STATE.activeFile);
+    // File confirmed ready → refresh preview with no delays
+    safeRefreshPreview();
     toast("Edit applied ✓", "success");
   } catch(e) { toast("AI edit failed: " + e.message, "error"); }
   finally {
@@ -861,26 +865,78 @@ async function aiEditFile() {
   }
 }
 
-// [FIX] Preview uses /workspace/project/:id/:file
+/* ─── PREVIEW SYSTEM ─── */
+
+/**
+ * _getEntryFile() — resolve the entry file from STATE.projectFiles.
+ * Prefers index.html, falls back to first file, then "index.html" literal.
+ */
+function _getEntryFile() {
+  return STATE.projectFiles.find(f => f === "index.html")
+    || STATE.projectFiles[0]
+    || "index.html";
+}
+
+/**
+ * refreshPreview() — fire-and-forget iframe reload.
+ * UUIDs are URL-safe. Plain filenames are safe. No encodeURIComponent needed.
+ * Cache-busted with ?v= to bypass browser caching.
+ */
 function refreshPreview() {
-  if (!STATE.projectId || !STATE.activeFile) return;
+  if (!STATE.projectId) return;
   const frame  = document.getElementById("previewFrame");
   const urlEl  = document.getElementById("previewUrl");
-  const url    = `/workspace/project/${encodeURIComponent(STATE.projectId)}/${encodeURIComponent(STATE.activeFile)}`;
+  const entry  = _getEntryFile();
+  const url    = `/workspace/project/${STATE.projectId}/preview/${entry}`;
+  const busted = `${url}?v=${Date.now()}`;
   frame.classList.add("loading");
-  frame.src    = url + "?t=" + Date.now();
+  frame.src = busted;
   if (urlEl) urlEl.textContent = url;
 }
 
-function openPreviewInTab() {
-  if (!STATE.projectId || !STATE.activeFile) { toast("No file to preview", "info"); return; }
-  const url = `/workspace/project/${encodeURIComponent(STATE.projectId)}/${encodeURIComponent(STATE.activeFile)}`;
-  window.open(url, "_blank", "noopener");
+/**
+ * safeRefreshPreview() — verifies the preview endpoint responds 200 before
+ * loading the iframe. Eliminates race conditions after save/AI-edit because
+ * we only point the iframe at the file after the server confirms it's ready.
+ * Falls back to direct refreshPreview() if verify fetch fails unexpectedly.
+ */
+async function safeRefreshPreview() {
+  if (!STATE.projectId) return;
+  const entry  = _getEntryFile();
+  const url    = `/workspace/project/${STATE.projectId}/preview/${entry}`;
+  const busted = `${url}?v=${Date.now()}`;
+  try {
+    const probe = await fetch(busted, { method: "HEAD" });
+    if (!probe.ok) {
+      // Server returned non-2xx — surface a soft warning and bail
+      console.warn("[AQ] preview probe failed:", probe.status);
+      return;
+    }
+  } catch(e) {
+    // Network error — fall through to direct load as best-effort
+    console.warn("[AQ] preview probe error:", e.message);
+  }
+  // File confirmed accessible — load into iframe
+  const frame = document.getElementById("previewFrame");
+  const urlEl = document.getElementById("previewUrl");
+  frame.classList.add("loading");
+  frame.src = busted;
+  if (urlEl) urlEl.textContent = url;
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
+/**
+ * openPreviewInTab() — opens the current project's entry file in a new tab.
+ * Uses the same URL scheme as refreshPreview (no encoding, UUID-safe).
+ */
+function openPreviewInTab() {
+  if (!STATE.projectId) return;
+  const entry = _getEntryFile();
+  window.open(`/workspace/project/${STATE.projectId}/preview/${entry}`, "_blank");
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════
    BUNDLE ENGINE
-───────────────────────────────────────────────────────────────────────────── */
+═════════════════════════════════════════════════════════════════════════════*/
 
 async function selectBundle(bundle) {
   if (!bundle || !bundle._id) return;
@@ -899,7 +955,8 @@ async function selectBundle(bundle) {
     const data = await res.json();
     if (data && data.bundle) bundle = data.bundle;
   } catch(e) {
-    showView("wsError"); document.getElementById("wsErrorMsg").textContent = "Could not load bundle.";
+    showView("wsError");
+    document.getElementById("wsErrorMsg").textContent = "Could not load bundle.";
     hideLoading(); return;
   }
   hideLoading();
@@ -922,12 +979,12 @@ function renderExecPanel(b) {
   const steps    = Array.isArray(b.steps)    ? b.steps    : [];
   const progress = Array.isArray(b.progress) ? b.progress : [];
   const outputs  = Array.isArray(b.outputs)  ? b.outputs  : [];
-  const done  = progress.filter(p => p && p.status === "completed").length;
-  const total = steps.length;
-  // [FIX] Guard pct against NaN
-  const pct   = total > 0 ? Math.round((done / total) * 100) : 0;
-  const scores = outputs.map(o => o && o.confidenceScore).filter(s => typeof s === "number");
-  const avgConf = scores.length ? (scores.reduce((a,s)=>a+s,0)/scores.length*100).toFixed(0)+"%" : "—";
+  const done     = progress.filter(p => p && p.status === "completed").length;
+  const total    = steps.length;
+  const pct      = total > 0 ? Math.round((done / total) * 100) : 0;
+  const scores   = outputs.map(o => o && o.confidenceScore).filter(s => typeof s === "number");
+  const avgConf  = scores.length ? (scores.reduce((a, s) => a + s, 0) / scores.length * 100).toFixed(0) + "%" : "—";
+
   document.getElementById("execTitle").textContent      = b.title  || "Untitled";
   document.getElementById("execGoal").textContent       = b.goal   || "";
   document.getElementById("statSteps").textContent      = total;
@@ -936,76 +993,88 @@ function renderExecPanel(b) {
   document.getElementById("statStatus").textContent     = (b.status || "draft").toUpperCase();
   document.getElementById("statConfidence").textContent = avgConf;
 
-  const fill = document.getElementById("mainProgressFill");
+  const fill  = document.getElementById("mainProgressFill");
   fill.style.width = pct + "%";
-  // Add running shimmer if active
   if (b.status === "active") fill.classList.add("running"); else fill.classList.remove("running");
 
   const track = document.getElementById("mainProgressTrack");
   if (track) track.setAttribute("aria-valuenow", pct);
-
   document.getElementById("mainProgressGlow").style.left = pct + "%";
+
   const btnRun    = document.getElementById("btnRun");
   const btnPause  = document.getElementById("btnPause");
   const btnResume = document.getElementById("btnResume");
   btnRun.style.display = btnPause.style.display = btnResume.style.display = "none";
-  if (b.status==="active") btnPause.style.display=""; else if(b.status==="paused") btnResume.style.display=""; else if(b.status!=="completed") btnRun.style.display="";
+  if (b.status === "active")     btnPause.style.display = "";
+  else if (b.status === "paused") btnResume.style.display = "";
+  else if (b.status !== "completed") btnRun.style.display = "";
+
   renderTimeline(steps, progress, b.currentStep || 0);
   renderStepCards(steps, progress, outputs, b.currentStep || 0);
 }
 
 function renderTimeline(steps, progress, currentStep) {
   const tl = document.getElementById("execTimeline");
-  if (!steps.length) { tl.innerHTML=""; return; }
-  tl.innerHTML = steps.map((step,i) => {
-    const prog   = progress.find(p => p && p.step===i);
-    const status = prog ? prog.status : (i===currentStep ? "in-progress" : "pending");
-    const dotCls = status==="completed" ? "done" : (status==="in-progress"||i===currentStep) ? "running" : "";
-    const icon   = status==="completed" ? "✓" : status==="in-progress" ? "…" : (i+1);
-    const lineCls = status==="completed" ? "done" : "";
-    const conn = i < steps.length-1 ? `<div class="aq-tl-line ${lineCls}"></div>` : "";
-    return `<div class="aq-tl-step" title="${esc(step.title||'Step '+(i+1))}" onclick="jumpToStep(${i})" role="listitem"><div class="aq-tl-dot ${dotCls}" tabindex="0" onkeydown="if(event.key==='Enter')jumpToStep(${i})">${icon}</div></div>${conn}`;
+  if (!steps.length) { tl.innerHTML = ""; return; }
+  tl.innerHTML = steps.map((step, i) => {
+    const prog    = progress.find(p => p && p.step === i);
+    const status  = prog ? prog.status : (i === currentStep ? "in-progress" : "pending");
+    const dotCls  = status === "completed" ? "done" : (status === "in-progress" || i === currentStep) ? "running" : "";
+    const icon    = status === "completed" ? "✓" : status === "in-progress" ? "…" : (i + 1);
+    const lineCls = status === "completed" ? "done" : "";
+    const conn    = i < steps.length - 1 ? `<div class="aq-tl-line ${lineCls}"></div>` : "";
+    return `<div class="aq-tl-step" title="${esc(step.title || 'Step ' + (i + 1))}" onclick="jumpToStep(${i})" role="listitem"><div class="aq-tl-dot ${dotCls}" tabindex="0" onkeydown="if(event.key==='Enter')jumpToStep(${i})">${icon}</div></div>${conn}`;
   }).join("");
 }
 
 function renderStepCards(steps, progress, outputs, currentStep) {
   const container = document.getElementById("execSteps");
-  if (!steps.length) { container.innerHTML=`<div class="aq-empty"><span class="aq-empty-icon">📋</span>No steps defined.</div>`; return; }
-  container.innerHTML = steps.map((step,i) => {
-    const prog      = progress.find(p => p && p.step===i) || {};
-    const status    = prog.status || (i===currentStep ? "in-progress" : "pending");
-    const output    = outputs.find(o => o && o.stepIndex===i);
+  if (!steps.length) {
+    container.innerHTML = `<div class="aq-empty"><span class="aq-empty-icon">📋</span>No steps defined.</div>`;
+    return;
+  }
+  container.innerHTML = steps.map((step, i) => {
+    const prog      = progress.find(p => p && p.step === i) || {};
+    const status    = prog.status || (i === currentStep ? "in-progress" : "pending");
+    const output    = outputs.find(o => o && o.stepIndex === i);
     const isRunning = STATE.stepRunning.has(i);
-    const cardCls   = status==="completed" ? "done" : (status==="in-progress"||i===currentStep) ? (isRunning?"running":"active") : "";
-    const badgeCls  = status==="completed" ? "wb-done" : isRunning ? "wb-running" : status==="in-progress" ? "wb-running" : status==="failed" ? "wb-failed" : "wb-pending";
-    const badgeTxt  = status==="completed" ? "DONE" : isRunning ? "RUNNING…" : status==="in-progress" ? "RUNNING" : status==="failed" ? "FAILED" : "PENDING";
-    const numCls    = status==="completed" ? "done" : status==="in-progress" ? "running" : "";
-    const numIcon   = status==="completed" ? "✓" : isRunning ? `<div class="aq-mini-spinner"></div>` : (i+1);
+    const cardCls   = status === "completed" ? "done" : (status === "in-progress" || i === currentStep) ? (isRunning ? "running" : "active") : "";
+    const badgeCls  = status === "completed" ? "wb-done" : isRunning ? "wb-running" : status === "in-progress" ? "wb-running" : status === "failed" ? "wb-failed" : "wb-pending";
+    const badgeTxt  = status === "completed" ? "DONE" : isRunning ? "RUNNING…" : status === "in-progress" ? "RUNNING" : status === "failed" ? "FAILED" : "PENDING";
+    const numCls    = status === "completed" ? "done" : status === "in-progress" ? "running" : "";
+    const numIcon   = status === "completed" ? "✓" : isRunning ? `<div class="aq-mini-spinner"></div>` : (i + 1);
     const resources = step.resources || step.tools || [];
-    const toolsHtml = resources.length ? `<div class="aq-tool-chips">${resources.map(r=>typeof r==="string"?`<span class="aq-tool-chip">🔗 ${esc(r)}</span>`:`<a class="aq-tool-chip" href="${esc(r.url||'#')}" target="_blank" rel="noopener">🔗 ${esc(r.name||'Tool')}</a>`).join("")}</div>` : "";
+    const toolsHtml = resources.length
+      ? `<div class="aq-tool-chips">${resources.map(r => typeof r === "string"
+          ? `<span class="aq-tool-chip">🔗 ${esc(r)}</span>`
+          : `<a class="aq-tool-chip" href="${esc(r.url || '#')}" target="_blank" rel="noopener">🔗 ${esc(r.name || 'Tool')}</a>`).join("")}</div>`
+      : "";
+
     let outputHtml = "";
     if (output && output.content) {
-      const confBadge = typeof output.confidenceScore==="number" ? `<span class="aq-out-meta-badge green">${Math.round(output.confidenceScore*100)}% conf</span>` : "";
+      const confBadge = typeof output.confidenceScore === "number" ? `<span class="aq-out-meta-badge green">${Math.round(output.confidenceScore * 100)}% conf</span>` : "";
       const durBadge  = output.durationMs ? `<span class="aq-out-meta-badge muted">${output.durationMs}ms</span>` : "";
-      const insights  = (output.keyInsights||[]).slice(0,4).map(k=>`<span class="aq-insight-chip">${esc(k)}</span>`).join("");
-      outputHtml = `<div class="aq-output-block"><div class="aq-output-hdr"><span class="aq-output-label">⚡ Output</span><div class="aq-output-badges">${confBadge}${durBadge}</div><div class="aq-output-dot"></div></div><div class="aq-output-content">${formatOutput(output.content)}</div></div>${insights?`<div class="aq-insight-chips">${insights}</div>`:""}`;
+      const insights  = (output.keyInsights || []).slice(0, 4).map(k => `<span class="aq-insight-chip">${esc(k)}</span>`).join("");
+      outputHtml = `<div class="aq-output-block"><div class="aq-output-hdr"><span class="aq-output-label">⚡ Output</span><div class="aq-output-badges">${confBadge}${durBadge}</div><div class="aq-output-dot"></div></div><div class="aq-output-content">${formatOutput(output.content)}</div></div>${insights ? `<div class="aq-insight-chips">${insights}</div>` : ""}`;
     } else if (isRunning) {
       outputHtml = `<div class="aq-output-block aq-output-loading"><div class="aq-spinner-row"><div class="aq-spinner aq-spinner-sm"></div><span>Executing…</span></div></div>`;
     } else {
       outputHtml = `<div class="aq-empty-inline">No output yet.</div>`;
     }
+
     const ad = isRunning ? "disabled" : "";
     const actionHtml = status !== "completed"
-      ? `<button class="aq-step-act-btn run-step ${isRunning?'loading':''}" ${ad} onclick="event.stopPropagation();runStep(${i})">${isRunning?'<div class="aq-mini-spinner"></div> Running…':'▶ Run Step'}</button><button class="aq-step-act-btn done-btn" ${ad} onclick="event.stopPropagation();markStepDone(${i})">✅ Done</button>`
+      ? `<button class="aq-step-act-btn run-step ${isRunning ? 'loading' : ''}" ${ad} onclick="event.stopPropagation();runStep(${i})">${isRunning ? '<div class="aq-mini-spinner"></div> Running…' : '▶ Run Step'}</button><button class="aq-step-act-btn done-btn" ${ad} onclick="event.stopPropagation();markStepDone(${i})">✅ Done</button>`
       : `<button class="aq-step-act-btn rerun" onclick="event.stopPropagation();rerunStep(${i})">↺ Re-run</button>`;
+
     return `
       <div class="aq-step-card ${cardCls}" id="scard-${i}" data-step="${i}" role="listitem">
         <div class="aq-step-hdr" onclick="toggleCard(${i})" role="button" tabindex="0" aria-expanded="false"
              onkeydown="if(event.key==='Enter')toggleCard(${i})">
           <div class="aq-step-num ${numCls}">${numIcon}</div>
           <div class="aq-step-info">
-            <div class="aq-step-title">${esc(step.title||'Step '+(i+1))}</div>
-            <div class="aq-step-desc">${esc(step.description||'')}</div>
+            <div class="aq-step-title">${esc(step.title || 'Step ' + (i + 1))}</div>
+            <div class="aq-step-desc">${esc(step.description || '')}</div>
           </div>
           <span class="aq-badge ${badgeCls}">${badgeTxt}</span>
           <span class="aq-step-toggle" aria-hidden="true">▾</span>
@@ -1024,284 +1093,386 @@ function renderStepCards(steps, progress, outputs, currentStep) {
 /* ─── ACCORDION ─── */
 function toggleCard(idx) {
   const hdr = document.querySelector(`#scard-${idx} .aq-step-hdr`);
-  if (STATE.openSteps.has(idx)) { _closeCard(idx); if(hdr) hdr.setAttribute("aria-expanded","false"); }
-  else {
-    Array.from(STATE.openSteps).filter(i=>i!==idx).forEach(i=>{_closeCard(i); const h=document.querySelector(`#scard-${i} .aq-step-hdr`); if(h) h.setAttribute("aria-expanded","false");});
+  if (STATE.openSteps.has(idx)) {
+    _closeCard(idx);
+    if (hdr) hdr.setAttribute("aria-expanded", "false");
+  } else {
+    Array.from(STATE.openSteps).filter(i => i !== idx).forEach(i => {
+      _closeCard(i);
+      const h = document.querySelector(`#scard-${i} .aq-step-hdr`);
+      if (h) h.setAttribute("aria-expanded", "false");
+    });
     _openCard(idx, true);
-    if(hdr) hdr.setAttribute("aria-expanded","true");
+    if (hdr) hdr.setAttribute("aria-expanded", "true");
   }
 }
-function _openCard(idx, animate=true) {
-  const body=document.getElementById("sbody-"+idx); const inner=document.getElementById("sbody-inner-"+idx);
-  const toggle=document.querySelector(`#scard-${idx} .aq-step-toggle`);
-  if (!body||!inner) return;
+function _openCard(idx, animate = true) {
+  const body   = document.getElementById("sbody-" + idx);
+  const inner  = document.getElementById("sbody-inner-" + idx);
+  const toggle = document.querySelector(`#scard-${idx} .aq-step-toggle`);
+  if (!body || !inner) return;
   STATE.openSteps.add(idx);
   if (toggle) toggle.classList.add("open");
-  body.style.overflow="hidden"; body.style.maxHeight="0"; body.setAttribute("data-state","open");
-  const targetH = inner.scrollHeight+40;
-  if (animate) requestAnimationFrame(()=>{body.style.maxHeight=targetH+"px";});
-  else { body.style.maxHeight=targetH+"px"; }
-  const onEnd = e => { if(e.propertyName!=="max-height") return; body.removeEventListener("transitionend",onEnd); if(STATE.openSteps.has(idx)){body.style.maxHeight="none";body.style.overflow="visible";body.setAttribute("data-state","settled");} };
+  body.style.overflow = "hidden"; body.style.maxHeight = "0"; body.setAttribute("data-state", "open");
+  const targetH = inner.scrollHeight + 40;
+  if (animate) requestAnimationFrame(() => { body.style.maxHeight = targetH + "px"; });
+  else body.style.maxHeight = targetH + "px";
+  const onEnd = e => {
+    if (e.propertyName !== "max-height") return;
+    body.removeEventListener("transitionend", onEnd);
+    if (STATE.openSteps.has(idx)) { body.style.maxHeight = "none"; body.style.overflow = "visible"; body.setAttribute("data-state", "settled"); }
+  };
   body.addEventListener("transitionend", onEnd);
-  if (!animate) { body.style.maxHeight="none"; body.style.overflow="visible"; body.setAttribute("data-state","settled"); }
+  if (!animate) { body.style.maxHeight = "none"; body.style.overflow = "visible"; body.setAttribute("data-state", "settled"); }
 }
 function _closeCard(idx) {
-  const body=document.getElementById("sbody-"+idx); const toggle=document.querySelector(`#scard-${idx} .aq-step-toggle`);
+  const body   = document.getElementById("sbody-" + idx);
+  const toggle = document.querySelector(`#scard-${idx} .aq-step-toggle`);
   if (!body) return;
   STATE.openSteps.delete(idx);
   if (toggle) toggle.classList.remove("open");
-  body.setAttribute("data-state","closed");
-  if (body.style.maxHeight==="none"||body.style.maxHeight==="") {
-    const inner=document.getElementById("sbody-inner-"+idx); const h=inner?inner.scrollHeight+40:200;
-    body.style.overflow="hidden"; body.style.maxHeight=h+"px"; body.getBoundingClientRect();
-    requestAnimationFrame(()=>{body.style.maxHeight="0";});
-  } else { body.style.overflow="hidden"; body.style.maxHeight="0"; }
-  if (STATE.selectedStep===idx) STATE.selectedStep=null;
+  body.setAttribute("data-state", "closed");
+  if (body.style.maxHeight === "none" || body.style.maxHeight === "") {
+    const inner = document.getElementById("sbody-inner-" + idx);
+    const h = inner ? inner.scrollHeight + 40 : 200;
+    body.style.overflow = "hidden"; body.style.maxHeight = h + "px"; body.getBoundingClientRect();
+    requestAnimationFrame(() => { body.style.maxHeight = "0"; });
+  } else {
+    body.style.overflow = "hidden"; body.style.maxHeight = "0";
+  }
+  if (STATE.selectedStep === idx) STATE.selectedStep = null;
 }
 function _recalcOpenCard(idx) {
   if (!STATE.openSteps.has(idx)) return;
-  const body=document.getElementById("sbody-"+idx); const inner=document.getElementById("sbody-inner-"+idx);
-  if (!body||!inner) return; if(body.getAttribute("data-state")==="settled") return;
-  body.style.maxHeight=(inner.scrollHeight+40)+"px";
+  const body  = document.getElementById("sbody-" + idx);
+  const inner = document.getElementById("sbody-inner-" + idx);
+  if (!body || !inner) return;
+  if (body.getAttribute("data-state") === "settled") return;
+  body.style.maxHeight = (inner.scrollHeight + 40) + "px";
 }
 function jumpToStep(idx) {
-  STATE.selectedStep=idx; const card=document.getElementById("scard-"+idx);
-  if (!card) return; card.scrollIntoView({behavior:"smooth",block:"center"});
-  if (!STATE.openSteps.has(idx)) setTimeout(()=>toggleCard(idx),180);
+  STATE.selectedStep = idx;
+  const card = document.getElementById("scard-" + idx);
+  if (!card) return;
+  card.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (!STATE.openSteps.has(idx)) {
+    // Small RAF delay to let scroll settle before expanding
+    requestAnimationFrame(() => requestAnimationFrame(() => toggleCard(idx)));
+  }
 }
 
 /* ─── RUN STEP ─── */
 async function runStep(stepIndex) {
   const b = STATE.bundle;
   if (!b || STATE.stepRunning.has(stepIndex)) return;
-  const stepTitle = (b.steps&&b.steps[stepIndex]&&b.steps[stepIndex].title)||("Step "+(stepIndex+1));
+  const stepTitle = (b.steps && b.steps[stepIndex] && b.steps[stepIndex].title) || ("Step " + (stepIndex + 1));
   STATE.stepRunning.add(stepIndex);
   openRunModal(`▶ ${stepTitle}`);
   _patchStepCardRunning(stepIndex, true);
   try {
-    const res  = await fetch(`/workspace/step/${b._id}/${stepIndex}`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({title:stepTitle}) });
-    if (!res.ok) { const err=await res.json().catch(()=>({})); throw new Error(err.error||`HTTP ${res.status}`); }
+    const res  = await fetch(`/workspace/step/${b._id}/${stepIndex}`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ title: stepTitle }),
+    });
+    if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err.error || `HTTP ${res.status}`); }
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     STATE.bundle = data.bundle;
-    if (data.workspace&&data.workspace.workspaceMemory) STATE.wsMemory=data.workspace.workspaceMemory;
+    if (data.workspace && data.workspace.workspaceMemory) STATE.wsMemory = data.workspace.workspaceMemory;
     STATE.stepRunning.delete(stepIndex); STATE.openSteps.add(stepIndex);
     renderExecPanel(data.bundle); renderMemoryPanel(data.bundle); renderInsightPanel(data.bundle);
     updateBundleRowProgress(b._id, data.bundle);
-    requestAnimationFrame(()=>requestAnimationFrame(()=>_openCard(stepIndex,false)));
-    const output = data.output || (data.bundle.outputs||[]).find(o=>o&&o.stepIndex===stepIndex);
-    if (output&&output.content) { showRunModalOutput(output.content); prependOutputFeed(data.bundle.title||"Bundle",output.stepIndex,output.stepTitle,output.content); }
-    else closeRunModal();
-    if (data.bundle.status==="completed") toast("🎉 Bundle complete!","success"); else toast(`Step ${stepIndex+1} complete ✓`,"success");
+    requestAnimationFrame(() => requestAnimationFrame(() => _openCard(stepIndex, false)));
+    const output = data.output || (data.bundle.outputs || []).find(o => o && o.stepIndex === stepIndex);
+    if (output && output.content) {
+      showRunModalOutput(output.content);
+      prependOutputFeed(data.bundle.title || "Bundle", output.stepIndex, output.stepTitle, output.content);
+    } else {
+      closeRunModal();
+    }
+    if (data.bundle.status === "completed") toast("🎉 Bundle complete!", "success");
+    else toast(`Step ${stepIndex + 1} complete ✓`, "success");
   } catch(e) {
-    STATE.stepRunning.delete(stepIndex); toast("Error: "+e.message,"error"); closeRunModal();
+    STATE.stepRunning.delete(stepIndex);
+    toast("Error: " + e.message, "error");
+    closeRunModal();
     if (STATE.bundle) renderExecPanel(STATE.bundle);
   }
 }
 function _patchStepCardRunning(stepIndex, isRunning) {
-  const card=document.getElementById("scard-"+stepIndex); if (!card) return;
-  const badge=card.querySelector(".aq-badge"); const num=card.querySelector(".aq-step-num"); const btn=card.querySelector(".aq-step-act-btn.run-step");
-  if (badge){badge.className="aq-badge wb-running";badge.textContent="RUNNING…";}
-  if (num) num.innerHTML=`<div class="aq-mini-spinner"></div>`;
-  if (btn) { btn.disabled=isRunning; btn.innerHTML=isRunning?'<div class="aq-mini-spinner"></div> Running…':'▶ Run Step'; }
-  const inner=document.getElementById("sbody-inner-"+stepIndex);
-  if (inner&&isRunning) { const emptyEl=inner.querySelector(".aq-empty-inline"); if(emptyEl)emptyEl.outerHTML=`<div class="aq-output-block aq-output-loading"><div class="aq-spinner-row"><div class="aq-spinner aq-spinner-sm"></div><span>Executing…</span></div></div>`; _recalcOpenCard(stepIndex); }
+  const card  = document.getElementById("scard-" + stepIndex); if (!card) return;
+  const badge = card.querySelector(".aq-badge");
+  const num   = card.querySelector(".aq-step-num");
+  const btn   = card.querySelector(".aq-step-act-btn.run-step");
+  if (badge) { badge.className = "aq-badge wb-running"; badge.textContent = "RUNNING…"; }
+  if (num)   num.innerHTML = `<div class="aq-mini-spinner"></div>`;
+  if (btn)   { btn.disabled = isRunning; btn.innerHTML = isRunning ? '<div class="aq-mini-spinner"></div> Running…' : '▶ Run Step'; }
+  const inner = document.getElementById("sbody-inner-" + stepIndex);
+  if (inner && isRunning) {
+    const emptyEl = inner.querySelector(".aq-empty-inline");
+    if (emptyEl) emptyEl.outerHTML = `<div class="aq-output-block aq-output-loading"><div class="aq-spinner-row"><div class="aq-spinner aq-spinner-sm"></div><span>Executing…</span></div></div>`;
+    _recalcOpenCard(stepIndex);
+  }
 }
 
 /* ─── AUTO RUN ─── */
 async function autoRunSteps() {
-  const b=STATE.bundle; if(!b||!b.steps){toast("Select a bundle","info");return;}
-  const ok=await showConfirm("Auto-Run All Steps",`Auto-run all ${b.steps.length} steps sequentially?`,"▶ Auto Run"); if(!ok) return;
-  for (let i=0;i<b.steps.length;i++) {
-    const prog=(Array.isArray(STATE.bundle.progress)?STATE.bundle.progress:[]).find(p=>p&&p.step===i);
-    if (prog&&prog.status==="completed") continue;
-    await markStepDone(i); await new Promise(r=>setTimeout(r,600));
+  const b = STATE.bundle;
+  if (!b || !b.steps) { toast("Select a bundle", "info"); return; }
+  const ok = await showConfirm("Auto-Run All Steps", `Auto-run all ${b.steps.length} steps sequentially?`, "▶ Auto Run");
+  if (!ok) return;
+  for (let i = 0; i < b.steps.length; i++) {
+    const prog = (Array.isArray(STATE.bundle.progress) ? STATE.bundle.progress : []).find(p => p && p.step === i);
+    if (prog && prog.status === "completed") continue;
+    await markStepDone(i);
   }
-  toast("✅ All steps completed","success");
+  toast("✅ All steps completed", "success");
 }
 
 /* ─── MARK STEP DONE ─── */
 async function markStepDone(stepIndex) {
-  const b=STATE.bundle; if(!b||STATE.loading) return;
+  const b = STATE.bundle;
+  if (!b || STATE.loading) return;
   showLoading();
   try {
-    const stepTitle=(b.steps&&b.steps[stepIndex]&&b.steps[stepIndex].title)||("Step "+(stepIndex+1));
-    const res=await fetch(`/workspace/step/${b._id}/${stepIndex}`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:stepTitle})});
-    const data=await res.json();
-    if (data.error){toast(data.error,"error");return;}
-    STATE.bundle=data.bundle;
-    if(data.workspace&&data.workspace.workspaceMemory) STATE.wsMemory=data.workspace.workspaceMemory;
+    const stepTitle = (b.steps && b.steps[stepIndex] && b.steps[stepIndex].title) || ("Step " + (stepIndex + 1));
+    const res  = await fetch(`/workspace/step/${b._id}/${stepIndex}`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ title: stepTitle }),
+    });
+    const data = await res.json();
+    if (data.error) { toast(data.error, "error"); return; }
+    STATE.bundle = data.bundle;
+    if (data.workspace && data.workspace.workspaceMemory) STATE.wsMemory = data.workspace.workspaceMemory;
     STATE.openSteps.add(stepIndex);
     renderExecPanel(data.bundle); renderMemoryPanel(data.bundle); renderInsightPanel(data.bundle);
-    updateBundleRowProgress(b._id,data.bundle);
-    requestAnimationFrame(()=>requestAnimationFrame(()=>_openCard(stepIndex,false)));
-    if (data.output) prependOutputFeed(data.bundle.title||"Bundle",data.output.stepIndex,data.output.stepTitle,data.output.content);
-    if (data.bundle.status==="completed") toast("🎉 Bundle complete!","success"); else toast(`Step ${stepIndex+1} complete ✓`,"success");
-  } catch(e){toast("Error marking step","error");console.error(e);}
-  finally{hideLoading();}
+    updateBundleRowProgress(b._id, data.bundle);
+    requestAnimationFrame(() => requestAnimationFrame(() => _openCard(stepIndex, false)));
+    if (data.output) prependOutputFeed(data.bundle.title || "Bundle", data.output.stepIndex, data.output.stepTitle, data.output.content);
+    if (data.bundle.status === "completed") toast("🎉 Bundle complete!", "success");
+    else toast(`Step ${stepIndex + 1} complete ✓`, "success");
+  } catch(e) { toast("Error marking step", "error"); console.error(e); }
+  finally { hideLoading(); }
 }
+
 function rerunStep(stepIndex) {
-  const b=STATE.bundle; if(!b) return;
-  if(Array.isArray(b.progress)){const e=b.progress.find(p=>p&&p.step===stepIndex);if(e)e.status="pending";}
-  if(Array.isArray(b.outputs)) b.outputs=b.outputs.filter(o=>o&&o.stepIndex!==stepIndex);
-  STATE.openSteps.add(stepIndex); renderExecPanel(b); toast(`Step ${stepIndex+1} reset`,"info");
+  const b = STATE.bundle; if (!b) return;
+  if (Array.isArray(b.progress)) { const e = b.progress.find(p => p && p.step === stepIndex); if (e) e.status = "pending"; }
+  if (Array.isArray(b.outputs)) b.outputs = b.outputs.filter(o => o && o.stepIndex !== stepIndex);
+  STATE.openSteps.add(stepIndex); renderExecPanel(b); toast(`Step ${stepIndex + 1} reset`, "info");
 }
 
 /* ─── BUNDLE ACTIONS ─── */
 async function runCurrentBundle() {
-  const b=STATE.bundle; if(!b||STATE.loading) return; showLoading();
+  const b = STATE.bundle; if (!b || STATE.loading) return; showLoading();
   try {
-    const res=await fetch("/workspace/run/"+b._id,{method:"POST"}); const data=await res.json();
-    if(data.error){toast(data.error,"error");return;}
-    STATE.bundle=data.bundle; if(data.workspace&&data.workspace.workspaceMemory) STATE.wsMemory=data.workspace.workspaceMemory;
-    renderExecPanel(data.bundle); updateBundleRowDot(b._id,"active"); toast("Bundle started ▶","success");
-  } catch{toast("Failed","error");} finally{hideLoading();}
+    const res  = await fetch("/workspace/run/" + b._id, { method: "POST" });
+    const data = await res.json();
+    if (data.error) { toast(data.error, "error"); return; }
+    STATE.bundle = data.bundle;
+    if (data.workspace && data.workspace.workspaceMemory) STATE.wsMemory = data.workspace.workspaceMemory;
+    renderExecPanel(data.bundle); updateBundleRowDot(b._id, "active"); toast("Bundle started ▶", "success");
+  } catch { toast("Failed", "error"); } finally { hideLoading(); }
 }
 async function pauseCurrentBundle() {
-  const b=STATE.bundle; if(!b||STATE.loading) return; showLoading();
+  const b = STATE.bundle; if (!b || STATE.loading) return; showLoading();
   try {
-    const res=await fetch("/workspace/pause/"+b._id,{method:"POST"}); const data=await res.json();
-    if(data.error){toast(data.error,"error");return;}
-    const updated=data.bundle||{...STATE.bundle,status:"paused"};
-    STATE.bundle=updated; renderExecPanel(updated); updateBundleRowDot(b._id,"paused"); toast("Paused ⏸","info");
-  } catch{toast("Failed","error");} finally{hideLoading();}
+    const res  = await fetch("/workspace/pause/" + b._id, { method: "POST" });
+    const data = await res.json();
+    if (data.error) { toast(data.error, "error"); return; }
+    const updated = data.bundle || { ...STATE.bundle, status: "paused" };
+    STATE.bundle = updated; renderExecPanel(updated); updateBundleRowDot(b._id, "paused"); toast("Paused ⏸", "info");
+  } catch { toast("Failed", "error"); } finally { hideLoading(); }
 }
 async function resumeCurrentBundle() {
-  const b=STATE.bundle; if(!b||STATE.loading) return; showLoading();
+  const b = STATE.bundle; if (!b || STATE.loading) return; showLoading();
   try {
-    const res=await fetch("/workspace/resume/"+b._id,{method:"POST"}); const data=await res.json();
-    if(data.error){toast(data.error,"error");return;}
-    STATE.bundle=data.bundle; if(data.workspace&&data.workspace.workspaceMemory) STATE.wsMemory=data.workspace.workspaceMemory;
-    renderExecPanel(data.bundle); updateBundleRowDot(b._id,"active"); toast("Resumed ▶","success");
-  } catch{toast("Failed","error");} finally{hideLoading();}
+    const res  = await fetch("/workspace/resume/" + b._id, { method: "POST" });
+    const data = await res.json();
+    if (data.error) { toast(data.error, "error"); return; }
+    STATE.bundle = data.bundle;
+    if (data.workspace && data.workspace.workspaceMemory) STATE.wsMemory = data.workspace.workspaceMemory;
+    renderExecPanel(data.bundle); updateBundleRowDot(b._id, "active"); toast("Resumed ▶", "success");
+  } catch { toast("Failed", "error"); } finally { hideLoading(); }
 }
-async function pinCurrentBundle() { const b=STATE.bundle; if(!b) return; await _togglePin(b._id); }
+async function pinCurrentBundle() { const b = STATE.bundle; if (!b) return; await _togglePin(b._id); }
 async function pinBundleById(id)  { await _togglePin(id); }
 async function _togglePin(id) {
-  const isPinned=STATE.pinnedIds.some(p=>String(p)===String(id)); const endpoint=isPinned?"unpin":"pin";
+  const isPinned  = STATE.pinnedIds.some(p => String(p) === String(id));
+  const endpoint  = isPinned ? "unpin" : "pin";
   try {
-    const res=await fetch(`/workspace/${endpoint}/${id}`,{method:"POST"}); const data=await res.json();
-    if(data.pinnedBundleIds) STATE.pinnedIds=data.pinnedBundleIds; else if(!isPinned) STATE.pinnedIds.push(id); else STATE.pinnedIds=STATE.pinnedIds.filter(x=>String(x)!==String(id));
-    if(STATE.bundle&&String(STATE.bundle._id)===String(id)) updatePinBtn(id);
-    toast(isPinned?"Unpinned":"Pinned ★",isPinned?"info":"success");
-  } catch{toast("Pin failed","error");}
+    const res  = await fetch(`/workspace/${endpoint}/${id}`, { method: "POST" });
+    const data = await res.json();
+    if (data.pinnedBundleIds) STATE.pinnedIds = data.pinnedBundleIds;
+    else if (!isPinned) STATE.pinnedIds.push(id);
+    else STATE.pinnedIds = STATE.pinnedIds.filter(x => String(x) !== String(id));
+    if (STATE.bundle && String(STATE.bundle._id) === String(id)) updatePinBtn(id);
+    toast(isPinned ? "Unpinned" : "Pinned ★", isPinned ? "info" : "success");
+  } catch { toast("Pin failed", "error"); }
 }
 async function deleteCurrentBundle() {
-  const b=STATE.bundle; const id=b&&b._id; if(!id) return;
-  const ok=await showConfirm("Delete Bundle","Delete this bundle? This cannot be undone.","Delete"); if(!ok) return;
+  const b  = STATE.bundle; const id = b && b._id; if (!id) return;
+  const ok = await showConfirm("Delete Bundle", "Delete this bundle? This cannot be undone.", "Delete");
+  if (!ok) return;
   await _doDeleteBundle(id);
 }
 async function _doDeleteBundle(id) {
   showLoading();
   try {
-    const res=await fetch("/bundle/"+id,{method:"DELETE"}); if(!res.ok) throw new Error("Delete failed");
-    const rowEl=document.getElementById("brow-"+id); if(rowEl) rowEl.remove();
-    const sw=document.getElementById("bundleSwitcher"); if(sw){const opt=sw.querySelector(`option[value="${id}"]`);if(opt)opt.remove();}
-    STATE.allBundles=STATE.allBundles.filter(b=>String(b._id)!==String(id));
-    if(STATE.bundle&&String(STATE.bundle._id)===String(id)){STATE.bundle=null;localStorage.removeItem("aq_activeBundle");showView("wsWelcome");document.getElementById("topBreadcrumb").textContent="Workspace";}
-    toast("Bundle deleted","info");
-  } catch{toast("Failed to delete","error");} finally{hideLoading();}
+    const res = await fetch("/bundle/" + id, { method: "DELETE" });
+    if (!res.ok) throw new Error("Delete failed");
+    const rowEl = document.getElementById("brow-" + id); if (rowEl) rowEl.remove();
+    const sw    = document.getElementById("bundleSwitcher");
+    if (sw) { const opt = sw.querySelector(`option[value="${id}"]`); if (opt) opt.remove(); }
+    STATE.allBundles = STATE.allBundles.filter(b => String(b._id) !== String(id));
+    if (STATE.bundle && String(STATE.bundle._id) === String(id)) {
+      STATE.bundle = null; localStorage.removeItem("aq_activeBundle");
+      showView("wsWelcome"); document.getElementById("topBreadcrumb").textContent = "Workspace";
+    }
+    toast("Bundle deleted", "info");
+  } catch { toast("Failed to delete", "error"); } finally { hideLoading(); }
 }
 
 /* ─── MEMORY / INSIGHT / OUTPUT ─── */
 function renderMemoryPanel(b) {
-  const mem=b.memory||{}; const keys=Object.keys(mem);
-  document.getElementById("memBundleCount").textContent=keys.length+" keys";
-  document.getElementById("memBundleEntries").innerHTML=keys.length?keys.map(k=>`<div class="aq-mem-kv"><div class="aq-mem-k">${esc(k)}</div><div class="aq-mem-v">${esc(String(mem[k]??""))}</div></div>`).join(""):`<div class="aq-empty" style="padding:6px 0;font-size:0.64rem;">No memory.</div>`;
+  const mem  = b.memory || {}; const keys = Object.keys(mem);
+  document.getElementById("memBundleCount").textContent   = keys.length + " keys";
+  document.getElementById("memBundleEntries").innerHTML   = keys.length
+    ? keys.map(k => `<div class="aq-mem-kv"><div class="aq-mem-k">${esc(k)}</div><div class="aq-mem-v">${esc(String(mem[k] ?? ""))}</div></div>`).join("")
+    : `<div class="aq-empty" style="padding:6px 0;font-size:0.64rem;">No memory.</div>`;
   renderWsMemory();
 }
 function renderWsMemory() {
-  const wsM=STATE.wsMemory||{}; const wsKeys=Object.keys(wsM);
-  document.getElementById("memWsCount").textContent=wsKeys.length+" keys";
-  document.getElementById("memWsEntries").innerHTML=wsKeys.length?wsKeys.map(k=>`<div class="aq-mem-kv" style="border-left-color:var(--accent3)"><div class="aq-mem-k" style="color:var(--accent3)">${esc(k)}</div><div class="aq-mem-v">${esc(String(wsM[k]??""))}</div></div>`).join(""):`<div class="aq-empty" style="padding:6px 0;font-size:0.64rem;">No workspace memory.</div>`;
+  const wsM   = STATE.wsMemory || {}; const wsKeys = Object.keys(wsM);
+  document.getElementById("memWsCount").textContent   = wsKeys.length + " keys";
+  document.getElementById("memWsEntries").innerHTML   = wsKeys.length
+    ? wsKeys.map(k => `<div class="aq-mem-kv" style="border-left-color:var(--accent3)"><div class="aq-mem-k" style="color:var(--accent3)">${esc(k)}</div><div class="aq-mem-v">${esc(String(wsM[k] ?? ""))}</div></div>`).join("")
+    : `<div class="aq-empty" style="padding:6px 0;font-size:0.64rem;">No workspace memory.</div>`;
 }
 function renderInsightPanel(b) {
-  const outputs=Array.isArray(b.outputs)?b.outputs:[];
-  const all=[];
-  outputs.forEach(o=>{(o&&o.keyInsights?o.keyInsights:[]).forEach(k=>{if(k)all.push({text:k,confidence:o.confidenceScore||0});});});
-  all.sort((a,b)=>b.confidence-a.confidence);
-  document.getElementById("insightList").innerHTML=all.length?all.map(({text,confidence})=>{const badge=confidence?`<span style="font-family:var(--mono);font-size:0.56rem;color:var(--accent);margin-left:auto;flex-shrink:0;">${Math.round(confidence*100)}%</span>`:"";return`<div class="aq-insight-item">${esc(text)}${badge}</div>`;}).join(""):`<div class="aq-empty"><span class="aq-empty-icon">💡</span>No insights yet.</div>`;
+  const outputs = Array.isArray(b.outputs) ? b.outputs : [];
+  const all     = [];
+  outputs.forEach(o => { (o && o.keyInsights ? o.keyInsights : []).forEach(k => { if (k) all.push({ text: k, confidence: o.confidenceScore || 0 }); }); });
+  all.sort((a, b) => b.confidence - a.confidence);
+  document.getElementById("insightList").innerHTML = all.length
+    ? all.map(({ text, confidence }) => {
+        const badge = confidence ? `<span style="font-family:var(--mono);font-size:0.56rem;color:var(--accent);margin-left:auto;flex-shrink:0;">${Math.round(confidence * 100)}%</span>` : "";
+        return `<div class="aq-insight-item">${esc(text)}${badge}</div>`;
+      }).join("")
+    : `<div class="aq-empty"><span class="aq-empty-icon">💡</span>No insights yet.</div>`;
 }
 function renderOutputFeed(outputs) {
-  const feed=document.getElementById("outputFeed");
-  if (!outputs||!outputs.length){feed.innerHTML=`<div class="aq-empty"><span class="aq-empty-icon">📤</span>No outputs yet.</div>`;return;}
-  feed.innerHTML=outputs.map(o=>`<div class="aq-feed-item"><div class="aq-feed-meta"><span class="aq-feed-step">Step ${(o.stepIndex??0)+1}${o.stepTitle?' · '+esc(o.stepTitle):''}</span><span class="aq-feed-bundle">${esc(o.bundleTitle||'')}</span></div><div class="aq-feed-preview">${esc(o.preview||o.content||'')}</div></div>`).join("");
+  const feed = document.getElementById("outputFeed");
+  if (!outputs || !outputs.length) {
+    feed.innerHTML = `<div class="aq-empty"><span class="aq-empty-icon">📤</span>No outputs yet.</div>`;
+    return;
+  }
+  feed.innerHTML = outputs.map(o =>
+    `<div class="aq-feed-item"><div class="aq-feed-meta"><span class="aq-feed-step">Step ${(o.stepIndex ?? 0) + 1}${o.stepTitle ? ' · ' + esc(o.stepTitle) : ''}</span><span class="aq-feed-bundle">${esc(o.bundleTitle || '')}</span></div><div class="aq-feed-preview">${esc(o.preview || o.content || '')}</div></div>`
+  ).join("");
 }
-function prependOutputFeed(bundleTitle,stepIndex,stepTitle,content) {
-  const feed=document.getElementById("outputFeed");
-  const empty=feed.querySelector(".aq-empty"); if(empty) empty.remove();
-  const item=document.createElement("div"); item.className="aq-feed-item aq-feed-item-new";
-  item.innerHTML=`<div class="aq-feed-meta"><span class="aq-feed-step">Step ${stepIndex+1}${stepTitle?' · '+esc(stepTitle):''}</span><span class="aq-feed-bundle">${esc(bundleTitle)}</span></div><div class="aq-feed-preview">${esc((content||'').substring(0,240))}</div>`;
-  feed.prepend(item); requestAnimationFrame(()=>item.classList.add("visible"));
+function prependOutputFeed(bundleTitle, stepIndex, stepTitle, content) {
+  const feed  = document.getElementById("outputFeed");
+  const empty = feed.querySelector(".aq-empty"); if (empty) empty.remove();
+  const item  = document.createElement("div"); item.className = "aq-feed-item aq-feed-item-new";
+  item.innerHTML = `<div class="aq-feed-meta"><span class="aq-feed-step">Step ${stepIndex + 1}${stepTitle ? ' · ' + esc(stepTitle) : ''}</span><span class="aq-feed-bundle">${esc(bundleTitle)}</span></div><div class="aq-feed-preview">${esc((content || '').substring(0, 240))}</div>`;
+  feed.prepend(item); requestAnimationFrame(() => item.classList.add("visible"));
 }
 
 /* ─── DOM HELPERS ─── */
-function updatePinBtn(id) { const el=document.getElementById("btnPin"); if(el) el.textContent=STATE.pinnedIds.some(p=>String(p)===String(id))?"★ PIN":"☆ PIN"; }
-function updateBundleRowDot(id,status) {
-  const row=document.getElementById("brow-"+id); if(!row) return;
-  const dot=row.querySelector(".aq-dot"); if(!dot) return;
-  dot.className="aq-dot "+(status==="active"?"aq-dot-active":status==="paused"?"aq-dot-paused":status==="completed"?"aq-dot-completed":"aq-dot-draft");
+function updatePinBtn(id) {
+  const el = document.getElementById("btnPin");
+  if (el) el.textContent = STATE.pinnedIds.some(p => String(p) === String(id)) ? "★ PIN" : "☆ PIN";
 }
-function updateBundleRowProgress(id,bundle) {
-  const row=document.getElementById("brow-"+id); if(!row) return;
-  const steps=Array.isArray(bundle.steps)?bundle.steps:[];
-  const prog=Array.isArray(bundle.progress)?bundle.progress:[];
-  const done=prog.filter(p=>p&&p.status==="completed").length;
-  // [FIX] Guard pct against NaN
-  const pct=steps.length>0?Math.round((done/steps.length)*100):0;
-  const fill=row.querySelector(".aq-bundle-fill"); const pctEl=row.querySelector(".aq-bundle-pct");
-  if(fill) fill.style.width=pct+"%"; if(pctEl) pctEl.textContent=pct+"%";
-  updateBundleRowDot(id,bundle.status);
+function updateBundleRowDot(id, status) {
+  const row = document.getElementById("brow-" + id); if (!row) return;
+  const dot = row.querySelector(".aq-dot"); if (!dot) return;
+  dot.className = "aq-dot " + (status === "active" ? "aq-dot-active" : status === "paused" ? "aq-dot-paused" : status === "completed" ? "aq-dot-completed" : "aq-dot-draft");
+}
+function updateBundleRowProgress(id, bundle) {
+  const row   = document.getElementById("brow-" + id); if (!row) return;
+  const steps = Array.isArray(bundle.steps)    ? bundle.steps    : [];
+  const prog  = Array.isArray(bundle.progress) ? bundle.progress : [];
+  const done  = prog.filter(p => p && p.status === "completed").length;
+  const pct   = steps.length > 0 ? Math.round((done / steps.length) * 100) : 0;
+  const fill  = row.querySelector(".aq-bundle-fill"); const pctEl = row.querySelector(".aq-bundle-pct");
+  if (fill)  fill.style.width   = pct + "%";
+  if (pctEl) pctEl.textContent  = pct + "%";
+  updateBundleRowDot(id, bundle.status);
 }
 
 /* ─── SANITIZE / FORMAT ─── */
-function esc(str) { if(str==null) return ""; return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;"); }
+function esc(str) {
+  if (str == null) return "";
+  return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 function formatOutput(text) {
-  if(!text) return "";
+  if (!text) return "";
   return esc(text)
-    .replace(/\*\*(.+?)\*\*/g,"<strong>$1</strong>")
-    .replace(/^## (.+)$/gm,'<span class="aq-out-h2">$1</span>')
-    .replace(/^- (.+)$/gm,'<span class="aq-out-li">• $1</span>')
-    .replace(/`([^`]+)`/g,'<code class="aq-out-code">$1</code>')
-    .replace(/\n/g,"<br/>");
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/^## (.+)$/gm, '<span class="aq-out-h2">$1</span>')
+    .replace(/^- (.+)$/gm, '<span class="aq-out-li">• $1</span>')
+    .replace(/`([^`]+)`/g, '<code class="aq-out-code">$1</code>')
+    .replace(/\n/g, "<br/>");
 }
 
 /* ─── TOAST ─── */
-function toast(msg, type="info") {
-  const root=document.getElementById("aq-toast-root");
-  const el=document.createElement("div"); el.className=`aq-toast ${type}`; el.textContent=msg;
-  root.appendChild(el); setTimeout(()=>{el.classList.add("fadeout");setTimeout(()=>el.remove(),320);},3000);
+function toast(msg, type = "info") {
+  const root = document.getElementById("aq-toast-root");
+  const el   = document.createElement("div"); el.className = `aq-toast ${type}`; el.textContent = msg;
+  root.appendChild(el);
+  // Use animationend instead of nested timeouts where possible; fall back to one clean timeout
+  const remove = () => { el.classList.add("fadeout"); el.addEventListener("transitionend", () => el.remove(), { once: true }); };
+  const timer  = window.setTimeout(remove, 3000);
+  el.addEventListener("click", () => { clearTimeout(timer); remove(); });
 }
 
 /* ─── COMMAND PALETTE ─── */
 const PALETTE_COMMANDS = [
-  { label:"⚡ Generate Project",       hint:"G",  action:()=>focusPrompt() },
-  { label:"▶ Run Bundle",              hint:"R",  action:()=>runCurrentBundle() },
-  { label:"⏸ Pause Bundle",            hint:"P",  action:()=>pauseCurrentBundle() },
-  { label:"↺ Resume Bundle",           hint:"RS", action:()=>resumeCurrentBundle() },
-  { label:"⚡ Auto-run All Steps",      hint:"A",  action:()=>autoRunSteps() },
-  { label:"☆ Pin / Unpin",             hint:"PI", action:()=>pinCurrentBundle() },
-  { label:"⌫ Delete Bundle",           hint:"D",  action:()=>deleteCurrentBundle() },
-  { label:"💾 Save File",               hint:"S",  action:()=>saveCurrentFile() },
-  { label:"✦ AI Edit File",             hint:"AI", action:()=>focusAiEdit() },
-  { label:"↗ Open Preview in Tab",     hint:"PV", action:()=>openPreviewInTab() },
-  { label:"⟳ Reload Preview",          hint:"RP", action:()=>refreshPreview() },
-  { label:"☰ Open Sidebar",            hint:"B",  action:()=>openSidebar() },
-  { label:"← Go to Bundles",           hint:"GB", action:()=>{ window.location.href="/bundles"; } },
+  { label: "⚡ Generate Project",   hint: "G",  action: () => focusPrompt() },
+  { label: "▶ Run Bundle",          hint: "R",  action: () => runCurrentBundle() },
+  { label: "⏸ Pause Bundle",        hint: "P",  action: () => pauseCurrentBundle() },
+  { label: "↺ Resume Bundle",       hint: "RS", action: () => resumeCurrentBundle() },
+  { label: "⚡ Auto-run All Steps", hint: "A",  action: () => autoRunSteps() },
+  { label: "☆ Pin / Unpin",         hint: "PI", action: () => pinCurrentBundle() },
+  { label: "⌫ Delete Bundle",       hint: "D",  action: () => deleteCurrentBundle() },
+  { label: "💾 Save File",           hint: "S",  action: () => saveCurrentFile() },
+  { label: "✦ AI Edit File",         hint: "AI", action: () => focusAiEdit() },
+  { label: "↗ Open Preview in Tab", hint: "PV", action: () => openPreviewInTab() },
+  { label: "⟳ Reload Preview",      hint: "RP", action: () => refreshPreview() },
+  { label: "☰ Open Sidebar",        hint: "B",  action: () => openSidebar() },
+  { label: "← Go to Bundles",       hint: "GB", action: () => { window.location.href = "/bundles"; } },
 ];
-function openPalette() { document.getElementById("aqPalette").classList.add("open"); document.getElementById("aqPaletteInput").value=""; renderPaletteList(PALETTE_COMMANDS); document.getElementById("aqPaletteInput").focus(); }
-function closePalette(e) { if(e&&e.target!==document.getElementById("aqPalette")) return; document.getElementById("aqPalette").classList.remove("open"); }
-function renderPaletteList(cmds) {
-  document.getElementById("aqPaletteList").innerHTML=cmds.map((c,i)=>`<div class="aq-palette-cmd" data-idx="${i}" role="option">${esc(c.label)}<span class="key">${esc(c.hint)}</span></div>`).join("");
-  document.querySelectorAll(".aq-palette-cmd").forEach(el=>{ el.onclick=()=>{ cmds[parseInt(el.dataset.idx)].action(); document.getElementById("aqPalette").classList.remove("open"); }; });
+function openPalette() {
+  document.getElementById("aqPalette").classList.add("open");
+  document.getElementById("aqPaletteInput").value = "";
+  renderPaletteList(PALETTE_COMMANDS);
+  document.getElementById("aqPaletteInput").focus();
 }
-function filterPalette(val) { const lower=val.toLowerCase(); renderPaletteList(PALETTE_COMMANDS.filter(c=>c.label.toLowerCase().includes(lower))); }
-function paletteKeydown(e) { if(e.key==="Escape") document.getElementById("aqPalette").classList.remove("open"); }
+function closePalette(e) {
+  if (e && e.target !== document.getElementById("aqPalette")) return;
+  document.getElementById("aqPalette").classList.remove("open");
+}
+function renderPaletteList(cmds) {
+  document.getElementById("aqPaletteList").innerHTML = cmds.map((c, i) =>
+    `<div class="aq-palette-cmd" data-idx="${i}" role="option">${esc(c.label)}<span class="key">${esc(c.hint)}</span></div>`
+  ).join("");
+  document.querySelectorAll(".aq-palette-cmd").forEach(el => {
+    el.onclick = () => { cmds[parseInt(el.dataset.idx)].action(); document.getElementById("aqPalette").classList.remove("open"); };
+  });
+}
+function filterPalette(val) {
+  const lower = val.toLowerCase();
+  renderPaletteList(PALETTE_COMMANDS.filter(c => c.label.toLowerCase().includes(lower)));
+}
+function paletteKeydown(e) { if (e.key === "Escape") document.getElementById("aqPalette").classList.remove("open"); }
 
 document.addEventListener("keydown", e => {
-  if ((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="k") { e.preventDefault(); openPalette(); }
-  if ((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==="s") { e.preventDefault(); saveCurrentFile(); }
-  if (e.key==="Escape") {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); openPalette(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") { e.preventDefault(); saveCurrentFile(); }
+  if (e.key === "Escape") {
     document.getElementById("aqPalette").classList.remove("open");
     document.getElementById("aqConfirm").classList.remove("open");
     document.getElementById("aqRunModal").classList.remove("open");
@@ -1311,29 +1482,37 @@ document.addEventListener("keydown", e => {
 
 /* ─── REALTIME ─── */
 (function initRealtime() {
-  if (typeof io==="undefined") return;
+  if (typeof io === "undefined") return;
   try {
-    const socket=io();
-    socket.on("bundle:update", data=>{
+    const socket = io();
+    socket.on("bundle:update", data => {
       if (!STATE.bundle) return;
-      if (String(data.bundleId)!==String(STATE.bundle._id)) return;
-      fetch("/workspace/bundle/"+STATE.bundle._id).then(r=>r.json()).then(d=>{
-        if(!d.bundle) return; STATE.bundle=d.bundle; renderExecPanel(d.bundle); renderMemoryPanel(d.bundle); renderInsightPanel(d.bundle);
-      }).catch(()=>{});
+      if (String(data.bundleId) !== String(STATE.bundle._id)) return;
+      fetch("/workspace/bundle/" + STATE.bundle._id)
+        .then(r => r.json())
+        .then(d => {
+          if (!d.bundle) return;
+          STATE.bundle = d.bundle;
+          renderExecPanel(d.bundle); renderMemoryPanel(d.bundle); renderInsightPanel(d.bundle);
+        })
+        .catch(() => {});
     });
-  } catch{}
+  } catch {}
 })();
 
-setInterval(async()=>{
-  if (!STATE.bundle||STATE.loading||STATE.stepRunning.size>0) return;
+setInterval(async () => {
+  if (!STATE.bundle || STATE.loading || STATE.stepRunning.size > 0) return;
   try {
-    const res=await fetch("/workspace/bundle/"+STATE.bundle._id); const data=await res.json();
+    const res  = await fetch("/workspace/bundle/" + STATE.bundle._id);
+    const data = await res.json();
     if (!data.bundle) return;
-    const prevDone=(STATE.bundle.progress||[]).filter(p=>p&&p.status==="completed").length;
-    const nextDone=(data.bundle.progress||[]).filter(p=>p&&p.status==="completed").length;
-    if (nextDone!==prevDone||data.bundle.status!==STATE.bundle.status) { STATE.bundle=data.bundle; renderExecPanel(data.bundle); }
-  } catch{}
-},10000);
+    const prevDone = (STATE.bundle.progress || []).filter(p => p && p.status === "completed").length;
+    const nextDone = (data.bundle.progress  || []).filter(p => p && p.status === "completed").length;
+    if (nextDone !== prevDone || data.bundle.status !== STATE.bundle.status) {
+      STATE.bundle = data.bundle; renderExecPanel(data.bundle);
+    }
+  } catch {}
+}, 10000);
 </script>
 </body>
 </html>

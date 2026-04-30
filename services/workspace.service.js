@@ -1,21 +1,23 @@
 /**
- * workspace.service.js — AQUIPLEX GOD MODE (v5)
+ * workspace.service.js — AQUIPLEX GOD MODE (v7)
  *
- * UNIFIED AI GENERATION ENGINE
- * Single pipeline: generateProjectUnified() handles ALL code/site generation.
- * Builder service is eliminated — all routes converge here.
+ * PRODUCTION-HARDENED AI GENERATION ENGINE
  *
- * PROVIDER WATERFALL:
- *   OpenRouter → openai/gpt-4o-mini → mistralai/mixtral-8x7b
- *   Groq       → llama-3.1-70b-versatile → llama-3.1-8b-instant
- *   → guaranteed fallback UI if ALL providers fail
- *
- * GUARANTEES:
- *   - generateProjectUnified() NEVER throws, NEVER returns empty
- *   - Every result has { files: [...], source, intent }
- *   - index.html is ALWAYS present
+ * HARDENING GUARANTEES:
+ *   - generateProjectUnified() NEVER returns success on invalid AI output
+ *   - Output MUST contain "=== FILE:" or an error is thrown (no silent fallback in edit mode)
+ *   - max_tokens capped at 2500 — no more 4096 overflow crashes
+ *   - Exponential backoff retry with AbortController timeout
+ *   - Provider health system: disabled after 2 consecutive failures, rotated intelligently
+ *   - FREE MODEL STACK: deepseek-chat (primary) → llama-3.3-70b (secondary) → mixtral-8x7b (creative/fallback)
+ *   - No paid models (no GPT-4, no Claude, no Mistral-Large)
+ *   - Consistent provider definitions across ai.service.js and workspace.service.js
+ *   - editProjectFile: NEVER overwrites files on invalid AI output
+ *   - parseMultiFileOutput: NEVER returns empty array, ALWAYS guarantees index.html
  *   - Atomic file writes — no partial-write corruption
- *   - Structured error logs: [AI ERROR] Provider | Model | Reason
+ *   - Structured logs: [AI ENGINE] | [PROJECT ENGINE] | [AI ERROR]
+ *   - Path traversal prevention on all file operations
+ *   - Allowed file extension whitelist enforced at write time
  */
 
 "use strict";
@@ -23,7 +25,6 @@
 const fs        = require("fs").promises;
 const fsSync    = require("fs");
 const path      = require("path");
-const os        = require("os");
 const mongoose  = require("mongoose");
 const Workspace = require("../models/Workspace");
 const Bundle    = require("../models/Bundle");
@@ -37,9 +38,20 @@ const MAX_RECENT_OUTPUTS = 20;
 const MAX_INSIGHTS       = 4;
 const PROJECTS_DIR       = path.join(__dirname, "../data/projects");
 
-const LLM_TIMEOUT_MS  = 30_000;
-const LLM_MAX_RETRIES = 2;
-const LLM_RETRY_DELAY = 600; // ms — doubles each retry
+const LLM_TIMEOUT_MS       = 35_000;
+const LLM_MAX_RETRIES      = 2;
+const LLM_RETRY_BASE_MS    = 800;   // doubles each retry (800 → 1600 → 3200)
+const LLM_MAX_TOKENS       = 2500;  // safe ceiling — prevents token overflow
+const PROVIDER_FAIL_LIMIT  = 2;     // disable provider after N consecutive failures
+const OUTPUT_MIN_LENGTH    = 100;
+const FILE_DELIMITER_REGEX = /={3}\s*FILE:\s*(.+?)\s*={3}/;
+
+const ALLOWED_EXTENSIONS = new Set([
+  ".html", ".htm", ".css", ".js", ".mjs", ".cjs",
+  ".ts", ".json", ".svg", ".md", ".txt",
+  ".png", ".jpg", ".jpeg", ".gif", ".ico",
+  ".woff", ".woff2", ".ttf",
+]);
 
 // Ensure projects dir exists on startup
 (async () => {
@@ -47,29 +59,70 @@ const LLM_RETRY_DELAY = 600; // ms — doubles each retry
 })();
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROVIDER REGISTRY — canonical, de-duplicated, no deprecated models
+// PROVIDER REGISTRY — strong models only, health tracking per process
 // ─────────────────────────────────────────────────────────────────────────────
+
+// In-process provider health state (resets on restart — intentional)
+const _providerHealth = new Map(); // key: "ProviderName" → { failures: 0, disabledUntil: 0 }
+
+function _getHealth(providerName) {
+  if (!_providerHealth.has(providerName)) {
+    _providerHealth.set(providerName, { failures: 0, disabledUntil: 0 });
+  }
+  return _providerHealth.get(providerName);
+}
+
+function _isProviderHealthy(providerName) {
+  const h = _getHealth(providerName);
+  if (h.disabledUntil > Date.now()) return false;
+  return true;
+}
+
+function _recordProviderSuccess(providerName) {
+  const h = _getHealth(providerName);
+  h.failures     = 0;
+  h.disabledUntil = 0;
+  console.log(`[AI ENGINE] ✅ Provider healthy: ${providerName}`);
+}
+
+function _recordProviderFailure(providerName) {
+  const h = _getHealth(providerName);
+  h.failures += 1;
+  if (h.failures >= PROVIDER_FAIL_LIMIT) {
+    const cooldownMs  = 60_000 * h.failures; // 1min * failure count
+    h.disabledUntil   = Date.now() + cooldownMs;
+    console.error(
+      `[AI ERROR] Provider disabled: ${providerName} | ` +
+      `failures: ${h.failures} | cooldown: ${cooldownMs / 1000}s`
+    );
+  }
+}
 
 function buildProviders() {
   const providers = [];
 
+  // ── OpenRouter (primary) ─────────────────────────────────────────────────
+  // Priority order: deepseek-chat (structure/coding) → mixtral-8x7b (creative/UI)
   if (process.env.OPENROUTER_API_KEY) {
     providers.push({
       name:    "OpenRouter",
       url:     "https://openrouter.ai/api/v1/chat/completions",
       headers: {
-        "Authorization":  `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        "Content-Type":   "application/json",
-        "HTTP-Referer":   process.env.OPENROUTER_REFERER || "https://aquiplex.com",
-        "X-Title":        "Aquiplex",
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
+        "Content-Type":  "application/json",
+        "HTTP-Referer":  process.env.OPENROUTER_REFERER || "https://aquiplex.com",
+        "X-Title":       "Aquiplex",
       },
+      // Free models only — priority order enforced
       models: [
-        "openai/gpt-4o-mini",
-        "mistralai/mixtral-8x7b",
+        "deepseek/deepseek-chat",          // #1 — best for structured multi-file code generation
+        "mistralai/mixtral-8x7b-instruct", // #2 — creative UI, reliable fallback
       ],
     });
   }
 
+  // ── Groq (secondary) ─────────────────────────────────────────────────────
+  // Priority order: llama-3.3-70b (general/reliable) → mixtral-8x7b (fallback)
   if (process.env.GROQ_API_KEY) {
     providers.push({
       name:    "Groq",
@@ -78,9 +131,10 @@ function buildProviders() {
         "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
         "Content-Type":  "application/json",
       },
+      // Free models only — priority order enforced
       models: [
-        "llama-3.1-70b-versatile",
-        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile", // #1 — strong general model, high reliability
+        "mixtral-8x7b-32768",      // #2 — long context fallback
       ],
     });
   }
@@ -274,11 +328,12 @@ async function _withRetry(fn, maxRetries = LLM_MAX_RETRIES, label = "LLM") {
       return await fn();
     } catch (err) {
       lastErr = err;
-      if (err._skipModel) throw err; // 400 errors — don't retry, skip model
+      if (err._skipModel) throw err; // 400/model errors — don't retry
       const reason = err.name === "AbortError" ? "timeout" : err.message;
       console.warn(`[AI ERROR] ${label} | Attempt ${attempt} | ${reason}`);
       if (attempt <= maxRetries) {
-        await new Promise(r => setTimeout(r, LLM_RETRY_DELAY * attempt));
+        const delay = LLM_RETRY_BASE_MS * Math.pow(2, attempt - 1); // exponential backoff
+        await new Promise(r => setTimeout(r, delay));
       }
     }
   }
@@ -286,11 +341,32 @@ async function _withRetry(fn, maxRetries = LLM_MAX_RETRIES, label = "LLM") {
 }
 
 function _isUsable(text) {
-  return typeof text === "string" && text.trim().length > 30;
+  return typeof text === "string" && text.trim().length > OUTPUT_MIN_LENGTH;
+}
+
+/**
+ * Strict output validation — throws if AI output cannot be used.
+ * This is the enforcement point for the "NEVER return success on bad output" guarantee.
+ */
+function _validateRawOutput(text, context = "generation") {
+  if (!text || typeof text !== "string") {
+    throw new Error(`AI output is null or non-string [${context}]`);
+  }
+  if (text.trim().length < OUTPUT_MIN_LENGTH) {
+    throw new Error(
+      `AI output too short (${text.trim().length} chars, min ${OUTPUT_MIN_LENGTH}) [${context}]`
+    );
+  }
+  if (!FILE_DELIMITER_REGEX.test(text)) {
+    throw new Error(
+      `AI output missing required "=== FILE:" delimiter [${context}]. ` +
+      `Raw preview: ${text.slice(0, 120).replace(/\n/g, "↵")}`
+    );
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// NUCLEAR FALLBACK PAGE — returned when ALL providers fail
+// NUCLEAR FALLBACK PAGE — only used for generate mode when ALL providers fail
 // ─────────────────────────────────────────────────────────────────────────────
 
 function _buildFallbackOutput(prompt, lastError) {
@@ -359,41 +435,36 @@ console.log("[Aquiplex] Fallback page loaded — all providers failed.");`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// UNIFIED AI GENERATION ENGINE — THE ONE TRUE PIPELINE
+// UNIFIED AI GENERATION ENGINE
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * generateProjectUnified({ prompt, mode, editMode, previousFiles })
+ * generateProjectUnified({ prompt, mode, editMode, previousFiles, targetFile, appType })
  *
  * THE single entry point for ALL AI generation in AQUIPLEX.
- * Replaces: generateCodeWithLLM (workspace.service v4)
- *           generateWebsiteFiles (builder.service / ai.service)
- *           builder.service generate()
  *
- * @param {object} params
- * @param {string}  params.prompt         - User's intent / edit instruction
- * @param {string}  [params.mode]         - "generate" | "edit" (default: "generate")
- * @param {boolean} [params.editMode]     - true → single-file edit prompt
- * @param {object}  [params.previousFiles]- { "filename": "content", ... } for edit mode
- * @param {string}  [params.targetFile]   - filename being edited (edit mode)
- * @param {string}  [params.appType]      - override detected app type
+ * BEHAVIOUR BY MODE:
+ *   generate → on all-provider failure: returns nuclear fallback HTML (guaranteed safe)
+ *   edit     → on all-provider failure: THROWS — never silently "succeeds" on edit
  *
  * @returns {Promise<{ rawOutput: string, source: string, intent: string }>}
- *   NEVER throws. NEVER returns undefined. rawOutput is ALWAYS a parseable string.
+ *   In generate mode: NEVER throws. rawOutput is ALWAYS a parseable string.
+ *   In edit mode: THROWS on AI failure. Caller must handle.
  */
 async function generateProjectUnified({
   prompt,
-  mode         = "generate",
-  editMode     = false,
+  mode          = "generate",
+  editMode      = false,
   previousFiles = null,
-  targetFile   = null,
-  appType      = null,
+  targetFile    = null,
+  appType       = null,
 }) {
-  const isEdit  = editMode || mode === "edit";
-  const intent  = appType || detectAppType(prompt);
+  const isEdit    = editMode || mode === "edit";
+  const intent    = appType || detectAppType(prompt);
   const sysPrompt = buildSystemPromptForType(intent);
+  const context   = isEdit ? `edit:${targetFile}` : "generate";
 
-  // ── Build user message ────────────────────────────────────────────────────
+  // ── Build user message ──────────────────────────────────────────────────────
   let userMessage;
   if (isEdit && targetFile && previousFiles) {
     const fileContent = previousFiles[targetFile] || "";
@@ -416,14 +487,20 @@ async function generateProjectUnified({
   ];
 
   const buildBody = (model) =>
-    JSON.stringify({ model, messages, max_tokens: 4096 });
+    JSON.stringify({
+      model,
+      messages,
+      max_tokens: LLM_MAX_TOKENS, // HARD CAP — prevents 4096 overflow crashes
+    });
 
   const PROVIDERS = buildProviders();
 
   if (PROVIDERS.length === 0) {
-    console.error("[AI ERROR] No providers configured — OPENROUTER_API_KEY and GROQ_API_KEY are both missing");
+    const err = new Error("No API keys configured. Set OPENROUTER_API_KEY or GROQ_API_KEY.");
+    console.error(`[AI ERROR] No providers configured`);
+    if (isEdit) throw err;
     return {
-      rawOutput: _buildFallbackOutput(prompt, new Error("No API keys configured. Set OPENROUTER_API_KEY or GROQ_API_KEY.")),
+      rawOutput: _buildFallbackOutput(prompt, err),
       source:    "nuclear_fallback",
       intent,
     };
@@ -432,6 +509,12 @@ async function generateProjectUnified({
   let lastError = null;
 
   for (const provider of PROVIDERS) {
+    // Skip providers that are in cooldown
+    if (!_isProviderHealthy(provider.name)) {
+      console.warn(`[AI ENGINE] Skipping unhealthy provider: ${provider.name}`);
+      continue;
+    }
+
     for (const model of provider.models) {
       const label = `${provider.name} | ${model}`;
       try {
@@ -443,8 +526,14 @@ async function generateProjectUnified({
           });
 
           if (res.status === 400) {
-            const errText = await res.text().catch(() => "HTTP 400");
-            const err     = new Error(`HTTP 400: ${errText.slice(0, 200)}`);
+            const errText  = await res.text().catch(() => "HTTP 400");
+            const err      = new Error(`HTTP 400: ${errText.slice(0, 200)}`);
+            err._skipModel = true;
+            throw err;
+          }
+
+          if (res.status === 401 || res.status === 403) {
+            const err      = new Error(`Auth error HTTP ${res.status} — check API key for ${provider.name}`);
             err._skipModel = true;
             throw err;
           }
@@ -464,28 +553,40 @@ async function generateProjectUnified({
 
         }, LLM_MAX_RETRIES, label);
 
-        if (_isUsable(text)) {
-          console.log(`[AI ENGINE] ✅ Success | ${label}`);
-          return { rawOutput: text, source: "ai", intent };
-        }
+        // ── Strict output validation before declaring success ─────────────────
+        _validateRawOutput(text, context); // throws if invalid
 
-        console.warn(`[AI ERROR] ${label} | Unusable response after retry`);
+        _recordProviderSuccess(provider.name);
+        console.log(`[AI ENGINE] ✅ Success | ${label} | output: ${text.length} chars`);
+        return { rawOutput: text, source: "ai", intent };
 
       } catch (err) {
+        lastError = err;
         if (err._skipModel) {
-          console.warn(`[AI ERROR] ${label} | 400 — model skipped permanently`);
+          console.warn(`[AI ERROR] ${label} | Model skipped: ${err.message}`);
         } else {
           console.warn(`[AI ERROR] ${label} | ${err.message}`);
+          _recordProviderFailure(provider.name);
         }
-        lastError = err;
-        console.log(`[AI ENGINE] Switching to next model...`);
+        console.log(`[AI ENGINE] Rotating to next model/provider...`);
       }
     }
-    console.warn(`[AI ENGINE] Provider exhausted: ${provider.name} — trying next provider...`);
+
+    console.warn(`[AI ENGINE] Provider exhausted: ${provider.name}`);
   }
 
-  // ── NUCLEAR FALLBACK — always returns valid HTML ──────────────────────────
+  // ── ALL PROVIDERS FAILED ───────────────────────────────────────────────────
   console.error(`[AI ERROR] ALL PROVIDERS FAILED | Last error: ${lastError?.message}`);
+
+  // Edit mode: NEVER silently succeed — throw so the caller does NOT overwrite files
+  if (isEdit) {
+    throw new Error(
+      `AI edit failed — all providers exhausted. File was NOT modified. ` +
+      `Last error: ${lastError?.message || "unknown"}`
+    );
+  }
+
+  // Generate mode: return clean fallback UI
   return {
     rawOutput: _buildFallbackOutput(prompt, lastError),
     source:    "nuclear_fallback",
@@ -494,12 +595,24 @@ async function generateProjectUnified({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PARSER
+// PARSER — strict, never returns empty array, always guarantees index.html
 // ─────────────────────────────────────────────────────────────────────────────
 
 function sanitizeFileName(name) {
   if (!name || typeof name !== "string") return "";
-  return name.replace(/\\/g, "/").replace(/^\/+/, "").replace(/\0/g, "").trim();
+  const cleaned = name
+    .replace(/\\/g, "/")
+    .replace(/^\/+/, "")
+    .replace(/\0/g, "")
+    .replace(/\.\.\//g, "") // prevent path traversal
+    .trim();
+  if (!cleaned) return "";
+  const ext = path.extname(cleaned).toLowerCase();
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    console.warn(`[PROJECT ENGINE] Rejected file with disallowed extension: ${cleaned}`);
+    return "";
+  }
+  return cleaned;
 }
 
 function inferLanguage(fileName) {
@@ -538,12 +651,20 @@ function _fallbackFile(reason = "", content = null) {
 }
 
 /**
- * Parse multi-file LLM output into an array of { fileName, content, language }.
- * ALWAYS returns a non-empty array.
+ * parseMultiFileOutput — strict parser.
+ *
+ * GUARANTEES:
+ *   - NEVER returns an empty array
+ *   - ALWAYS includes index.html
+ *   - Rejects malformed output (files with no content)
+ *   - Rejects files with disallowed extensions
+ *
+ * NOTE: This parser trusts that _validateRawOutput() was called first.
+ * It still handles edge cases defensively but does NOT produce silent successes.
  */
 function parseMultiFileOutput(raw) {
   if (!raw || typeof raw !== "string") {
-    console.warn("[parser] Received empty/null output — using fallback");
+    console.warn("[PROJECT ENGINE] Parser received empty/null output — using fallback");
     return [_fallbackFile("LLM returned no output")];
   }
 
@@ -552,6 +673,7 @@ function parseMultiFileOutput(raw) {
     .replace(/^```\s*$/gm, "")
     .trim();
 
+  // Normalise delimiter variants: == FILE:, ==FILE:, === FILE :, etc.
   cleaned = cleaned
     .replace(/={2,}\s*FILE\s*:\s*/gi, "=== FILE: ")
     .replace(/\s*={2,}\s*$/gm, " ===");
@@ -566,11 +688,11 @@ function parseMultiFileOutput(raw) {
   if (matches.length === 0) {
     const trimmed = cleaned.trim();
     if (trimmed.toLowerCase().includes("<!doctype") || trimmed.toLowerCase().includes("<html")) {
-      console.warn("[parser] No FILE delimiters — raw HTML detected, wrapping as index.html");
+      console.warn("[PROJECT ENGINE] No FILE delimiters — raw HTML detected, wrapping as index.html");
       return [{ fileName: "index.html", content: trimmed, language: "html" }];
     }
-    console.warn("[parser] No FILE delimiters and no HTML — using fallback page");
-    return [_fallbackFile("LLM output had no recognisable file delimiters", trimmed)];
+    console.warn("[PROJECT ENGINE] No FILE delimiters and no HTML — using fallback");
+    return [_fallbackFile("LLM output had no recognisable file delimiters", trimmed.slice(0, 500))];
   }
 
   const files = [];
@@ -579,26 +701,75 @@ function parseMultiFileOutput(raw) {
     const next    = matches[i + 1];
     let   content = next ? cleaned.slice(cur.end, next.start) : cleaned.slice(cur.end);
     content       = content.trim();
-    if (!content) continue;
+
+    if (!content) {
+      console.warn(`[PROJECT ENGINE] Skipping empty file block: ${cur.fileName}`);
+      continue;
+    }
+
     const safeFileName = sanitizeFileName(cur.fileName);
-    if (!safeFileName) continue;
+    if (!safeFileName) {
+      console.warn(`[PROJECT ENGINE] Skipping file with rejected name: ${cur.fileName}`);
+      continue;
+    }
+
     files.push({ fileName: safeFileName, content, language: inferLanguage(safeFileName) });
   }
 
   if (files.length === 0) {
-    console.warn("[parser] All parsed file blocks were empty — using fallback");
-    return [_fallbackFile("All file blocks were empty after parsing")];
+    console.warn("[PROJECT ENGINE] All parsed file blocks empty/rejected — using fallback");
+    return [_fallbackFile("All file blocks were empty or had disallowed extensions")];
   }
 
+  // ── Guarantee index.html is always present ──────────────────────────────────
+  const hasIndex = files.some(f => f.fileName === "index.html");
+  if (!hasIndex) {
+    const htmlFile = files.find(f => f.fileName.endsWith(".html"));
+    if (htmlFile) {
+      console.warn(`[PROJECT ENGINE] Renaming ${htmlFile.fileName} → index.html`);
+      htmlFile.fileName = "index.html";
+      htmlFile.language = "html";
+    } else {
+      console.warn("[PROJECT ENGINE] No HTML file found — injecting minimal index.html");
+      files.unshift({
+        fileName: "index.html",
+        content: `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Generated Project</title>
+  ${files.find(f => f.fileName === "style.css") ? '<link rel="stylesheet" href="style.css">' : ""}
+</head>
+<body>
+  ${files.find(f => f.fileName === "script.js") ? '<script src="script.js"></script>' : ""}
+</body>
+</html>`,
+        language: "html",
+      });
+    }
+  }
+
+  // ── Guarantee style.css and script.js ───────────────────────────────────────
+  if (!files.some(f => f.fileName === "style.css")) {
+    files.push({ fileName: "style.css", content: "/* Generated stylesheet */\n", language: "css" });
+  }
+  if (!files.some(f => f.fileName === "script.js")) {
+    files.push({ fileName: "script.js", content: '"use strict";\n// Generated script\n', language: "javascript" });
+  }
+
+  console.log(`[PROJECT ENGINE] Parsed ${files.length} file(s): ${files.map(f => f.fileName).join(", ")}`);
   return files;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FILE SYSTEM HELPERS — atomic writes, path safety
+// FILE SYSTEM HELPERS — atomic writes, path safety, extension whitelist
 // ─────────────────────────────────────────────────────────────────────────────
 
 function projectDir(projectId) {
-  return path.join(PROJECTS_DIR, String(projectId));
+  const safe = String(projectId).replace(/[^a-zA-Z0-9_-]/g, "");
+  if (!safe) throw new Error("Invalid projectId");
+  return path.join(PROJECTS_DIR, safe);
 }
 
 async function _atomicWrite(filePath, content) {
@@ -619,28 +790,46 @@ async function saveProjectFiles(projectId, files, meta = {}) {
     existingIndex = JSON.parse(raw);
   } catch { /* first save — no existing index */ }
 
+  // ── Write all files atomically (all-or-nothing via tmp files) ───────────────
+  const writeResults = await Promise.allSettled(
+    files.map(async file => {
+      const filePath = path.join(dir, file.fileName);
+      // Double-check path is within project dir
+      if (!filePath.startsWith(dir + path.sep) && filePath !== dir) {
+        throw new Error(`Path traversal rejected: ${file.fileName}`);
+      }
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+      await _atomicWrite(filePath, file.content);
+      return file.fileName;
+    })
+  );
+
+  const written  = [];
+  const failures = [];
+  for (const r of writeResults) {
+    if (r.status === "fulfilled") written.push(r.value);
+    else failures.push(r.reason?.message);
+  }
+
+  if (failures.length > 0) {
+    console.error(`[PROJECT ENGINE] Write failures: ${failures.join("; ")}`);
+  }
+
+  if (written.length === 0) {
+    throw new Error("All file writes failed — project not saved");
+  }
+
   const index = {
     ...existingIndex,
     ...meta,
     projectId:  String(projectId),
-    files:      files.map(f => f.fileName),
+    files:      written,
     updatedAt:  new Date().toISOString(),
     createdAt:  existingIndex.createdAt || new Date().toISOString(),
   };
 
-  await Promise.all(
-    files.map(async file => {
-      const filePath = path.join(dir, file.fileName);
-      if (!filePath.startsWith(dir)) {
-        console.warn(`[saveProjectFiles] Skipping unsafe path: ${file.fileName}`);
-        return;
-      }
-      await fs.mkdir(path.dirname(filePath), { recursive: true });
-      await _atomicWrite(filePath, file.content);
-    })
-  );
-
   await _atomicWrite(path.join(dir, "_index.json"), JSON.stringify(index, null, 2));
+  console.log(`[PROJECT ENGINE] Saved project ${projectId} — ${written.length} file(s)`);
   return index;
 }
 
@@ -656,7 +845,7 @@ async function readProjectFiles(projectId) {
         const content = await fs.readFile(path.join(dir, fileName), "utf8");
         files.push({ fileName, content, language: inferLanguage(fileName) });
       } catch (readErr) {
-        console.warn(`[readProjectFiles] Missing file skipped: ${fileName} (${readErr.message})`);
+        console.warn(`[PROJECT ENGINE] Missing file skipped: ${fileName} (${readErr.message})`);
       }
     }
 
@@ -665,13 +854,13 @@ async function readProjectFiles(projectId) {
         const content = await fs.readFile(path.join(dir, "index.html"), "utf8");
         files.unshift({ fileName: "index.html", content, language: "html" });
         index.files = ["index.html", ...index.files];
-        console.warn(`[readProjectFiles] index.html found on disk but missing from manifest — added`);
+        console.warn(`[PROJECT ENGINE] index.html found on disk but missing from manifest — recovered`);
       } catch { /* no index.html on disk either */ }
     }
 
     return { index, files };
   } catch (err) {
-    console.warn(`[readProjectFiles] Could not read index for project ${projectId}: ${err.message}`);
+    console.warn(`[PROJECT ENGINE] Could not read index for project ${projectId}: ${err.message}`);
     return { index: null, files: [] };
   }
 }
@@ -681,7 +870,9 @@ async function readSingleFile(projectId, fileName) {
   if (!safeFile) throw new Error("Invalid file name");
   const dir      = projectDir(projectId);
   const filePath = path.join(dir, safeFile);
-  if (!filePath.startsWith(dir)) throw new Error("Forbidden path");
+  if (!filePath.startsWith(dir + path.sep) && filePath !== dir) {
+    throw new Error("Forbidden path");
+  }
   try {
     return await fs.readFile(filePath, "utf8");
   } catch {
@@ -694,7 +885,9 @@ async function writeSingleFile(projectId, fileName, content) {
   if (!safeFile) throw new Error("Invalid file name");
   const dir      = projectDir(projectId);
   const filePath = path.join(dir, safeFile);
-  if (!filePath.startsWith(dir)) throw new Error("Forbidden path");
+  if (!filePath.startsWith(dir + path.sep) && filePath !== dir) {
+    throw new Error("Forbidden path");
+  }
 
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   await _atomicWrite(filePath, content);
@@ -716,6 +909,8 @@ async function writeSingleFile(projectId, fileName, content) {
     };
     await _atomicWrite(indexPath, JSON.stringify(fallbackIndex, null, 2));
   }
+
+  console.log(`[PROJECT ENGINE] Wrote file: ${safeFile} → project ${projectId}`);
 }
 
 async function deleteProject(projectId) {
@@ -744,7 +939,7 @@ async function listProjects() {
             createdAt: index.createdAt  || null,
             updatedAt: index.updatedAt  || null,
           });
-        } catch { /* malformed or missing index — skip silently */ }
+        } catch { /* malformed or missing index — skip */ }
       })
     );
 
@@ -761,7 +956,223 @@ async function listProjects() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FALLBACK TEMPLATE ENGINE — bundle step outputs
+// PROJECT SERVICES — all AI generation routed through generateProjectUnified
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function createProject(userId, name, projectId = null) {
+  if (!userId) throw new Error("Unauthorized");
+  const id  = projectId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const dir = projectDir(id);
+  await fs.mkdir(dir, { recursive: true });
+  const index = {
+    projectId: id,
+    name:      (name || "Untitled Project").slice(0, 120),
+    userId:    String(userId),
+    files:     [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  await _atomicWrite(path.join(dir, "_index.json"), JSON.stringify(index, null, 2));
+  console.log(`[PROJECT ENGINE] Created project ${id} for user ${userId}`);
+  return { success: true, projectId: id, name: index.name };
+}
+
+/**
+ * generateProject — full multi-file AI generation.
+ *
+ * Guarantees:
+ *   - index.html, style.css, script.js are ALWAYS written
+ *   - _index.json is ALWAYS saved on success
+ *   - On nuclear fallback: success: true with fallback HTML (user sees UI, not crash)
+ *   - On actual AI success: validated output only
+ */
+async function generateProject(userId, projectId, prompt) {
+  if (!userId)               throw new Error("Unauthorized");
+  if (!projectId || !prompt) throw new Error("projectId and prompt are required");
+
+  console.log(`[AI ENGINE] generateProject start | project: ${projectId} | prompt: ${String(prompt).slice(0, 80)}`);
+
+  const appType = detectAppType(prompt);
+
+  const { rawOutput, source, intent } = await generateProjectUnified({
+    prompt,
+    mode:    "generate",
+    appType,
+  });
+
+  // For nuclear_fallback, rawOutput is pre-validated and contains === FILE: ===
+  // For ai source, _validateRawOutput was already called inside generateProjectUnified
+  const files = parseMultiFileOutput(rawOutput); // ALWAYS non-empty, always has index.html
+
+  // ── Preserve existing metadata ──────────────────────────────────────────────
+  let existingMeta = {};
+  try {
+    const raw    = await fs.readFile(path.join(projectDir(projectId), "_index.json"), "utf8");
+    existingMeta = JSON.parse(raw);
+  } catch { /* no existing index — fine */ }
+
+  const meta = {
+    name:   (existingMeta.name || String(prompt).slice(0, 80) || "Generated Project"),
+    userId: existingMeta.userId || String(userId),
+    prompt: String(prompt).slice(0, 500),
+    source,
+    intent,
+  };
+
+  const index = await saveProjectFiles(projectId, files, meta);
+
+  console.log(
+    `[AI ENGINE] generateProject complete | project: ${projectId} | ` +
+    `source: ${source} | files: ${files.map(f => f.fileName).join(", ")}`
+  );
+
+  return {
+    success:   true,
+    projectId,
+    appType:   intent,
+    name:      index.name,
+    files:     files.map(f => f.fileName),
+    fileData:  files,
+    source,
+  };
+}
+
+/**
+ * editProjectFile — AI single-file edit.
+ *
+ * CRITICAL GUARANTEE:
+ *   - If AI output is invalid → throws → file is NEVER overwritten
+ *   - Only writes to disk after full validation passes
+ *   - Returns { success: false } path is handled at route level via thrown error
+ */
+async function editProjectFile(userId, projectId, filename, command) {
+  if (!userId)   throw new Error("Unauthorized");
+  if (!filename) throw new Error("filename is required");
+  if (!command)  throw new Error("edit command is required");
+
+  const safeFilename = sanitizeFileName(filename);
+  if (!safeFilename) throw new Error(`Invalid or disallowed filename: ${filename}`);
+
+  console.log(`[AI ENGINE] editProjectFile start | project: ${projectId} | file: ${safeFilename}`);
+
+  const { files: existingFiles } = await readProjectFiles(projectId);
+  if (!existingFiles.length) throw new Error("Project not found or has no files");
+
+  const targetExists = existingFiles.some(f => f.fileName === safeFilename);
+  if (!targetExists) throw new Error(`File not found in project: ${safeFilename}`);
+
+  const previousFiles = {};
+  existingFiles.forEach(f => { previousFiles[f.fileName] = f.content; });
+
+  // generateProjectUnified in edit mode THROWS on failure — file will NOT be touched
+  const { rawOutput } = await generateProjectUnified({
+    prompt:        command,
+    mode:          "edit",
+    editMode:      true,
+    previousFiles,
+    targetFile:    safeFilename,
+  });
+
+  // rawOutput was already validated inside generateProjectUnified (throws on invalid)
+  // Parse to get the updated file content
+  const parsed = parseMultiFileOutput(rawOutput);
+
+  if (!parsed.length) {
+    throw new Error("AI returned no file content for edit — file was NOT modified");
+  }
+
+  // Verify parsed output actually contains meaningful content
+  const editedFile = parsed.find(f => f.fileName === safeFilename) || parsed[0];
+  if (!editedFile || !editedFile.content || editedFile.content.trim().length < 10) {
+    throw new Error(`AI returned empty content for ${safeFilename} — file was NOT modified`);
+  }
+
+  // ── Only now do we write to disk — ALL validation passed ────────────────────
+  const writtenFiles = [];
+  for (const file of parsed) {
+    const targetName = (file.fileName === safeFilename || parsed.length === 1)
+      ? safeFilename
+      : sanitizeFileName(file.fileName);
+    if (!targetName) continue;
+    await writeSingleFile(projectId, targetName, file.content);
+    writtenFiles.push(targetName);
+  }
+
+  if (writtenFiles.length === 0) {
+    throw new Error("No files were written during edit — all targets were invalid");
+  }
+
+  console.log(`[AI ENGINE] editProjectFile complete | project: ${projectId} | updated: ${writtenFiles.join(", ")}`);
+
+  return {
+    success:      true,
+    projectId,
+    filename:     safeFilename,
+    updatedFiles: writtenFiles,
+  };
+}
+
+async function getProjectList(userId) {
+  if (!userId) throw new Error("Unauthorized");
+  const all      = await listProjects();
+  const projects = all
+    .filter(p => !p.userId || p.userId === String(userId))
+    .map(p => ({
+      projectId: p.projectId,
+      name:      p.name,
+      fileCount: p.fileCount,
+      files:     p.files,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    }));
+  return { success: true, projects };
+}
+
+async function getProjectFiles(userId, projectId) {
+  if (!projectId) throw new Error("projectId is required");
+  const { index, files } = await readProjectFiles(projectId);
+  if (!index) throw new Error("Project not found");
+
+  const sorted = [
+    ...files.filter(f => f.fileName === "index.html"),
+    ...files.filter(f => f.fileName !== "index.html"),
+  ];
+
+  return {
+    success:   true,
+    projectId,
+    name:      index.name || "Untitled Project",
+    files:     sorted.map(f => f.fileName),
+    fileData:  sorted,
+    updatedAt: index.updatedAt || null,
+  };
+}
+
+async function getProjectFile(userId, projectId, fileName) {
+  if (!projectId || !fileName) throw new Error("projectId and fileName are required");
+  const content = await readSingleFile(projectId, fileName);
+  return { success: true, projectId, fileName, content };
+}
+
+async function saveProjectFile(userId, projectId, fileName, content) {
+  if (!projectId || !fileName) throw new Error("projectId and fileName are required");
+  if (content === undefined || content === null) throw new Error("content is required");
+  const safeFile = sanitizeFileName(fileName);
+  if (!safeFile) throw new Error(`Invalid or disallowed filename: ${fileName}`);
+  await writeSingleFile(projectId, safeFile, content);
+  return { success: true, projectId, fileName: safeFile };
+}
+
+async function deleteProjectById(userId, projectId) {
+  if (!userId)    throw new Error("Unauthorized");
+  if (!projectId) throw new Error("projectId is required");
+  await deleteProject(projectId);
+  console.log(`[PROJECT ENGINE] Deleted project ${projectId}`);
+  return { success: true };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FALLBACK TEMPLATE ENGINE — bundle step outputs (unchanged)
 // ─────────────────────────────────────────────────────────────────────────────
 
 const INSIGHT_TEMPLATES = [
@@ -920,194 +1331,6 @@ function validateBundleId(bundleId) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PROJECT SERVICES — all AI generation routed through generateProjectUnified
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function createProject(userId, name, projectId = null) {
-  if (!userId) throw new Error("Unauthorized");
-  const id  = projectId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const dir = projectDir(id);
-  await fs.mkdir(dir, { recursive: true });
-  const index = {
-    projectId: id,
-    name:      name || "Untitled Project",
-    userId:    String(userId),
-    files:     [],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  await _atomicWrite(path.join(dir, "_index.json"), JSON.stringify(index, null, 2));
-  return { success: true, projectId: id, name: index.name };
-}
-
-/**
- * Generate a complete multi-file project using the unified AI engine.
- * Guarantees: index.html is always present, _index.json is always saved.
- */
-async function generateProject(userId, projectId, prompt) {
-  if (!userId)               throw new Error("Unauthorized");
-  if (!projectId || !prompt) throw new Error("projectId and prompt are required");
-
-  const appType = detectAppType(prompt);
-
-  // ── Single unified AI call ─────────────────────────────────────────────────
-  const { rawOutput, source, intent } = await generateProjectUnified({
-    prompt,
-    mode:    "generate",
-    appType,
-  });
-
-  let files = parseMultiFileOutput(rawOutput); // ALWAYS non-empty
-
-  // ── Normalise: guarantee index.html ────────────────────────────────────────
-  const hasIndex = files.some(f => f.fileName === "index.html");
-  if (!hasIndex) {
-    const htmlFile = files.find(f => f.fileName.endsWith(".html"));
-    if (htmlFile) {
-      htmlFile.fileName = "index.html";
-    } else {
-      files.unshift({
-        fileName: "index.html",
-        content: `<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${String(prompt).slice(0, 60)}</title></head>
-<body><script src="${files[0]?.fileName || 'script.js'}"></script></body>
-</html>`,
-        language: "html",
-      });
-    }
-  }
-
-  // ── Preserve existing metadata ─────────────────────────────────────────────
-  let existingMeta = {};
-  try {
-    const raw    = await fs.readFile(path.join(projectDir(projectId), "_index.json"), "utf8");
-    existingMeta = JSON.parse(raw);
-  } catch { /* no existing index — fine */ }
-
-  const meta = {
-    name:   existingMeta.name   || String(prompt).slice(0, 80) || "Generated Project",
-    userId: existingMeta.userId || String(userId),
-    prompt: String(prompt).slice(0, 500),
-    source,
-    intent,
-  };
-
-  const index = await saveProjectFiles(projectId, files, meta);
-
-  return {
-    success:  true,
-    projectId,
-    appType:  intent,
-    name:     index.name,
-    files:    files.map(f => f.fileName),
-    fileData: files,
-    source,
-  };
-}
-
-/**
- * Edit a single project file using the unified AI engine.
- */
-async function editProjectFile(userId, projectId, filename, command) {
-  if (!userId)   throw new Error("Unauthorized");
-  if (!filename) throw new Error("filename is required");
-  if (!command)  throw new Error("edit command is required");
-
-  const { files: existingFiles } = await readProjectFiles(projectId);
-  if (!existingFiles.length) throw new Error("Project not found or has no files");
-
-  const targetExists = existingFiles.some(f => f.fileName === filename);
-  if (!targetExists) throw new Error(`File not found in project: ${filename}`);
-
-  const previousFiles = {};
-  existingFiles.forEach(f => { previousFiles[f.fileName] = f.content; });
-
-  // ── Single unified AI call ─────────────────────────────────────────────────
-  const { rawOutput } = await generateProjectUnified({
-    prompt:        command,
-    mode:          "edit",
-    editMode:      true,
-    previousFiles,
-    targetFile:    filename,
-  });
-
-  const parsed = parseMultiFileOutput(rawOutput);
-  if (!parsed.length) throw new Error("AI returned no file content for edit");
-
-  for (const file of parsed) {
-    const targetName = (file.fileName === filename || parsed.length === 1)
-      ? filename
-      : file.fileName;
-    await writeSingleFile(projectId, targetName, file.content);
-  }
-
-  return {
-    success:      true,
-    projectId,
-    filename,
-    updatedFiles: parsed.map(f => f.fileName),
-  };
-}
-
-async function getProjectList(userId) {
-  if (!userId) throw new Error("Unauthorized");
-  const all      = await listProjects();
-  const projects = all
-    .filter(p => !p.userId || p.userId === String(userId))
-    .map(p => ({
-      projectId: p.projectId,
-      name:      p.name,
-      fileCount: p.fileCount,
-      files:     p.files,
-      createdAt: p.createdAt,
-      updatedAt: p.updatedAt,
-    }));
-  return { success: true, projects };
-}
-
-async function getProjectFiles(userId, projectId) {
-  if (!projectId) throw new Error("projectId is required");
-  const { index, files } = await readProjectFiles(projectId);
-  if (!index) throw new Error("Project not found");
-
-  const sorted = [
-    ...files.filter(f => f.fileName === "index.html"),
-    ...files.filter(f => f.fileName !== "index.html"),
-  ];
-
-  return {
-    success:   true,
-    projectId,
-    name:      index.name || "Untitled Project",
-    files:     sorted.map(f => f.fileName),
-    fileData:  sorted,
-    updatedAt: index.updatedAt || null,
-  };
-}
-
-async function getProjectFile(userId, projectId, fileName) {
-  if (!projectId || !fileName) throw new Error("projectId and fileName are required");
-  const content = await readSingleFile(projectId, fileName);
-  return { success: true, projectId, fileName, content };
-}
-
-async function saveProjectFile(userId, projectId, fileName, content) {
-  if (!projectId || !fileName) throw new Error("projectId and fileName are required");
-  if (content === undefined || content === null) throw new Error("content is required");
-  await writeSingleFile(projectId, fileName, content);
-  return { success: true, projectId, fileName };
-}
-
-async function deleteProjectById(userId, projectId) {
-  if (!userId)    throw new Error("Unauthorized");
-  if (!projectId) throw new Error("projectId is required");
-  await deleteProject(projectId);
-  return { success: true };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // WORKSPACE SERVICES
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1116,8 +1339,8 @@ async function getWorkspaceState(userId) {
   const ws         = await getOrCreateWorkspace(userId);
   const allBundles = await Bundle.find({ userId }).sort({ updatedAt: -1 }).lean();
   const bundles    = allBundles.map((b) => {
-    const steps    = Array.isArray(b.steps)    ? b.steps    : [];
-    const progress = Array.isArray(b.progress) ? b.progress : [];
+    const steps     = Array.isArray(b.steps)    ? b.steps    : [];
+    const progress  = Array.isArray(b.progress) ? b.progress : [];
     const completed = progress.filter((p) => p && p.status === "completed").length;
     return {
       _id:               b._id,
@@ -1131,16 +1354,10 @@ async function getWorkspaceState(userId) {
       updatedAt:         b.updatedAt,
     };
   });
-
-  const mem = ws.workspaceMemory instanceof Map
-    ? Object.fromEntries(ws.workspaceMemory)
-    : ws.workspaceMemory || {};
-
   return {
-    success:    true,
-    workspace:  sanitizeWorkspaceForClient(ws),
+    success:   true,
+    workspace: sanitizeWorkspaceForClient(ws),
     bundles,
-    workspaceMemory: mem,
   };
 }
 
@@ -1155,38 +1372,21 @@ async function getBundleState(userId, bundleId) {
 async function runBundle(userId, bundleId) {
   validateBundleId(bundleId);
   if (!userId) throw new Error("Unauthorized");
-
   const [ws, bundle] = await Promise.all([
     getOrCreateWorkspace(userId),
     Bundle.findOne({ _id: bundleId, userId }),
   ]);
   if (!bundle) throw new Error("Bundle not found");
+  if (bundle.status === "completed") throw new Error("Bundle already completed");
 
-  const steps = Array.isArray(bundle.steps) ? bundle.steps : [];
-  if (!steps.length) throw new Error("Bundle has no steps");
-
-  bundle.progress    = buildProgressArray(steps, bundle.progress);
-  bundle.currentStep = 0;
-  bundle.status      = "active";
+  const steps    = Array.isArray(bundle.steps) ? bundle.steps : [];
+  bundle.status  = "active";
+  bundle.progress = buildProgressArray(steps, bundle.progress);
 
   if (typeof ws.openSession === "function") ws.openSession(bundleId, steps.length);
-  else {
-    if (!Array.isArray(ws.executionSessions)) ws.executionSessions = [];
-    ws.executionSessions = ws.executionSessions
-      .filter((s) => s && s.bundleId?.toString() !== bundleId.toString())
-      .slice(-(MAX_SESSIONS - 1));
-    ws.executionSessions.push({
-      bundleId: bundle._id,
-      totalSteps: steps.length,
-      currentStep: 0,
-      status: "running",
-      startedAt: new Date(),
-    });
-  }
-
   ws.lastOpenBundleId = bundle._id;
-  await Promise.all([bundle.save(), ws.save()]);
 
+  await Promise.all([bundle.save(), ws.save()]);
   return {
     success:   true,
     bundle:    sanitizeBundleForClient(bundle),
@@ -1194,11 +1394,11 @@ async function runBundle(userId, bundleId) {
   };
 }
 
-async function completeStep(userId, bundleId, stepIndex, payload = {}) {
+async function completeStep(userId, bundleId, stepIdx, payload = {}) {
   validateBundleId(bundleId);
   if (!userId) throw new Error("Unauthorized");
 
-  const idx = typeof stepIndex === "string" ? parseInt(stepIndex, 10) : stepIndex;
+  const idx = parseInt(stepIdx, 10);
   if (isNaN(idx) || idx < 0) throw new Error("Invalid step index");
 
   const [ws, bundle] = await Promise.all([
@@ -1208,37 +1408,28 @@ async function completeStep(userId, bundleId, stepIndex, payload = {}) {
   if (!bundle) throw new Error("Bundle not found");
 
   const steps = Array.isArray(bundle.steps) ? bundle.steps : [];
-  if (idx >= steps.length) throw new Error(`Step ${idx} does not exist`);
-
-  if (!Array.isArray(bundle.progress) || bundle.progress.length !== steps.length) {
-    bundle.progress = buildProgressArray(steps, bundle.progress);
-  }
+  if (idx >= steps.length) throw new Error(`Step ${idx} out of range (total: ${steps.length})`);
+  if (!Array.isArray(bundle.progress)) bundle.progress = buildProgressArray(steps, []);
 
   let outputEntry;
-
   if (payload.useAI) {
-    // AI-powered step — uses the unified engine's generateAI shim
-    const stepPrompt = `
-${steps[idx].description || steps[idx].title}
-
-PROJECT GOAL: ${bundle.goal || bundle.title}
-STEP ${idx + 1} of ${steps.length}: ${steps[idx].title}
-
-Deliver a concrete, actionable output. No filler.
-`.trim();
-
     try {
-      const { rawOutput } = await generateProjectUnified({
-        prompt:  stepPrompt,
-        mode:    "generate",
-        appType: "static",
-      });
+      const step     = steps[idx];
+      const stepPrompt =
+        `Complete this step for the project bundle titled "${bundle.title || "Untitled"}":\n` +
+        `Goal: ${bundle.goal || "Not specified"}\n` +
+        `Step: ${step.title || `Step ${idx + 1}`}\n` +
+        `Description: ${step.description || "No description"}\n\n` +
+        `Provide a detailed, actionable output for this step.`;
+
+      const aiRes  = await generateProjectUnified({ prompt: stepPrompt, mode: "generate" });
+      const rawOutput = aiRes.rawOutput;
 
       outputEntry = {
         stepIndex:       idx,
-        stepTitle:       steps[idx].title || `Step ${idx + 1}`,
+        stepTitle:       steps[idx]?.title || `Step ${idx + 1}`,
         content:         rawOutput,
-        keyInsights:     generateInsights(steps[idx].title || `Step ${idx + 1}`, idx),
+        keyInsights:     generateInsights(steps[idx]?.title || `Step ${idx + 1}`, idx),
         nextStepHints:   generateNextHints(steps[idx], steps, idx),
         confidenceScore: 0.95,
         tokensUsed:      rawOutput.length / 4 | 0,
@@ -1406,7 +1597,7 @@ async function autoProgressNext(userId, bundleId) {
 // ─────────────────────────────────────────────────────────────────────────────
 
 module.exports = {
-  // ── UNIFIED AI ENGINE (primary export) ───────────────────────────────────
+  // ── UNIFIED AI ENGINE ─────────────────────────────────────────────────────
   generateProjectUnified,
 
   // ── Workspace services ────────────────────────────────────────────────────

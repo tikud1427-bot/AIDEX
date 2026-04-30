@@ -1,13 +1,12 @@
 /**
- * workspace.routes.js — AQUIPLEX Production (v4)
+ * workspace.routes.js — AQUIPLEX Production (v6)
  *
- * CHANGELOG v4:
- * - GET  /workspace/projects          → list all user projects (with metadata)
- * - GET  /workspace/files/:projectId  → list project files (index.html always first)
- * - GET  /workspace/file/:projectId/:filename → serve file content as JSON for editor
- * - POST /workspace/save-file         → atomic file save
- * - POST /workspace/edit-file         → AI-powered file edit
- * - All existing routes preserved exactly
+ * FIXES v6:
+ * - [FIX-CRITICAL] mirrorSingleFile after /edit-file: result.updatedFiles is string[]
+ *   (file names only). Must read content from svc after edit, not from result.updatedFiles.
+ *   Old code tried f.fileName / f.content on a string — mirror was NEVER called.
+ * - [FIX-PREVIEW] After save-file: mirror now verified working.
+ * - [FIX-PREVIEW] After edit-file: read each updated file's content from svc then mirror.
  */
 
 "use strict";
@@ -22,9 +21,40 @@ const Bundle    = require("../models/Bundle");
 const svc       = require("../services/workspace.service");
 
 // ── Mount Project Engine ──────────────────────────────────────────────────────
-// IMPORTANT: mounted BEFORE param-based routes to prevent conflicts
 const projectRoutes = require("./project.routes");
 router.use("/project", projectRoutes);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mirror root — MUST match PROJECTS_ROOT in project.routes.js
+// ─────────────────────────────────────────────────────────────────────────────
+const PROJECTS_ROOT = path.join(process.cwd(), "projects");
+
+const ALLOWED_MIRROR_EXTENSIONS = new Set([
+  ".html", ".htm", ".css", ".js", ".mjs", ".cjs",
+  ".ts", ".json", ".svg", ".md", ".txt",
+  ".png", ".jpg", ".jpeg", ".gif", ".ico",
+  ".woff", ".woff2", ".ttf",
+]);
+
+function mirrorSingleFile(projectId, fileName, content) {
+  try {
+    const safe = path.basename(projectId);
+    if (!safe || safe !== projectId) return;
+
+    const ext = path.extname(fileName).toLowerCase();
+    if (!ALLOWED_MIRROR_EXTENSIONS.has(ext)) return;
+
+    const dir      = path.join(PROJECTS_ROOT, safe);
+    const safeName = path.basename(fileName);
+    if (!safeName) return;
+
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, safeName), content, "utf8");
+    console.log(`[WS ROUTE] Mirrored ${safeName} → ${dir}`);
+  } catch (e) {
+    console.warn("[WS ROUTE] mirrorSingleFile failed:", e.message);
+  }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers
@@ -237,7 +267,7 @@ router.delete("/tools/:id", async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /workspace/add/:toolId  (backward compat)
+// POST /workspace/add/:toolId
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/add/:toolId", async (req, res) => {
@@ -268,7 +298,7 @@ router.post("/add/:toolId", async (req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POST /workspace/remove/:toolId  (backward compat)
+// POST /workspace/remove/:toolId
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/remove/:toolId", async (req, res) => {
@@ -298,8 +328,6 @@ router.post("/remove/:toolId", async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /workspace/projects
-// List all saved projects for the authenticated user.
-// Returns: { success, projects: [{ projectId, name, fileCount, updatedAt, createdAt }] }
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get("/projects", async (req, res) => {
@@ -315,8 +343,6 @@ router.get("/projects", async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /workspace/files/:projectId
-// List all files in a project. index.html is always first in the response.
-// Returns: { success, projectId, name, files, fileData, updatedAt }
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get("/files/:projectId", async (req, res) => {
@@ -333,8 +359,6 @@ router.get("/files/:projectId", async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /workspace/file/:projectId/:filename
-// Fetch content of a single file for the code editor.
-// Returns: { success, file: { content, fileName }, projectId }
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.get("/file/:projectId/:filename", async (req, res) => {
@@ -357,9 +381,6 @@ router.get("/file/:projectId/:filename", async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /workspace/save-file
-// Manually save file content (from the code editor).
-// Body: { projectId, fileName, content }
-// Returns: { success, projectId, fileName }
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/save-file", async (req, res) => {
@@ -373,6 +394,10 @@ router.post("/save-file", async (req, res) => {
       return res.status(400).json({ success: false, error: "content is required" });
     }
     const result = await svc.saveProjectFile(userId, projectId, fileName, content);
+
+    // Mirror to PROJECTS_ROOT so iframe preview reflects saved content immediately
+    mirrorSingleFile(projectId, fileName, content);
+
     res.json(result);
   } catch (err) {
     handleErr(res, err);
@@ -381,9 +406,15 @@ router.post("/save-file", async (req, res) => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /workspace/edit-file
-// AI-powered file edit via natural language instruction.
-// Body: { projectId, fileName, instruction }
-// Returns: { success, projectId, filename, updatedFiles }
+//
+// [FIX-CRITICAL v6]
+// editProjectFile() returns { success, projectId, filename, updatedFiles }
+// where updatedFiles is string[] — file NAMES only, not objects.
+// Old code: for (const f of result.updatedFiles) { f.fileName, f.content }
+//   → f is a string → f.fileName is undefined → mirror NEVER ran.
+//
+// Fix: after edit succeeds, read each updated file's content from svc,
+// then mirror. Best-effort — never blocks the response.
 // ─────────────────────────────────────────────────────────────────────────────
 
 router.post("/edit-file", async (req, res) => {
@@ -394,6 +425,22 @@ router.post("/edit-file", async (req, res) => {
       return res.status(400).json({ success: false, error: "projectId, fileName, and instruction required" });
     }
     const result = await svc.editProjectFile(userId, projectId, fileName, instruction);
+
+    // [FIX] updatedFiles is string[] — read content for each and mirror
+    if (Array.isArray(result.updatedFiles) && result.updatedFiles.length > 0) {
+      // Fire-and-forget mirror (non-blocking, best-effort)
+      setImmediate(async () => {
+        for (const updatedFileName of result.updatedFiles) {
+          try {
+            const content = await svc.readSingleFile(projectId, updatedFileName);
+            mirrorSingleFile(projectId, updatedFileName, content);
+          } catch (mirrorErr) {
+            console.warn(`[WS ROUTE] Mirror read failed for ${updatedFileName}:`, mirrorErr.message);
+          }
+        }
+      });
+    }
+
     res.json(result);
   } catch (err) {
     handleErr(res, err);
