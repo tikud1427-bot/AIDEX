@@ -292,29 +292,6 @@
 
   <hr class="os-divider">
 
-  <!-- ═══ TRENDING TOOLS (dynamic from backend) ═══ -->
-  <% if (tools && tools.length > 0) { %>
-  <section class="tools-section" aria-labelledby="trending-heading">
-    <span class="section-eyebrow">Trending Now</span>
-    <h2 class="section-heading" id="trending-heading">Tools people are building with</h2>
-
-    <div class="tools-grid">
-      <% tools.slice(0, 4).forEach(function(tool){ %>
-      <div class="tool-card-os">
-        <img class="tool-logo-os" src="<%= tool.logo %>" alt="<%= tool.name %> logo">
-        <div class="tool-name-os"><%= tool.name %></div>
-        <p class="tool-desc-os"><%= tool.description %></p>
-        <div class="tool-actions-os">
-          <a href="/tool/<%= tool._id %>" class="tool-btn primary-tool">Details</a>
-          <a href="/visit/<%= tool._id %>" target="_blank" rel="noopener noreferrer" class="tool-btn ghost-tool">Visit →</a>
-        </div>
-      </div>
-      <% }) %>
-    </div>
-  </section>
-
-  <hr class="os-divider">
-  <% } %>
 
   <!-- ═══ INTELLIGENCE LAYER ═══ -->
   <section class="intelligence-layer">
@@ -351,6 +328,29 @@
   </section>
 
   <hr class="os-divider">
+  <!-- ═══ TRENDING TOOLS (dynamic from backend) ═══ -->
+  <% if (tools && tools.length > 0) { %>
+  <section class="tools-section" aria-labelledby="trending-heading">
+    <span class="section-eyebrow">Trending Now</span>
+    <h2 class="section-heading" id="trending-heading">Tools people are building with</h2>
+
+    <div class="tools-grid">
+      <% tools.slice(0, 4).forEach(function(tool){ %>
+      <div class="tool-card-os">
+        <img class="tool-logo-os" src="<%= tool.logo %>" alt="<%= tool.name %> logo">
+        <div class="tool-name-os"><%= tool.name %></div>
+        <p class="tool-desc-os"><%= tool.description %></p>
+        <div class="tool-actions-os">
+          <a href="/tool/<%= tool._id %>" class="tool-btn primary-tool">Details</a>
+          <a href="/visit/<%= tool._id %>" target="_blank" rel="noopener noreferrer" class="tool-btn ghost-tool">Visit →</a>
+        </div>
+      </div>
+      <% }) %>
+    </div>
+  </section>
+  <hr class="os-divider">
+  <% } %>
+
 
 
   <!-- ═══ FEATURED TOOLS (full list) ═══ -->
