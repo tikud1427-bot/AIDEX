@@ -1,0 +1,15 @@
+{
+  "projectId": "00d2147b-c714-4ba0-8cda-b2e7bd8e16c3",
+  "name": "build a fully working pomodoro timer",
+  "userId": "69b6c6d87c83e9504c4e0cde",
+  "files": [
+    "index.html",
+    "style.css",
+    "script.js"
+  ],
+  "createdAt": "2026-05-05T07:57:38.386Z",
+  "updatedAt": "2026-05-05T07:57:53.007Z",
+  "prompt": "build a fully working pomodoro timer",
+  "source": "ai_two_pass",
+  "intent": "tool"
+}
