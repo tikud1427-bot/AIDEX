@@ -413,6 +413,13 @@ async function getTrendingTools(limit = 10) {
     .slice(0, limit);
 }
 
+// ── isTrending helper ─────────────────────────────────────────────────────────
+function isTrending(tool, thresholdClicks = 1) {
+  const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const score = (tool.clickHistory || []).filter((c) => new Date(c.date) > last24h).length;
+  return score >= thresholdClicks;
+}
+
 // ── Import tools from JSON ────────────────────────────────────────────────────
 let jsonTools = [];
 try {
@@ -507,48 +514,105 @@ app.get("/tools", async (req, res) => {
         const aiRes = await axios.post(
           "https://api.groq.com/openai/v1/chat/completions",
           {
-            model:    "llama-3.1-8b-instant",
+            model: "llama-3.1-8b-instant",
             messages: [
-              { role: "system", content: `You are an AI search engine brain. Convert user query into JSON: {"intent": "","keywords": [],"categories": []}. Return ONLY valid JSON, no markdown.` },
-              { role: "user",   content: searchQuery },
+              {
+                role: "system",
+                content: `Convert user query into JSON: {"intent":"","keywords":[],"categories":[]}. Return ONLY JSON.`,
+              },
+              { role: "user", content: searchQuery },
             ],
             temperature: 0.3,
           },
           {
-            headers: { Authorization: `Bearer ${process.env.GROQ_API_KEY}`, "Content-Type": "application/json" },
+            headers: {
+              Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+              "Content-Type": "application/json",
+            },
             timeout: 8000,
-          },
+          }
         );
+
         let text = aiRes.data.choices[0].message.content;
-        text     = text.replace(/```json/g, "").replace(/```/g, "").trim();
+        text = text.replace(/```json|```/g, "").trim();
+
         const match = text.match(/\{[\s\S]*\}/);
         if (match) aiData = JSON.parse(match[0]);
-        else throw new Error("No JSON found");
+        else throw new Error("No JSON");
+
       } catch {
         aiData = { intent: searchQuery, keywords: [searchQuery], categories: [] };
       }
 
       tools = tools
         .map((tool) => {
-          let score   = 0;
-          const name  = tool.name.toLowerCase();
-          const desc  = (tool.description || "").toLowerCase();
-          const cat   = (tool.category || "").toLowerCase();
+          let score = 0;
+
+          const name = (tool.name || "").toLowerCase();
+          const desc = (tool.description || "").toLowerCase();
+          const cat  = (tool.category || "").toLowerCase();
+
           const keywords = [...(aiData.keywords || []), aiData.intent]
             .map((k) => (k || "").toLowerCase())
             .filter(Boolean);
+
           keywords.forEach((k) => {
             if (name.includes(k)) score += 5;
             if (desc.includes(k)) score += 3;
             if (cat.includes(k))  score += 4;
           });
+
           return { ...tool, score };
         })
         .filter((t) => t.score > 0)
         .sort((a, b) => b.score - a.score);
     }
 
-    res.render("tools", { tools, searchQuery: searchQuery || "" });
+    // Categories from all tools (not just filtered)
+    const allToolsForCats = searchQuery ? await Tool.find().lean() : tools;
+    const categories = [...new Set(allToolsForCats.map(t => t.category).filter(Boolean))].sort();
+
+    // Trending IDs
+    const trendingTools = await getTrendingTools(10);
+    const trendingIds   = new Set(trendingTools.map(t => t._id.toString()));
+
+    // AI recommended: top matching query OR top liked/clicked
+    let recommended = [];
+    try {
+      if (searchQuery) {
+        recommended = tools.slice(0, 4).map(t => ({
+          _id: t._id, name: t.name, url: t.url, category: t.category,
+          logo: t.logo, description: t.description,
+          isTrending: trendingIds.has(t._id.toString()),
+        }));
+      } else {
+        const top = await Tool.find().sort({ likes: -1, clicks: -1 }).limit(4).lean();
+        recommended = top.map(t => ({
+          _id: t._id, name: t.name, url: t.url, category: t.category,
+          logo: t.logo, description: t.description,
+          isTrending: trendingIds.has(t._id.toString()),
+        }));
+      }
+    } catch { recommended = []; }
+
+    // Annotate tools with badges
+    const nowMs = Date.now();
+    const toolsAnnotated = tools.map(t => ({
+      ...t,
+      isTrending: trendingIds.has(t._id.toString()),
+      isNew: t.createdAt && (nowMs - new Date(t.createdAt).getTime()) < 7 * 24 * 60 * 60 * 1000,
+      isPopular: (t.likes || 0) > 10,
+    }));
+
+    res.render("tools", {
+      tools: toolsAnnotated,
+      searchQuery: searchQuery || "",
+      categories,
+      trendingIds: [...trendingIds],
+      recommended,
+      categoryFilter: req.query.cat || "",
+    });
+
   } catch (err) {
     console.error(err);
     res.status(500).send("Error loading tools");
@@ -557,20 +621,21 @@ app.get("/tools", async (req, res) => {
 
 app.get("/tools/:id", async (req, res) => {
   try {
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).send("Invalid tool ID");
     const tool = await Tool.findById(req.params.id).lean();
-    if (!tool) return res.status(404).send("Tool not found");
 
-    if (req.session.userId) {
-      await Tool.findByIdAndUpdate(req.params.id, {
-        $push: { clickHistory: { date: new Date() } },
-        $inc:  { clicks: 1 },
-      });
-    }
+    let aiInsights = null;
 
-    res.render("tool-details", { tool });
+    try {
+      const aiRes = await generateAI([
+        { role: "system", content: "Give short insights about this AI tool." },
+        { role: "user", content: `${tool.name}: ${tool.description}` }
+      ]);
+      aiInsights = aiRes;
+    } catch {}
+
+    res.render("tool-details", { tool, aiInsights });
+
   } catch (err) {
-    console.error(err);
     res.status(500).send("Error loading tool");
   }
 });
@@ -687,6 +752,66 @@ app.get("/api/tools/suggest", async (req, res) => {
     }
     res.json(tools.map((t) => ({ _id: t._id, name: t.name, url: t.url, category: t.category, logo: t.logo })));
   } catch {
+    res.json([]);
+  }
+});
+
+// ── Visit redirect (tracks click) ─────────────────────────────────────────────
+app.get("/visit/:id", async (req, res) => {
+  try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) return res.status(400).send("Invalid ID");
+    const tool = await Tool.findById(req.params.id).lean();
+    if (!tool) return res.status(404).send("Tool not found");
+    // track click async
+    Tool.findByIdAndUpdate(req.params.id, {
+      $push: { clickHistory: { date: new Date() } },
+      $inc:  { clicks: 1 },
+    }).catch(() => {});
+    res.redirect(tool.url || "/tools");
+  } catch (err) {
+    console.error(err);
+    res.redirect("/tools");
+  }
+});
+
+// ── AI Tool Recommendation endpoint ───────────────────────────────────────────
+app.get("/api/tools/recommend", async (req, res) => {
+  try {
+    const q = (req.query.q || "").trim();
+    const cat = (req.query.cat || "").trim();
+    const trendingTools = await getTrendingTools(10);
+    const trendingIds = new Set(trendingTools.map(t => t._id.toString()));
+
+    let tools = await Tool.find().lean();
+
+    // filter by category if provided
+    if (cat) tools = tools.filter(t => (t.category || "").toLowerCase() === cat.toLowerCase());
+
+    let scored;
+    if (q) {
+      scored = tools.map(t => {
+        const text = ((t.name || "") + " " + (t.description || "") + " " + (t.category || "")).toLowerCase();
+        const qLow = q.toLowerCase();
+        let score = 0;
+        if (t.name.toLowerCase().includes(qLow)) score += 6;
+        if (text.includes(qLow)) score += 3;
+        score += (t.likes || 0) * 0.1;
+        if (trendingIds.has(t._id.toString())) score += 4;
+        return { ...t, recScore: score };
+      }).filter(t => t.recScore > 0).sort((a, b) => b.recScore - a.recScore).slice(0, 6);
+    } else {
+      scored = tools
+        .map(t => ({ ...t, recScore: (t.likes || 0) + (trendingIds.has(t._id.toString()) ? 10 : 0) + (t.clicks || 0) * 0.1 }))
+        .sort((a, b) => b.recScore - a.recScore).slice(0, 6);
+    }
+
+    res.json(scored.map(t => ({
+      _id: t._id, name: t.name, url: t.url, category: t.category,
+      logo: t.logo, description: t.description,
+      likes: t.likes || 0, isTrending: trendingIds.has(t._id.toString()),
+    })));
+  } catch (err) {
+    console.error("recommend error:", err);
     res.json([]);
   }
 });
