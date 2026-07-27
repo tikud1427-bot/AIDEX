@@ -138,3 +138,73 @@ test('contradictions are surfaced, never resolved (both statements retained)', (
   assert.equal(c.statements.length, 2);
   assert.ok(c.statements[0] !== c.statements[1], 'both sides kept intact for the user to adjudicate');
 });
+
+// ── Predicate typing (Brain V1 / B1) ─────────────────────────────────────────
+//
+// Entity typing is deliberately coarse ('name' for every proper noun, so that
+// "OpenAI" and "OpenAI Inc." stay one entity), which left REL_BY_TYPES
+// unreachable for the dominant name|name pair and collapsed nearly every
+// relationship to `related_to`. Typing now reads the co-mentioning sentence.
+
+test('B1: relationship type is read off the supporting statement', () => {
+  const entities = [entity('e:a', 'Ananya'), entity('e:p', 'AQUA')];
+  const facts = [fact('f1', 'Ananya leads the AQUA project', ['Ananya', 'AQUA'], [ev('e1', 'charter')])];
+  const [rel] = buildRelationships(entities, facts, mockStore(facts), 'o');
+  assert.equal(rel.type, 'works_on', 'not the generic related_to');
+  assert.equal(rel.typeSource, 'predicate');
+  assert.match(rel.reason, /stated via "leads"/, 'the justifying phrase is recorded');
+  assert.ok(rel.evidence.length > 0, 'still grounded');
+});
+
+test('B1: reverse predicates flip direction ("X founded Y" ⇒ Y created_by X)', () => {
+  const entities = [entity('e:a', 'Ananya'), entity('e:o', 'Aquiplex')];
+  const facts = [fact('f1', 'Ananya founded Aquiplex in 2024', ['Ananya', 'Aquiplex'], [ev('e1', 'bio')])];
+  const [rel] = buildRelationships(entities, facts, mockStore(facts), 'o');
+  assert.equal(rel.type, 'created_by');
+  assert.equal(rel.from, 'e:o', 'the company is created_by…');
+  assert.equal(rel.to, 'e:a', '…the founder');
+  assert.equal(rel.id, 'rel:e:a|e:o', 'id stays canonical (id-sorted) so re-runs never duplicate');
+});
+
+test('B1: forward direction follows entity order in the sentence', () => {
+  const entities = [entity('e:x', 'ServiceX'), entity('e:y', 'Postgres')];
+  const facts = [fact('f1', 'ServiceX depends on Postgres for storage', ['ServiceX', 'Postgres'], [ev('e1', 'arch')])];
+  const [rel] = buildRelationships(entities, facts, mockStore(facts), 'o');
+  assert.equal(rel.type, 'depends_on');
+  assert.equal(rel.from, 'e:x');
+  assert.equal(rel.to, 'e:y');
+});
+
+test('B1: predicate must sit BETWEEN the two entities, else it is describing something else', () => {
+  const entities = [entity('e:a', 'Ananya'), entity('e:b', 'Bengaluru')];
+  // "founded" precedes both names — it is not a statement about a↔b.
+  const facts = [fact('f1', 'The company founded a lab; Ananya and Bengaluru were mentioned later', ['Ananya', 'Bengaluru'], [ev('e1', 'doc')])];
+  const [rel] = buildRelationships(entities, facts, mockStore(facts), 'o');
+  assert.equal(rel.type, 'related_to', 'falls back rather than mis-typing');
+  assert.equal(rel.typeSource, 'co_occurrence');
+});
+
+test('B1: place predicates beat the ambiguous ownership ones', () => {
+  const entities = [entity('e:o', 'Aquiplex'), entity('e:g', 'Guwahati')];
+  const facts = [fact('f1', 'Aquiplex operates from Guwahati', ['Aquiplex', 'Guwahati'], [ev('e1', 'doc')])];
+  assert.equal(buildRelationships(entities, facts, mockStore(facts), 'o')[0].type, 'located_in');
+});
+
+test('B1: typing never invents an edge — no co-occurrence, still no relationship', () => {
+  const entities = [entity('e:a', 'Ananya'), entity('e:z', 'Zeta')];
+  const facts = [
+    fact('f1', 'Ananya leads the project', ['Ananya'], [ev('e1', 'a')]),
+    fact('f2', 'Zeta depends on something', ['Zeta'], [ev('e2', 'b')]),
+  ];
+  assert.equal(buildRelationships(entities, facts, mockStore(facts), 'o').length, 0);
+});
+
+test('B1: predicate-typed relationships earn a small bounded confidence lift, still capped', () => {
+  const entities = [entity('e:a', 'Ananya'), entity('e:p', 'AQUA')];
+  const stated = [fact('f1', 'Ananya leads the AQUA project', ['Ananya', 'AQUA'], [ev('e1', 'a')])];
+  const merely = [fact('f1', 'Ananya and AQUA appeared together', ['Ananya', 'AQUA'], [ev('e1', 'a')])];
+  const a = buildRelationships(entities, stated, mockStore(stated), 'o')[0];
+  const b = buildRelationships(entities, merely, mockStore(merely), 'o')[0];
+  assert.ok(a.confidence > b.confidence, 'stated beats co-occurring');
+  assert.ok(a.confidence <= 0.95, 'cap holds');
+});

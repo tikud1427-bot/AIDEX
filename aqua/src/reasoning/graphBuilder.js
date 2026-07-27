@@ -11,7 +11,9 @@
  * rebuildOwnerGraph(owner) — full construction from the owner's stored
  *   facts + evidence: collect mentions → resolve entities → upsert
  *   entity/fact/file/event nodes → add mentions/asserts/about/involves/
- *   related_to/contradicts edges (all provenance-bearing). Idempotent.
+ *   contradicts edges plus TYPED entity↔entity relationships (works_on,
+ *   owns, affiliated_with, located_in, …), all provenance-bearing.
+ *   Idempotent.
  *
  * The graph is derived state over the evidence store (the source of truth),
  * so "incremental" here means: re-deriving is cheap and safe, and
@@ -110,9 +112,17 @@ export function rebuildOwnerGraph(deps, ownerId) {
   }
 
   // 6. Relationships (entity↔entity, derived).
+  //
+  // B1: the inferred type is stored AS the edge type. Before, every one of
+  // these was flattened to `related_to` with the true type demoted into the
+  // reason string — unqueryable, untraversable, invisible to relationship
+  // -distance scoring. relationshipEngine already infers works_on / owns /
+  // affiliated_with / located_in / associated_with; the graph now keeps them.
+  // Consumers that ask for `related_to` still match all of these, because
+  // the registry expands it as a class (see typeRegistry.expandEdgeTypes).
   const relationships = buildRelationships(entities, facts, evidenceStore, ownerId);
   for (const rel of relationships) {
-    G.addEdge(ownerId, { from: rel.from, to: rel.to, type: 'related_to', kind: 'derived', confidence: rel.confidence, evidence: rel.evidence, sourceFiles: rel.sourceFiles, reason: `${rel.type}: ${rel.reason}`, id: rel.id }, { fileId: rel.sourceFiles[0] ?? null });
+    G.addEdge(ownerId, { from: rel.from, to: rel.to, type: rel.type, kind: 'derived', confidence: rel.confidence, evidence: rel.evidence, sourceFiles: rel.sourceFiles, reason: rel.reason, id: rel.id }, { fileId: rel.sourceFiles[0] ?? null });
   }
 
   // 7. Cross-file contradictions (fact↔fact, derived; surfaced not resolved).

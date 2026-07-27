@@ -42,6 +42,7 @@ import { purgeOwner as purgeEvidence } from '../files/evidenceStore.js';
 import { purgeOwner as purgeFileIndex } from '../files/fileSearchIndex.js';
 import { purgeOwner as purgeReasoningGraph } from '../reasoning/reasoningGraph.js';
 import { purgeOwner as purgePic } from '../pic/picStore.js';
+import { purgeOwner as purgeBrain } from '../brain/index.js';
 import { listArtifacts, deleteArtifact } from '../artifacts/artifactStore.js';
 import { listWorkspaces, deleteWorkspace } from '../project/workspaceManager.js';
 import { clearIndex } from '../project/projectIndex.js';
@@ -139,8 +140,11 @@ export async function purgeOwnerData({ userId } = {}) {
   report.graph = step(report, 'reasoningGraph', () => purgeReasoningGraph(ownerId))
     ?? { nodes: 0, edges: 0 };
 
-  // ── 4. Persistent Intelligence Core ───────────────────────────────────────
+  // ── 4. Persistent Intelligence Core + Brain world-model annotations ────────
   report.picSubjects = step(report, 'pic', () => purgePic(ownerId)) ?? 0;
+  // Brain sidecar holds only annotations (no knowledge), but once a user has
+  // written entity descriptions they are personal data and must be erased too.
+  report.brainAnnotations = step(report, 'brain', () => purgeBrain(ownerId))?.annotations ?? 0;
 
   // ── 5. Generated artifacts (manifest index + files on disk) ───────────────
   const artifacts = step(report, 'artifacts:list', () => listArtifacts({ ownerId })) ?? [];

@@ -87,6 +87,9 @@ import {
   canAccessConversation,
 } from '../memory/conversationStore.js';
 import { resolveOwner, memoryObserve, memoryRetrieve, memoryAfterTurn, getMemoryTrace, semanticFactScores, semanticFileChunks } from '../memory/engine.js';
+import * as Brain from '../brain/index.js';
+import { formatCitation } from '../files/evidence.js';
+import { REFLECT_EVERY_TURNS } from '../mind/reflectionEngine.js';
 import { retrieveProjectContext, formatProjectContext }    from '../project/projectRetriever.js';
 import { semanticFileScores }                              from '../project/semanticProject.js';
 import { formatAttachmentsForPrompt, getAttachments }       from '../upload/attachmentStore.js';
@@ -547,12 +550,28 @@ async function prepareTurn({ userMessage, workspaceId, conversationId, userId = 
     // MAY add one bounded keyword-broadened retry when the cognitive plan
     // requires evidence and the first pass came back empty. CIE off ⇒ pure
     // passthrough, byte-identical to calling PIC directly.
-    const knowledge = cognitiveKnowledgeRetrieve(memoryOwner, userMessage, { limit: 8, plan: cognition.plan });
+    //
+    // B4 — Context Engine V2: the CIE+PIC call becomes the FLOOR for the
+    // ten-dimension scorer + budgeted, diversity-aware assembler. Superset
+    // return shape ({ items, block, stats }), so knowledgeContext/Items/Stats
+    // downstream are untouched. Fail-safe: any V2 failure returns the PIC
+    // floor unchanged. Off unless AQUA_CONTEXT_V2=on (then pure passthrough).
+    // The semantic scores are pre-awaited here — the async boundary the CIE
+    // path already owns — and handed in, keeping the engine itself pure.
+    const floorRetrieve = (oid, q, o) => cognitiveKnowledgeRetrieve(oid, q, { ...o, plan: cognition.plan });
+    const knowledge = Brain.contextV2Active()
+      ? Brain.assembleContext(memoryOwner, userMessage, floorRetrieve, {
+          limit: 8, plan: cognition.plan, formatCitation,
+          semanticScores: await semanticScoresP.catch(() => null),
+          activeProjectId: workspaceId ?? null,
+        })
+      : floorRetrieve(memoryOwner, userMessage, { limit: 8 });
     knowledgeContext = knowledge.block;
     knowledgeItems   = knowledge.items;
     knowledgeStats   = knowledge.stats ?? {};
     if (knowledgeContext) {
-      console.log(`[PIC] Knowledge injected owner=${memoryOwner} facts=${knowledge.stats.facts} entities=${knowledge.stats.entities} timeline=${knowledge.stats.timelineEvents} feedbackReuse=${knowledge.stats.reusedSignals}${knowledge.stats.broadened ? ` broadened=+${knowledge.stats.broadenGained}` : ''}`);
+      const ce = knowledge.stats?.contextEngine;
+      console.log(`[PIC] Knowledge injected owner=${memoryOwner} facts=${knowledge.stats.facts} entities=${knowledge.stats.entities} timeline=${knowledge.stats.timelineEvents} feedbackReuse=${knowledge.stats.reusedSignals}${knowledge.stats.broadened ? ` broadened=+${knowledge.stats.broadenGained}` : ''}${ce ? ` [CTXv2 selected=${ce.selected}/${ce.candidates} dropped=${ce.dropped}]` : ''}`);
     }
   }
 
@@ -1001,6 +1020,43 @@ router.post('/', async (req, res) => {
     // ── 9b. Mind post-turn — predictions rebuild + async reflection when due ────
     memoryAfterTurn(prep.memoryOwner, { taskType, workspaceId });
 
+    // ── 9c. Brain world-model ingest (B3) — conversations earn the same graph
+    //         standing as files. Fail-open + off by default (AQUA_BRAIN_INGEST),
+    //         so this is inert until turned on. Deferred to the next tick so it
+    //         never adds a millisecond to the response the user is waiting on.
+    setImmediate(() => {
+      try {
+        Brain.observeConversationTurn({
+          ownerId: prep.memoryOwner,
+          conversationId,
+          turn: getConversation(conversationId).length,
+          userMessage,
+          assistantMessage: finalAnswer,
+        });
+      } catch { /* fail-open: world-model enrichment must never affect the turn */ }
+      try {
+        // Digital Twin (B6) — the six inferred patterns the Mind does not yet
+        // cover. Signals route through the Mind's ONE belief writer, so they
+        // decay/contradict/version like every existing dimension. Reads the
+        // USER's message only: inferring the user's style from AQUA's own
+        // output would be a closed loop that manufactures its own evidence.
+        Brain.observeTwin({ ownerId: prep.memoryOwner, userMessage, conversationId });
+      } catch { /* fail-open */ }
+    });
+
+    // ── 9d. Brain Reflection V2 (B5) — on the Mind's reflection cadence, compute
+    //         a STRUCTURED world-model delta (entities/relationships/obsoleted
+    //         facts) and apply it via reversible lifecycle transitions. Deferred,
+    //         fail-open, off by default (AQUA_REFLECT_V2). Runs after the ingest
+    //         above so it reflects on the turn just absorbed.
+    setImmediate(() => {
+      try {
+        if ((getConversation(conversationId).length % REFLECT_EVERY_TURNS) === 0) {
+          Brain.reflectTurn(prep.memoryOwner);
+        }
+      } catch { /* fail-open: reflection must never affect the turn */ }
+    });
+
     // ── 10. Respond ──────────────────────────────────────────────────────────────
     const payload = buildResponsePayload({
       identityGuarded, draftObservation,
@@ -1312,6 +1368,43 @@ router.post('/stream', async (req, res) => {
 
     // ── 9b. Mind post-turn — predictions rebuild + async reflection when due ────
     memoryAfterTurn(prep.memoryOwner, { taskType, workspaceId });
+
+    // ── 9c. Brain world-model ingest (B3) — conversations earn the same graph
+    //         standing as files. Fail-open + off by default (AQUA_BRAIN_INGEST),
+    //         so this is inert until turned on. Deferred to the next tick so it
+    //         never adds a millisecond to the response the user is waiting on.
+    setImmediate(() => {
+      try {
+        Brain.observeConversationTurn({
+          ownerId: prep.memoryOwner,
+          conversationId,
+          turn: getConversation(conversationId).length,
+          userMessage,
+          assistantMessage: finalAnswer,
+        });
+      } catch { /* fail-open: world-model enrichment must never affect the turn */ }
+      try {
+        // Digital Twin (B6) — the six inferred patterns the Mind does not yet
+        // cover. Signals route through the Mind's ONE belief writer, so they
+        // decay/contradict/version like every existing dimension. Reads the
+        // USER's message only: inferring the user's style from AQUA's own
+        // output would be a closed loop that manufactures its own evidence.
+        Brain.observeTwin({ ownerId: prep.memoryOwner, userMessage, conversationId });
+      } catch { /* fail-open */ }
+    });
+
+    // ── 9d. Brain Reflection V2 (B5) — on the Mind's reflection cadence, compute
+    //         a STRUCTURED world-model delta (entities/relationships/obsoleted
+    //         facts) and apply it via reversible lifecycle transitions. Deferred,
+    //         fail-open, off by default (AQUA_REFLECT_V2). Runs after the ingest
+    //         above so it reflects on the turn just absorbed.
+    setImmediate(() => {
+      try {
+        if ((getConversation(conversationId).length % REFLECT_EVERY_TURNS) === 0) {
+          Brain.reflectTurn(prep.memoryOwner);
+        }
+      } catch { /* fail-open: reflection must never affect the turn */ }
+    });
 
     // ── 10. Done event — same diagnostics shape as POST /chat ───────────────────
     const payload = buildResponsePayload({

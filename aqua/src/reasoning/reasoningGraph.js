@@ -1,5 +1,5 @@
 /**
- * AQUA Reasoning Graph — Cross-File Reasoning (Phase 3)
+ * AQUA Reasoning Graph — Cross-File Reasoning (Phase 3) + Brain V1 / B1
  *
  * The Unified Reasoning Graph: one connected knowledge space where every
  * node (entity, fact, event, file, topic) links to every other through
@@ -7,21 +7,44 @@
  * INFORMATION, not files — this graph is what "information, not files"
  * means concretely.
  *
- * Node types:  entity | fact | event | file | topic
- * Edge types:  mentions (file→entity), asserts (file→fact),
- *              about (fact→entity), supports (evidence-backed fact→claim),
- *              occurs_at (event→timepoint), involves (event→entity),
- *              derived_from (event→fact), related_to (entity→entity),
- *              contradicts (fact↔fact), same_as (entity merge record)
+ * Node types:  entity | fact | event | file | topic   (extend: registerNodeType)
+ * Edge types:  OPEN. Two classes, owned by ./typeRegistry.js —
+ *              structural  the graph's own wiring: mentions (file→entity),
+ *                          asserts (file→fact), about (fact→entity),
+ *                          supports, occurs_at, involves, derived_from,
+ *                          contradicts, same_as
+ *              related_to  entity↔entity semantics: works_on, depends_on,
+ *                          implements, uses, member_of, owns, … and anything
+ *                          registered later. Not a fixed list.
  *
- * THE REASONING CONTRACT is enforced structurally: no edge exists without
- * provenance. Every edge carries { confidence, evidence: [evidenceId…],
- * sourceFiles: [ukoId…], reason }. An edge with empty provenance is
- * rejected at insert. And every node/edge is tagged with an epistemic
- * `kind` — observed | derived | hypothesis | speculation — so the query
- * layer can keep them from ever mixing (facts are observed; inferred
- * relationships are derived; contradiction pairings are derived; nothing
- * here is speculation, but the field exists for the reasoning phase).
+ * BRAIN V1 / B1 — WHAT CHANGED AND WHY
+ * ------------------------------------
+ * Edge types were a frozen array and addEdge threw on anything outside it.
+ * The consequence was live semantic loss: graphBuilder inferred `works_on`,
+ * `owns`, `affiliated_with`, `located_in` and then had to flatten all of
+ * them to `related_to`, moving the true type into a free-text `reason`
+ * prefix where nothing could query it. Three things changed:
+ *
+ *   1. Types come from a registry, not a literal. Unknown relationship
+ *      types auto-register (logged once) instead of throwing — the brief's
+ *      "do not hardcode relationship types" requirement. Malformed type
+ *      NAMES are still rejected, so edge ids stay clean.
+ *   2. Queries expand by CLASS. `edgesOf(…, { type: 'related_to' })` still
+ *      returns `works_on`/`owns`/…, so every existing consumer keeps working
+ *      against the newly-typed data with no change. `{ exact: true }` opts
+ *      out.
+ *   3. Legacy `related_to` edges self-heal. On load, an edge whose reason
+ *      reads "works_on: co-mentioned in…" is rewritten to its true type; on
+ *      re-insert, a generic edge is upgraded in place when a specific type
+ *      arrives. No rebuild required, no duplicate edges (edge ids from
+ *      graphBuilder are type-independent).
+ *
+ * THE REASONING CONTRACT is enforced structurally and is unchanged: no edge
+ * exists without provenance. Every edge carries { confidence, evidence:
+ * [evidenceId…], sourceFiles: [ukoId…], reason }. An edge with empty
+ * provenance is rejected at insert. And every node/edge is tagged with an
+ * epistemic `kind` — observed | derived | hypothesis | speculation — so the
+ * query layer can keep them from ever mixing.
  *
  * Incremental by construction: addFile() merges a file's contribution into
  * the existing graph without a rebuild; removeFile() detaches exactly that
@@ -32,16 +55,25 @@ import {
   createDebouncedWriter, loadJsonFile, wrapStore, unwrapStore,
 } from '../core/atomicStore.js';
 import { dataPath } from '../core/dataDir.js';
+import {
+  EDGE_CLASS, ensureEdgeType, isKnownEdgeType, isKnownNodeType,
+  edgeClassOf, expandEdgeTypes, listEdgeTypes, listNodeTypes,
+} from './typeRegistry.js';
 
 const STORE_FILE = dataPath('.aqua-reasoning-graph.json');
-const SCHEMA     = 1;
+const SCHEMA     = 2;   // v2: open edge-type vocabulary + legacy related_to migration
 
-export const NODE_TYPES = Object.freeze(['entity', 'fact', 'event', 'file', 'topic']);
-export const EDGE_TYPES = Object.freeze([
-  'mentions', 'asserts', 'about', 'supports', 'occurs_at', 'involves',
-  'derived_from', 'related_to', 'contradicts', 'same_as',
-]);
-export const EPISTEMIC = Object.freeze(['observed', 'derived', 'hypothesis', 'speculation']);
+/**
+ * Back-compat snapshots of the SEED vocabularies, taken at import time.
+ * These are no longer the limit — use listEdgeTypes()/listNodeTypes() from
+ * ./typeRegistry.js for the live set. Kept exported so nothing that imported
+ * them breaks.
+ */
+export const NODE_TYPES = Object.freeze(listNodeTypes().map(t => t.type));
+export const EDGE_TYPES = Object.freeze(listEdgeTypes().map(t => t.type));
+export const EPISTEMIC  = Object.freeze(['observed', 'derived', 'hypothesis', 'speculation']);
+
+export { EDGE_CLASS };
 
 const MAX_NODES_PER_OWNER = 50_000;
 
@@ -55,6 +87,30 @@ function graph(ownerId) {
   return g;
 }
 
+// ── Legacy migration (B1) ────────────────────────────────────────────────────
+
+/**
+ * Pre-B1, graphBuilder flattened every inferred relationship to `related_to`
+ * and prefixed the true type onto the reason string:
+ *
+ *   { type: 'related_to', reason: 'works_on: co-mentioned in 3 fact(s)…' }
+ *
+ * Recover the type on load. Conservative by design: only a `related_to`
+ * edge, only a prefix that is a REGISTERED semantic type, and the reason
+ * loses just the prefix. Anything else is left exactly as found.
+ */
+const LEGACY_REASON = /^([a-z][a-z0-9_]{0,63}):\s+/;
+
+function migrateLegacyEdge(edge) {
+  if (!edge || edge.type !== 'related_to' || typeof edge.reason !== 'string') return edge;
+  const m = LEGACY_REASON.exec(edge.reason);
+  if (!m) return edge;
+  const recovered = m[1];
+  if (recovered === 'related_to') return edge;
+  if (!isKnownEdgeType(recovered) || edgeClassOf(recovered) !== EDGE_CLASS.RELATED) return edge;
+  return { ...edge, type: recovered, reason: edge.reason.slice(m[0].length), migratedFrom: 'related_to' };
+}
+
 // ── Persistence ──────────────────────────────────────────────────────────────
 
 function loadFromDisk() {
@@ -62,16 +118,25 @@ function loadFromDisk() {
   if (parsed == null) return;
   const { data } = unwrapStore(parsed, { expected: SCHEMA, file: STORE_FILE, label: 'reasoning-graph' });
   if (!data || typeof data !== 'object') return;
+  let migrated = 0;
   for (const [owner, g] of Object.entries(data)) {
     const gr = graph(owner);
     for (const n of Object.values(g.nodes ?? {})) gr.nodes.set(n.id, n);
-    for (const e of Object.values(g.edges ?? {})) { gr.edges.set(e.id, e); indexEdge(gr, e); }
+    for (const raw of Object.values(g.edges ?? {})) {
+      const e = migrateLegacyEdge(raw);
+      if (e !== raw) migrated++;
+      gr.edges.set(e.id, e); indexEdge(gr, e);
+    }
     for (const [file, links] of Object.entries(g.byFile ?? {})) {
       gr.byFile.set(file, { nodes: new Set(links.nodes ?? []), edges: new Set(links.edges ?? []) });
     }
   }
   const totals = [...store.values()].reduce((a, g) => ({ n: a.n + g.nodes.size, e: a.e + g.edges.size }), { n: 0, e: 0 });
   if (totals.n) console.log(`[REASONING] Graph loaded: ${totals.n} node(s), ${totals.e} edge(s) across ${store.size} owner(s) from ${STORE_FILE}`);
+  if (migrated) {
+    console.log(`[GRAPH] B1 migration: ${migrated} legacy related_to edge(s) recovered to their true relationship type`);
+    scheduleSave();
+  }
 }
 
 const _writer = createDebouncedWriter(STORE_FILE);
@@ -102,10 +167,17 @@ function indexEdge(g, edge) {
 
 /**
  * Upsert a node. Merges label/aliases/provenance; never duplicates by id.
+ *
+ * Node types remain validated against the registry: a node type is a
+ * STRUCTURAL class (entity vs fact vs event), not a user-world category —
+ * a Person / Project / Repository is an `entity` whose data.entityType says
+ * which. New classes are added deliberately via registerNodeType(), so a
+ * typo here is still an error rather than a silently interned new class.
+ *
  * @param {object} node - { id, type, label, kind?, data?, sourceFiles?[] }
  */
 export function upsertNode(ownerId, node, { fileId = null } = {}) {
-  if (!NODE_TYPES.includes(node.type)) throw new Error(`upsertNode: bad type ${node.type}`);
+  if (!isKnownNodeType(node.type)) throw new Error(`upsertNode: bad type ${node.type}`);
   if (!node.id) throw new Error('upsertNode: id required');
   const g = graph(ownerId);
   if (g.nodes.size >= MAX_NODES_PER_OWNER && !g.nodes.has(node.id)) return g.nodes.get(node.id) ?? null;
@@ -128,12 +200,28 @@ export function upsertNode(ownerId, node, { fileId = null } = {}) {
 }
 
 /**
+ * Is `incoming` a strictly more specific relationship type than `current`?
+ * Only the generic `related_to` is ever upgraded, and only to another member
+ * of its own class — a structural edge is never silently reclassified.
+ */
+function isTypeUpgrade(current, incoming) {
+  return current === 'related_to'
+    && incoming !== 'related_to'
+    && edgeClassOf(incoming) === EDGE_CLASS.RELATED;
+}
+
+/**
  * Add a provenance-bearing edge. REJECTS edges without provenance — the
  * reasoning contract has teeth.
+ *
+ * The type is registered on the way in (B1): a type nobody has used before
+ * joins the `related_to` class and is logged once, rather than throwing.
+ * Set AQUA_GRAPH_STRICT_TYPES=1 to pin the vocabulary instead.
+ *
  * @param {object} edge - { from, to, type, kind?, confidence, evidence?[], sourceFiles[], reason }
  */
 export function addEdge(ownerId, edge, { fileId = null } = {}) {
-  if (!EDGE_TYPES.includes(edge.type)) throw new Error(`addEdge: bad type ${edge.type}`);
+  ensureEdgeType(edge.type);
   const sourceFiles = edge.sourceFiles ?? [];
   const evidence    = edge.evidence ?? [];
   if (!sourceFiles.length && !evidence.length) {
@@ -144,6 +232,11 @@ export function addEdge(ownerId, edge, { fileId = null } = {}) {
   const existing = g.edges.get(id);
   const rec = existing ? {
     ...existing,
+    // Type upgrade: a stored generic edge takes the specific type when one
+    // finally arrives (callers that pin an explicit `id` — graphBuilder does
+    // — would otherwise keep the pre-B1 type forever).
+    type: isTypeUpgrade(existing.type, edge.type) ? edge.type : existing.type,
+    reason: isTypeUpgrade(existing.type, edge.type) ? (edge.reason ?? existing.reason) : existing.reason,
     confidence: Math.max(existing.confidence, edge.confidence ?? 0),
     evidence: [...new Set([...existing.evidence, ...evidence])],
     sourceFiles: [...new Set([...existing.sourceFiles, ...sourceFiles])],
@@ -176,15 +269,28 @@ export function nodesByType(ownerId, type) {
   return [...graph(ownerId).nodes.values()].filter(n => n.type === type);
 }
 
-export function edgesOf(ownerId, nodeId, { type = null } = {}) {
+/**
+ * Edges touching a node, optionally filtered by type.
+ *
+ * `type` may be a concrete type, a list, or a CLASS name. Passing the class
+ * `related_to` matches every semantic relationship (works_on, owns, …) —
+ * which is exactly what pre-B1 callers meant when they asked for
+ * `related_to`, so they keep working unchanged against typed data.
+ *
+ * @param {object} [opts] - { type?: string|string[], exact?: boolean }
+ */
+export function edgesOf(ownerId, nodeId, { type = null, exact = false } = {}) {
   const g = graph(ownerId);
-  return [...(g.adj.get(nodeId) ?? [])].map(eid => g.edges.get(eid)).filter(e => e && (!type || e.type === type));
+  const want = expandEdgeTypes(type, { exact });
+  return [...(g.adj.get(nodeId) ?? [])]
+    .map(eid => g.edges.get(eid))
+    .filter(e => e && (!want || want.has(e.type)));
 }
 
-export function neighbors(ownerId, nodeId, { type = null, edgeType = null } = {}) {
+export function neighbors(ownerId, nodeId, { type = null, edgeType = null, exact = false } = {}) {
   const g = graph(ownerId);
   const out = [];
-  for (const e of edgesOf(ownerId, nodeId, { type: edgeType })) {
+  for (const e of edgesOf(ownerId, nodeId, { type: edgeType, exact })) {
     const otherId = e.from === nodeId ? e.to : e.from;
     const node = g.nodes.get(otherId);
     if (node && (!type || node.type === type)) out.push({ node, edge: e });
@@ -196,10 +302,14 @@ export function neighbors(ownerId, nodeId, { type = null, edgeType = null } = {}
  * Bounded BFS returning the connected sub-graph around a node — the
  * multi-hop traversal primitive the query engine and (next phase) the
  * reasoning planner use. Every returned edge still carries its provenance.
+ *
+ * `edgeTypes` expands by class like edgesOf, so a traversal restricted to
+ * `['related_to']` walks the whole semantic relationship layer.
  */
-export function traverse(ownerId, startId, { maxHops = 3, maxNodes = 50, edgeTypes = null } = {}) {
+export function traverse(ownerId, startId, { maxHops = 3, maxNodes = 50, edgeTypes = null, exact = false } = {}) {
   const g = graph(ownerId);
   if (!g.nodes.has(startId)) return { nodes: [], edges: [], paths: new Map() };
+  const allowed = expandEdgeTypes(edgeTypes, { exact });
   const seenN = new Set([startId]);
   const seenE = new Set();
   const paths = new Map([[startId, []]]);
@@ -209,7 +319,7 @@ export function traverse(ownerId, startId, { maxHops = 3, maxNodes = 50, edgeTyp
     const next = [];
     for (const nid of frontier) {
       for (const e of edgesOf(ownerId, nid)) {
-        if (edgeTypes && !edgeTypes.includes(e.type)) continue;
+        if (allowed && !allowed.has(e.type)) continue;
         seenE.add(e.id);
         const other = e.from === nid ? e.to : e.from;
         if (!seenN.has(other) && seenN.size < maxNodes) {
@@ -268,7 +378,11 @@ export function graphStats(ownerId) {
   const g = graph(ownerId);
   const byType = {};
   for (const n of g.nodes.values()) byType[n.type] = (byType[n.type] ?? 0) + 1;
-  return { nodes: g.nodes.size, edges: g.edges.size, files: g.byFile.size, byNodeType: byType };
+  // byEdgeType (B1): relationship types are now real data, so make them
+  // visible — this is the signal that the related_to collapse is gone.
+  const byEdgeType = {};
+  for (const e of g.edges.values()) byEdgeType[e.type] = (byEdgeType[e.type] ?? 0) + 1;
+  return { nodes: g.nodes.size, edges: g.edges.size, files: g.byFile.size, byNodeType: byType, byEdgeType };
 }
 
 export function _resetGraphForTests() { store.clear(); }
