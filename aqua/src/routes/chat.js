@@ -86,10 +86,10 @@ import {
   conversationExists,
   canAccessConversation,
 } from '../memory/conversationStore.js';
-import { resolveOwner, memoryObserve, memoryRetrieve, memoryAfterTurn, getMemoryTrace, semanticFactScores, semanticFileChunks } from '../memory/engine.js';
+import { resolveOwner, memoryObserve, memoryRetrieve, getMemoryTrace, semanticFactScores, semanticFileChunks } from '../memory/engine.js';
 import * as Brain from '../brain/index.js';
+import { runPostTurn } from './turnPostProcess.js';
 import { formatCitation } from '../files/evidence.js';
-import { REFLECT_EVERY_TURNS } from '../mind/reflectionEngine.js';
 import { retrieveProjectContext, formatProjectContext }    from '../project/projectRetriever.js';
 import { semanticFileScores }                              from '../project/semanticProject.js';
 import { formatAttachmentsForPrompt, getAttachments }       from '../upload/attachmentStore.js';
@@ -1017,44 +1017,17 @@ router.post('/', async (req, res) => {
     addMessage(conversationId, 'user',      userMessage);
     addMessage(conversationId, 'assistant', finalAnswer);
 
-    // ── 9b. Mind post-turn — predictions rebuild + async reflection when due ────
-    memoryAfterTurn(prep.memoryOwner, { taskType, workspaceId });
-
-    // ── 9c. Brain world-model ingest (B3) — conversations earn the same graph
-    //         standing as files. Fail-open + off by default (AQUA_BRAIN_INGEST),
-    //         so this is inert until turned on. Deferred to the next tick so it
-    //         never adds a millisecond to the response the user is waiting on.
-    setImmediate(() => {
-      try {
-        Brain.observeConversationTurn({
-          ownerId: prep.memoryOwner,
-          conversationId,
-          turn: getConversation(conversationId).length,
-          userMessage,
-          assistantMessage: finalAnswer,
-        });
-      } catch { /* fail-open: world-model enrichment must never affect the turn */ }
-      try {
-        // Digital Twin (B6) — the six inferred patterns the Mind does not yet
-        // cover. Signals route through the Mind's ONE belief writer, so they
-        // decay/contradict/version like every existing dimension. Reads the
-        // USER's message only: inferring the user's style from AQUA's own
-        // output would be a closed loop that manufactures its own evidence.
-        Brain.observeTwin({ ownerId: prep.memoryOwner, userMessage, conversationId });
-      } catch { /* fail-open */ }
-    });
-
-    // ── 9d. Brain Reflection V2 (B5) — on the Mind's reflection cadence, compute
-    //         a STRUCTURED world-model delta (entities/relationships/obsoleted
-    //         facts) and apply it via reversible lifecycle transitions. Deferred,
-    //         fail-open, off by default (AQUA_REFLECT_V2). Runs after the ingest
-    //         above so it reflects on the turn just absorbed.
-    setImmediate(() => {
-      try {
-        if ((getConversation(conversationId).length % REFLECT_EVERY_TURNS) === 0) {
-          Brain.reflectTurn(prep.memoryOwner);
-        }
-      } catch { /* fail-open: reflection must never affect the turn */ }
+    // ── 9b-9d. Post-turn understanding — Mind post-turn, world-model ingest,
+    //          Digital Twin, cadence-gated Reflection V2. Extracted to ONE
+    //          shared unit so both endpoints cannot drift (audit W6); the
+    //          behaviour is unchanged from when this block was inline.
+    runPostTurn({
+      ownerId: prep.memoryOwner,
+      conversationId,
+      userMessage,
+      assistantMessage: finalAnswer,
+      taskType,
+      workspaceId,
     });
 
     // ── 10. Respond ──────────────────────────────────────────────────────────────
@@ -1366,44 +1339,17 @@ router.post('/stream', async (req, res) => {
     addMessage(conversationId, 'user',      userMessage);
     addMessage(conversationId, 'assistant', finalAnswer);
 
-    // ── 9b. Mind post-turn — predictions rebuild + async reflection when due ────
-    memoryAfterTurn(prep.memoryOwner, { taskType, workspaceId });
-
-    // ── 9c. Brain world-model ingest (B3) — conversations earn the same graph
-    //         standing as files. Fail-open + off by default (AQUA_BRAIN_INGEST),
-    //         so this is inert until turned on. Deferred to the next tick so it
-    //         never adds a millisecond to the response the user is waiting on.
-    setImmediate(() => {
-      try {
-        Brain.observeConversationTurn({
-          ownerId: prep.memoryOwner,
-          conversationId,
-          turn: getConversation(conversationId).length,
-          userMessage,
-          assistantMessage: finalAnswer,
-        });
-      } catch { /* fail-open: world-model enrichment must never affect the turn */ }
-      try {
-        // Digital Twin (B6) — the six inferred patterns the Mind does not yet
-        // cover. Signals route through the Mind's ONE belief writer, so they
-        // decay/contradict/version like every existing dimension. Reads the
-        // USER's message only: inferring the user's style from AQUA's own
-        // output would be a closed loop that manufactures its own evidence.
-        Brain.observeTwin({ ownerId: prep.memoryOwner, userMessage, conversationId });
-      } catch { /* fail-open */ }
-    });
-
-    // ── 9d. Brain Reflection V2 (B5) — on the Mind's reflection cadence, compute
-    //         a STRUCTURED world-model delta (entities/relationships/obsoleted
-    //         facts) and apply it via reversible lifecycle transitions. Deferred,
-    //         fail-open, off by default (AQUA_REFLECT_V2). Runs after the ingest
-    //         above so it reflects on the turn just absorbed.
-    setImmediate(() => {
-      try {
-        if ((getConversation(conversationId).length % REFLECT_EVERY_TURNS) === 0) {
-          Brain.reflectTurn(prep.memoryOwner);
-        }
-      } catch { /* fail-open: reflection must never affect the turn */ }
+    // ── 9b-9d. Post-turn understanding — Mind post-turn, world-model ingest,
+    //          Digital Twin, cadence-gated Reflection V2. Extracted to ONE
+    //          shared unit so both endpoints cannot drift (audit W6); the
+    //          behaviour is unchanged from when this block was inline.
+    runPostTurn({
+      ownerId: prep.memoryOwner,
+      conversationId,
+      userMessage,
+      assistantMessage: finalAnswer,
+      taskType,
+      workspaceId,
     });
 
     // ── 10. Done event — same diagnostics shape as POST /chat ───────────────────
