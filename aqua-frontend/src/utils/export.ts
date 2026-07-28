@@ -43,14 +43,17 @@ export function exportPdf(html: string, title = 'AQUA') {
   return true;
 }
 
-export async function shareText(text: string): Promise<'shared' | 'copied' | 'failed'> {
+export async function shareText(text: string): Promise<'shared' | 'copied' | 'cancelled' | 'failed'> {
   if (navigator.share) {
     try {
       await navigator.share({ text });
       return 'shared';
-    } catch {
-      // user cancelled the native share sheet — not an error worth surfacing
-      return 'failed';
+    } catch (err) {
+      // Backing out of the native sheet is a decision, not a failure — it
+      // used to report 'failed' and raise an error toast for it. Anything
+      // else (sheet unavailable, permission denied) falls through to the
+      // clipboard rather than dead-ending.
+      if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled';
     }
   }
   try {

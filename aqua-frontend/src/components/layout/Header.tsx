@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Menu, Package, PanelLeftOpen, Wallet } from 'lucide-react';
+import { FolderGit2, Menu, Package, PanelLeftOpen, Wallet } from 'lucide-react';
 import { useLocation } from 'react-router-dom';
 import { AquaLogo } from '@/components/common/AquaLogo';
 import { useUiStore } from '@/stores/uiStore';
@@ -7,6 +7,7 @@ import { useConversationStore } from '@/stores/conversationStore';
 import { useWalletStore } from '@/stores/walletStore';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { useArtifactsStore } from '@/stores/artifactsStore';
+import { useUploadStore } from '@/stores/uploadStore';
 
 /**
  * P1 (freemium) — remaining-quota visibility. Users should never discover
@@ -43,6 +44,37 @@ function CreditsChip() {
       <Wallet className="h-3.5 w-3.5" />
       <span className="tabular-nums">{wallet.total}</span>
     </a>
+  );
+}
+
+/**
+ * What this conversation is grounded in.
+ *
+ * This lived in the message column as ProjectContextBar — a full-width strip
+ * above the thread that pushed the conversation down and was only visible
+ * when the dashboard wasn't. Context that comes and goes is worse than no
+ * context at all, so it moved into the persistent chrome: always on screen,
+ * out of the reading column, one surface instead of two. Renders nothing
+ * when the conversation has no project, which is most of them.
+ */
+function ContextChip() {
+  const overview = useUploadStore((s) => s.overview);
+  const setShowDashboard = useUploadStore((s) => s.setShowDashboard);
+
+  if (!overview) return null;
+
+  return (
+    <button
+      onClick={() => setShowDashboard(true)}
+      className="tap flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border border-border px-2.5 text-micro font-medium text-foreground-secondary transition-colors hover:bg-surface-secondary hover:text-foreground"
+      title={`Answering with ${overview.name} in context`}
+    >
+      <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+      <span className="truncate">{overview.name}</span>
+      <span className="hidden shrink-0 tabular-nums text-foreground-secondary/60 sm:inline">
+        {(overview.stats?.fileCount ?? 0).toLocaleString()}
+      </span>
+    </button>
   );
 }
 
@@ -86,15 +118,16 @@ export function Header() {
           <div className="flex h-6 w-6 shrink-0 items-center justify-center">
             <AquaLogo size={24} />
           </div>
-          <div className="flex min-w-0 items-baseline gap-1.5 leading-none">
-            <span className="text-sm font-semibold tracking-tight text-foreground">AQUA</span>
-            <span className="truncate text-[11px] font-medium text-foreground-secondary/70">
-              AI Engineering Workspace
-            </span>
-          </div>
+          {/* The tagline here read "AI Engineering Workspace" — the exact
+              category the product is not. Removed rather than reworded: this
+              strip is the highest-value persistent real estate in the app,
+              and a static noun is the weakest thing it could hold. Phase D
+              gives the space to a live context indicator. */}
+          <span className="text-sm font-semibold tracking-tight text-foreground">AQUA</span>
         </div>
       )}
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex min-w-0 items-center gap-1.5">
+        <ContextChip />
         <CreditsChip />
         <button
           onClick={() => openArtifacts(true)}

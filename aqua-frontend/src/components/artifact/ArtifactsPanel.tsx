@@ -61,7 +61,7 @@ function Row({ a, onPreview }: { a: ArtifactListEntry; onPreview: (a: ArtifactLi
                 value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') { setDraft(a.title); setEditing(false); } }}
-                className="h-6 px-1.5 text-[12px]"
+                className="h-6 px-1.5 text-caption"
               />
               <button type="button" onClick={commit} className="tap text-success" aria-label="Save name">
                 <Check className="h-3.5 w-3.5" />
@@ -72,8 +72,8 @@ function Row({ a, onPreview }: { a: ArtifactListEntry; onPreview: (a: ArtifactLi
             </div>
           ) : (
             <>
-              <div className="truncate text-[12.5px] font-medium text-foreground">{a.title}</div>
-              <div className="text-[10.5px] text-foreground-secondary">
+              <div className="truncate text-caption font-medium text-foreground">{a.title}</div>
+              <div className="text-micro text-foreground-secondary">
                 {a.format}{a.version > 1 ? ` · v${a.version}` : ''} · {a.fileCount} file{a.fileCount > 1 ? 's' : ''} · {fmtBytes(a.totalBytes)} · {fmtDate(a.createdAt)}
               </div>
             </>
@@ -149,7 +149,7 @@ export function ArtifactsPanel() {
               <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 md:h-14">
                 <Package className="h-4 w-4 text-primary" />
                 <span className="text-sm font-semibold text-foreground">Artifacts</span>
-                {loadedOnce && <span className="text-[11px] text-foreground-secondary">{items.length} · {fmtBytes(totalBytes)}</span>}
+                {loadedOnce && <span className="text-micro text-foreground-secondary">{items.length} · {fmtBytes(totalBytes)}</span>}
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
@@ -168,7 +168,7 @@ export function ArtifactsPanel() {
                       type="button"
                       onClick={() => setScope(s)}
                       className={cn(
-                        'rounded-md px-2.5 py-1 text-[11.5px] font-medium transition-colors',
+                        'rounded-md px-2.5 py-1 text-micro font-medium transition-colors',
                         scope === s ? 'bg-primary/10 text-primary' : 'text-foreground-secondary hover:bg-surface-secondary hover:text-foreground',
                       )}
                     >
@@ -180,7 +180,7 @@ export function ArtifactsPanel() {
 
               <div className="min-h-0 flex-1 overflow-y-auto p-2">
                 {loading && !items.length ? (
-                  <div className="flex items-center gap-2 p-3 text-[12px] text-foreground-secondary">
+                  <div className="flex items-center gap-2 p-3 text-caption text-foreground-secondary">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
                   </div>
                 ) : items.length ? (
@@ -188,7 +188,7 @@ export function ArtifactsPanel() {
                     {items.map((a) => <Row key={a.id} a={a} onPreview={setPreview} />)}
                   </ul>
                 ) : loadedOnce ? (
-                  <div className="p-4 text-center text-[12px] leading-relaxed text-foreground-secondary">
+                  <div className="p-4 text-center text-caption leading-relaxed text-foreground-secondary">
                     Nothing here yet. Ask AQUA to <em>create</em> something —
                     "write my notes as a markdown file", "generate an invoice",
                     "build me a node backend" — and it lands in this panel.

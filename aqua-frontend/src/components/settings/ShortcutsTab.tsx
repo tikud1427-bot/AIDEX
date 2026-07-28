@@ -10,7 +10,7 @@ export function ShortcutsTab() {
             {s.keys.map((k) => (
               <kbd
                 key={k}
-                className="rounded-md border border-border bg-surface-secondary px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground-secondary"
+                className="rounded-md border border-border bg-surface-secondary px-1.5 py-0.5 font-mono text-micro font-medium text-foreground-secondary"
               >
                 {k}
               </kbd>

@@ -18,7 +18,7 @@ export function DiagnosticsPanel({ diagnostics }: { diagnostics: MessageDiagnost
     <div className="mt-2">
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[11px] text-foreground-secondary/70 transition-colors hover:bg-surface-secondary hover:text-foreground-secondary"
+        className="flex items-center gap-1.5 rounded-md px-1.5 py-1 text-micro text-foreground-secondary/70 transition-colors hover:bg-surface-secondary hover:text-foreground-secondary"
       >
         <Cpu className="h-3 w-3" />
         <span className="font-medium">AQUA</span>
@@ -88,7 +88,7 @@ export function DiagnosticsPanel({ diagnostics }: { diagnostics: MessageDiagnost
                     <ul className="mt-1 space-y-0.5">
                       {memory.facts.slice(0, 5).map((f, i) => (
                         <li key={i} className="truncate text-foreground-secondary/80">
-                          <span className="font-mono text-[10px]">{f.key}</span>: {f.value}
+                          <span className="font-mono text-micro">{f.key}</span>: {f.value}
                         </li>
                       ))}
                     </ul>
@@ -101,7 +101,7 @@ export function DiagnosticsPanel({ diagnostics }: { diagnostics: MessageDiagnost
                   <p className="mb-1 font-medium text-foreground-secondary">Routing</p>
                   <div className="space-y-0.5">
                     {fallbackChain.map((f, i) => (
-                      <div key={i} className="flex items-center gap-1.5 text-[11px]">
+                      <div key={i} className="flex items-center gap-1.5 text-micro">
                         <span
                           className={cn(
                             'h-1.5 w-1.5 rounded-full',

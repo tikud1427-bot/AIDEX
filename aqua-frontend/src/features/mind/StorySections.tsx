@@ -4,7 +4,8 @@ import { Check, Sparkles, TrendingUp, Target, RefreshCcw } from 'lucide-react';
 import type { MindModel, TimelineEvent } from '@/api/mind';
 import type { Learning } from '@/stores/mindStore';
 import { DIMENSIONS } from '@/stores/mindStore';
-import { Card, timeAgo } from './primitives';
+import { Panel } from '@/components/ui/panel';
+import { timeAgo } from '@/lib/format';
 
 /* ── Learning feed — "watch new knowledge appear" ───────────────────────── */
 
@@ -30,7 +31,7 @@ export function LearningFeed({ learnings, reflections }: { learnings: Learning[]
   }
 
   return (
-    <Card className="p-5">
+    <Panel className="p-5">
       <ul className="space-y-2.5" aria-live="polite">
         <AnimatePresence initial={false}>
           {seeded.slice(0, 8).map((l) => (
@@ -44,12 +45,12 @@ export function LearningFeed({ learnings, reflections }: { learnings: Learning[]
             >
               <span className="mt-0.5">{LEARNING_ICON[l.kind]}</span>
               <span className="text-sm text-foreground">{l.text}</span>
-              <span className="ml-auto shrink-0 text-[11px] text-foreground-secondary">{timeAgo(l.ts)}</span>
+              <span className="ml-auto shrink-0 text-micro text-foreground-secondary">{timeAgo(l.ts)}</span>
             </motion.li>
           ))}
         </AnimatePresence>
       </ul>
-    </Card>
+    </Panel>
   );
 }
 
@@ -142,12 +143,12 @@ export function EvolutionHeatmap({ model }: { model: MindModel }) {
   if (!hasSignal) return <p className="text-sm text-foreground-secondary">Evolution shows up after a little history accrues.</p>;
 
   return (
-    <Card className="overflow-x-auto p-5">
+    <Panel className="overflow-x-auto p-5">
       <div className="min-w-[420px]">
         <div className="grid gap-1" style={{ gridTemplateColumns: `72px repeat(${HEAT_WEEKS}, 1fr)` }}>
           {grid.cells.map((row, ri) => (
             <div key={ri} className="contents">
-              <div className="pr-2 text-right text-[11px] leading-4 text-foreground-secondary">{DIM_SHORT[ri]}</div>
+              <div className="pr-2 text-right text-micro leading-4 text-foreground-secondary">{DIM_SHORT[ri]}</div>
               {row.map((v, ci) => (
                 <motion.div
                   key={ci}
@@ -162,10 +163,10 @@ export function EvolutionHeatmap({ model }: { model: MindModel }) {
             </div>
           ))}
         </div>
-        <div className="mt-2 flex justify-between text-[11px] text-foreground-secondary">
+        <div className="mt-2 flex justify-between text-micro text-foreground-secondary">
           <span>{HEAT_WEEKS} weeks ago</span><span>This week</span>
         </div>
       </div>
-    </Card>
+    </Panel>
   );
 }

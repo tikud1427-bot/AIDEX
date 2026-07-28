@@ -1,11 +1,15 @@
-import { lazy, Suspense } from 'react';
+import { lazy } from 'react';
 import { createBrowserRouter } from 'react-router-dom';
 import { Root } from '@/Root';
 import { ChatPage } from '@/pages/ChatPage';
 import { PrivacyPolicyPage } from '@/pages/PrivacyPolicyPage';
 import { NotFoundPage, RouteError } from '@/components/feedback/RouteError';
+import { LazyRoute } from '@/components/feedback/LazyRoute';
 
 const MindPage = lazy(() => import('@/pages/MindPage'));
+const ProjectsPage = lazy(() => import('@/pages/ProjectsPage'));
+const MemoryPage = lazy(() => import('@/pages/MemoryPage'));
+
 
 export const router = createBrowserRouter(
   [
@@ -20,18 +24,16 @@ export const router = createBrowserRouter(
         { path: 'c/:conversationId', element: <ChatPage /> },
 
         {
+          path: 'projects',
+          element: <LazyRoute label="Looking for your projects…"><ProjectsPage /></LazyRoute>,
+        },
+        {
+          path: 'memory',
+          element: <LazyRoute label="Reading what AQUA remembers…"><MemoryPage /></LazyRoute>,
+        },
+        {
           path: 'mind',
-          element: (
-            <Suspense
-              fallback={
-                <div className="flex flex-1 items-center justify-center text-sm text-foreground-secondary">
-                  Opening the mind…
-                </div>
-              }
-            >
-              <MindPage />
-            </Suspense>
-          ),
+          element: <LazyRoute label="Opening the mind…"><MindPage /></LazyRoute>,
         },
 
         {

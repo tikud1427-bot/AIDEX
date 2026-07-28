@@ -72,6 +72,20 @@
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
 
+  /* ── Type scale ───────────────────────────────────────────────────────
+     Semantic, and in REM on purpose. The Settings font-size preference sets
+     the root to 14 / 16 / 18px, so anything written as a px literal ignored
+     that choice entirely — 147 hardcoded literals across nine sizes (three
+     of them sub-pixel: 10.5, 11.5, 12.5) sat frozen while the rest of the
+     interface resized around them. Those nine collapse onto these four.
+
+     No line-height is paired with these tokens: the literals they replace
+     carried none either, so line boxes are unchanged by the migration. */
+  --text-micro: 0.6875rem;  /* 11px @16 — meta, eyebrows, badges, kbd */
+  --text-caption: 0.75rem;  /* 12px @16 — helper text, chips, captions */
+  --text-body: 0.8125rem;   /* 13px @16 — dense body inside panels */
+  --text-lead: 0.9375rem;   /* 15px @16 — composer + message reading size */
+
   --animate-fade-in: fade-in 0.15s ease-out;
   --animate-slide-up: slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -258,6 +272,44 @@
        this holds regardless of stylesheet order. */
     .hover-reveal[data-state='open'] {
       opacity: 1;
+    }
+  }
+
+  /* ── Always-present affordance ────────────────────────────────────────
+     The opposite of .hover-reveal. The control is ALWAYS on screen; hover
+     only changes how loud it is. Used for the conversation row menu, which
+     a user has to be able to see without first discovering that hovering
+     does something.
+
+     Idle 40% on precise pointers, full on hover / keyboard focus within the
+     row / focus on the control itself / while its menu is open. Touch has no
+     idle state to quiet, so it stays fully visible there. */
+  .affordance {
+    opacity: 1;
+  }
+  @media (hover: hover) and (pointer: fine) {
+    .affordance {
+      opacity: 0.4;
+      transition: opacity 0.15s ease;
+    }
+    .group:hover .affordance,
+    .group:focus-within .affordance,
+    .group\/item:hover .affordance,
+    .group\/item:focus-within .affordance,
+    .affordance:hover,
+    .affordance:focus-visible,
+    .affordance[data-state='open'] {
+      opacity: 1;
+    }
+  }
+
+  /* ── Row that has to hold a 44px control ──────────────────────────────
+     .touch-lg grows a button to 44px on coarse pointers. A row shorter than
+     44px lets that target overflow into the rows above and below, so any row
+     carrying one grows to match. Desktop density is untouched. */
+  @media (pointer: coarse) {
+    .row-touch {
+      min-height: 2.75rem;
     }
   }
 

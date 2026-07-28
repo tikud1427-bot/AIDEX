@@ -50,7 +50,7 @@ function DiffRow({ line, language, dark }: { line: DiffLine; language: string; d
   return (
     <tr
       className={cn(
-        'font-mono text-[12px] leading-[1.55]',
+        'font-mono text-caption leading-[1.55]',
         isAdd && 'bg-success/10',
         isDel && 'bg-danger/10',
       )}
@@ -81,7 +81,7 @@ function DiffRow({ line, language, dark }: { line: DiffLine; language: string; d
 function GapRow({ count }: { count: number }) {
   return (
     <tr className="select-none bg-surface-secondary/50">
-      <td colSpan={4} className="px-3 py-1 text-center font-mono text-[11px] text-foreground-secondary/60">
+      <td colSpan={4} className="px-3 py-1 text-center font-mono text-micro text-foreground-secondary/60">
         <ChevronsDownUp className="mr-1.5 inline h-3 w-3" />
         {count} unchanged line{count === 1 ? '' : 's'}
       </td>
@@ -130,7 +130,7 @@ export const DiffView = memo(function DiffView({ file }: { file: PatchFileDiff }
       {truncatedCreate && (
         <button
           onClick={() => setExpanded(true)}
-          className="w-full border-t border-border/50 bg-surface-secondary/50 py-1.5 text-center text-[11px] font-medium text-foreground-secondary hover:bg-surface-secondary"
+          className="w-full border-t border-border/50 bg-surface-secondary/50 py-1.5 text-center text-micro font-medium text-foreground-secondary hover:bg-surface-secondary"
         >
           Show all {file.totalNewLines} lines
         </button>

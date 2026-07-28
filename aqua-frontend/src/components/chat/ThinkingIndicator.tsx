@@ -30,7 +30,7 @@ export function ThinkingIndicator({ stage }: { stage?: { id: string; label: stri
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -3 }}
             transition={{ duration: 0.18 }}
-            className="thinking-shimmer text-[13px] text-foreground-secondary"
+            className="thinking-shimmer text-body text-foreground-secondary"
           >
             {stage.label}
           </motion.span>

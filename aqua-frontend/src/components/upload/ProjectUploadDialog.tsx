@@ -156,7 +156,7 @@ export function ProjectUploadDialog({ open, onOpenChange }: Props) {
               <p className="text-sm font-medium text-foreground">
                 {busy
                   ? status === 'creating'
-                    ? 'Creating workspace…'
+                    ? 'Setting up your project…'
                     : `Uploading… ${progress}%`
                   : pendingFiles.length > 0
                     ? `${pendingFiles.length} file${pendingFiles.length === 1 ? '' : 's'} selected`
@@ -192,7 +192,7 @@ export function ProjectUploadDialog({ open, onOpenChange }: Props) {
             <div>
               <p className="text-sm font-medium text-foreground">{projectName} indexed</p>
               <p className="text-xs text-foreground-secondary">
-                {fileCount} file{fileCount === 1 ? '' : 's'} analyzed — the workspace overview is ready behind this
+                {fileCount} file{fileCount === 1 ? '' : 's'} read — the project overview is ready behind this
                 dialog, with suggested questions to get you started.
               </p>
             </div>

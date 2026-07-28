@@ -73,14 +73,14 @@ export function ArtifactPreviewDialog({ artifactId, title, onClose }: Props) {
 
         {versions.length > 1 && (
           <div className="flex flex-wrap items-center gap-1 border-b border-border pb-2">
-            <span className="mr-1 text-[11px] text-foreground-secondary">Version</span>
+            <span className="mr-1 text-micro text-foreground-secondary">Version</span>
             {versions.map((v) => (
               <button
                 key={v}
                 type="button"
                 onClick={() => setVersion(v)}
                 className={cn(
-                  'rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors',
+                  'rounded-md px-2 py-0.5 text-micro font-medium transition-colors',
                   version === v
                     ? 'bg-primary/10 text-primary'
                     : 'text-foreground-secondary hover:bg-surface-secondary hover:text-foreground',
@@ -100,7 +100,7 @@ export function ArtifactPreviewDialog({ artifactId, title, onClose }: Props) {
                 type="button"
                 onClick={() => setSelected(f.path)}
                 className={cn(
-                  'max-w-full truncate rounded-md px-2 py-1 font-mono text-[11px] transition-colors',
+                  'max-w-full truncate rounded-md px-2 py-1 font-mono text-micro transition-colors',
                   selected === f.path
                     ? 'bg-primary/10 text-primary'
                     : 'text-foreground-secondary hover:bg-surface-secondary hover:text-foreground',
@@ -114,20 +114,20 @@ export function ArtifactPreviewDialog({ artifactId, title, onClose }: Props) {
 
         <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border bg-surface-secondary/40">
           {loading && !current ? (
-            <div className="flex items-center gap-2 p-4 text-[12px] text-foreground-secondary">
+            <div className="flex items-center gap-2 p-4 text-caption text-foreground-secondary">
               <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading preview…
             </div>
           ) : current && 'unpreviewable' in current ? (
-            <div className="p-4 text-[12px] text-foreground-secondary">
+            <div className="p-4 text-caption text-foreground-secondary">
               This file type can't be previewed as text — use Download to open it in its native app.
             </div>
           ) : current ? (
             <>
-              <pre className="whitespace-pre-wrap break-words p-3.5 font-mono text-[11.5px] leading-relaxed text-foreground">
+              <pre className="whitespace-pre-wrap break-words p-3.5 font-mono text-micro leading-relaxed text-foreground">
                 {current.text}
               </pre>
               {current.truncated && (
-                <div className="border-t border-border px-3.5 py-2 text-[11px] text-foreground-secondary">
+                <div className="border-t border-border px-3.5 py-2 text-micro text-foreground-secondary">
                   Preview truncated — the download contains the full file.
                 </div>
               )}

@@ -45,7 +45,7 @@ export function AttachmentChip({ attachment, onRemove }: { attachment: PendingAt
 
       <div className="flex min-w-0 flex-col">
         <span className="max-w-[150px] truncate font-medium text-foreground">{attachment.name}</span>
-        <span className={cn('flex items-center gap-1 text-[10px]', failed ? 'text-danger' : 'text-foreground-secondary/70')}>
+        <span className={cn('flex items-center gap-1 text-micro', failed ? 'text-danger' : 'text-foreground-secondary/70')}>
           {busy && <Loader2 className="h-2.5 w-2.5 animate-spin" />}
           {attachment.stage === 'ready' && <CheckCircle2 className="h-2.5 w-2.5 text-success" />}
           {failed && <XCircle className="h-2.5 w-2.5" />}

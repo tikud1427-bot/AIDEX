@@ -3,7 +3,7 @@ import { MessageSquarePlus, RefreshCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { CompactBelief } from '@/api/mind';
 import { useMindStore } from '@/stores/mindStore';
-import { SectionHeader } from '@/features/mind/primitives';
+import { SectionHeader } from '@/components/ui/section-header';
 import { UnderstandingRing } from '@/features/mind/UnderstandingRing';
 import { IdentitySection } from '@/features/mind/IdentitySection';
 import { GoalsSection, WorkingMemorySection, PredictionsSection } from '@/features/mind/NowSections';

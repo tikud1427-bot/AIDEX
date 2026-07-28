@@ -20,7 +20,7 @@ function SourceFavicon({ url }: { url: string }) {
   if (failed) {
     return (
       <span
-        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] bg-primary/15 text-[9px] font-semibold uppercase text-primary"
+        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[3px] bg-primary/15 text-micro font-semibold uppercase text-primary"
         aria-hidden="true"
       >
         {host.charAt(0) || '?'}
@@ -51,14 +51,14 @@ function SourceCard({ source, index }: { source: SearchSource; index: number }) 
       title={`${title} — ${source.url}`}
       className="tap group flex w-[190px] shrink-0 flex-col gap-1.5 rounded-xl border border-border/70 bg-surface-secondary/60 px-3 py-2.5 transition-colors hover:border-border hover:bg-surface-secondary"
     >
-      <div className="flex items-center gap-1.5 text-[11px] text-foreground-secondary">
-        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-surface text-[9px] font-semibold text-foreground-secondary/80">
+      <div className="flex items-center gap-1.5 text-micro text-foreground-secondary">
+        <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-surface text-micro font-semibold text-foreground-secondary/80">
           {index}
         </span>
         <SourceFavicon url={source.url} />
         <span className="truncate">{host}</span>
       </div>
-      <span className="line-clamp-2 text-[12.5px] font-medium leading-snug text-foreground group-hover:text-primary">
+      <span className="line-clamp-2 text-caption font-medium leading-snug text-foreground group-hover:text-primary">
         {title}
       </span>
     </a>
@@ -71,7 +71,7 @@ export const SourceCards = memo(function SourceCards({ sources }: { sources?: Se
 
   return (
     <section className="mt-3" aria-label="Sources">
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground-secondary/70">
+      <div className="mb-1.5 flex items-center gap-1.5 text-micro font-medium uppercase tracking-wide text-foreground-secondary/70">
         <Globe className="h-3 w-3" />
         Sources
         <span className="text-foreground-secondary/50">· {unique.length}</span>

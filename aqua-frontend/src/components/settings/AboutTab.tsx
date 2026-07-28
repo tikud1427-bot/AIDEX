@@ -53,7 +53,7 @@ export function AboutTab() {
         </div>
         <div>
           <p className="text-sm font-semibold text-foreground">AQUA</p>
-          <p className="text-xs text-foreground-secondary">Your AI workspace on the AQUIPLEX platform</p>
+          <p className="text-xs text-foreground-secondary">Understands your projects, files and conversations</p>
         </div>
       </div>
 

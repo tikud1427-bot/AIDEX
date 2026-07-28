@@ -171,7 +171,7 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   const blocks = useMemo(() => splitMarkdownBlocks(prepared), [prepared]);
 
   return (
-    <div className="text-[15px] text-foreground [overflow-wrap:anywhere]">
+    <div className="text-lead text-foreground [overflow-wrap:anywhere]">
       {blocks.map((block, i) => (
         // Index keys are correct here: blocks only ever append/extend at the
         // tail during streaming, so indices are stable for finished blocks.

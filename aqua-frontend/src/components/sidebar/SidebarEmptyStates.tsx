@@ -26,12 +26,12 @@ function Shell({ icon, children }: { icon: React.ReactNode; children: React.Reac
 export function NoConversations() {
   return (
     <Shell icon={<MessagesSquare className="h-4 w-4" />}>
-      <p className="text-[13px] font-medium text-foreground">Your conversations live here</p>
-      <p className="text-[11.5px] leading-relaxed text-foreground-secondary/80">
+      <p className="text-body font-medium text-foreground">Your conversations live here</p>
+      <p className="text-micro leading-relaxed text-foreground-secondary/80">
         AQUA keeps the context from each one — the files you share, the decisions you make,
         what it learns about how you work.
       </p>
-      <p className="mt-1 flex items-start gap-1.5 text-left text-[11px] leading-relaxed text-foreground-secondary/60">
+      <p className="mt-1 flex items-start gap-1.5 text-left text-micro leading-relaxed text-foreground-secondary/60">
         <FilePlus2 className="mt-px h-3 w-3 shrink-0" />
         Drop a document, image, or repository straight into the chat to start with context.
       </p>
@@ -48,13 +48,13 @@ export function NoSearchMatch({ query, onClear }: { query: string; onClear: () =
   const shown = query.length > 24 ? `${query.slice(0, 24)}…` : query;
   return (
     <Shell icon={<SearchX className="h-4 w-4" />}>
-      <p className="text-[13px] font-medium text-foreground">No titles match “{shown}”</p>
-      <p className="text-[11.5px] leading-relaxed text-foreground-secondary/80">
+      <p className="text-body font-medium text-foreground">No titles match “{shown}”</p>
+      <p className="text-micro leading-relaxed text-foreground-secondary/80">
         Search looks at conversation titles for now.
       </p>
       <button
         onClick={onClear}
-        className="tap mt-0.5 rounded-md px-2 py-1 text-[11.5px] font-medium text-primary transition-colors hover:bg-surface-secondary"
+        className="tap mt-0.5 rounded-md px-2 py-1 text-micro font-medium text-primary transition-colors hover:bg-surface-secondary"
       >
         Clear search
       </button>
@@ -66,13 +66,13 @@ export function NoSearchMatch({ query, onClear }: { query: string; onClear: () =
 export function LoadFailed({ message, onRetry }: { message: string | null; onRetry: () => void }) {
   return (
     <Shell icon={<WifiOff className="h-4 w-4" />}>
-      <p className="text-[13px] font-medium text-foreground">Couldn’t load your conversations</p>
-      <p className="text-[11.5px] leading-relaxed text-foreground-secondary/80">
+      <p className="text-body font-medium text-foreground">Couldn’t load your conversations</p>
+      <p className="text-micro leading-relaxed text-foreground-secondary/80">
         {message ?? 'Check your connection and try again.'}
       </p>
       <button
         onClick={onRetry}
-        className="tap mt-0.5 flex items-center gap-1.5 rounded-md px-2 py-1 text-[11.5px] font-medium text-primary transition-colors hover:bg-surface-secondary"
+        className="tap mt-0.5 flex items-center gap-1.5 rounded-md px-2 py-1 text-micro font-medium text-primary transition-colors hover:bg-surface-secondary"
       >
         <RotateCcw className="h-3 w-3" /> Try again
       </button>

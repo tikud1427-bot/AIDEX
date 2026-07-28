@@ -10,12 +10,16 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUiStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { searchInputId } from '@/components/sidebar/Sidebar';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const setSidebarCollapsed = useUiStore((s) => s.setSidebarCollapsed);
+  const setMobileSidebarOpen = useUiStore((s) => s.setMobileSidebarOpen);
   const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
   const setProjectUploadOpen = useUiStore((s) => s.setProjectUploadOpen);
   const newConversation = useChatStore((s) => s.newConversation);
@@ -26,9 +30,24 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       newConversation();
       navigate('/');
     }, [newConversation, navigate]),
+    // ⌘K used to call focus() on an element that isn't rendered whenever the
+    // sidebar was collapsed or the mobile drawer was shut — a dead shortcut
+    // in exactly the state where finding a conversation is hardest. Reveal
+    // the search field first, then focus it once it has mounted.
     onFocusSearch: useCallback(() => {
-      document.getElementById(searchInputId)?.focus();
-    }, []),
+      const focusSearch = () => {
+        const el = document.getElementById(searchInputId) as HTMLInputElement | null;
+        if (!el) return false;
+        el.focus();
+        el.select();
+        return true;
+      };
+      if (focusSearch()) return;
+      if (isMobile) setMobileSidebarOpen(true);
+      else setSidebarCollapsed(false);
+      // Two frames: one for the state commit, one for the paint that mounts it.
+      requestAnimationFrame(() => requestAnimationFrame(focusSearch));
+    }, [isMobile, setMobileSidebarOpen, setSidebarCollapsed]),
     onToggleSidebar: toggleSidebar,
     onUploadProject: useCallback(() => setProjectUploadOpen(true), [setProjectUploadOpen]),
     onOpenSettings: useCallback(() => setSettingsOpen(true), [setSettingsOpen]),

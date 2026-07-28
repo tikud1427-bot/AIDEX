@@ -38,7 +38,7 @@ function changeIcon(t: PatchFileDiff['changeType']) {
 
 function StatChip({ added, removed }: { added: number; removed: number }) {
   return (
-    <span className="flex items-center gap-1 font-mono text-[11px]">
+    <span className="flex items-center gap-1 font-mono text-micro">
       <span className="text-success">+{added}</span>
       <span className="text-danger">−{removed}</span>
     </span>
@@ -56,7 +56,7 @@ function StatusBadge({ status }: { status: PatchProposal['status'] }) {
     proposed: 'Awaiting review', applied: 'Applied', rejected: 'Rejected', reverted: 'Reverted',
   };
   return (
-    <span className={cn('rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide', styles[status] ?? styles.proposed)}>
+    <span className={cn('rounded-full border px-2 py-0.5 text-micro font-semibold uppercase tracking-wide', styles[status] ?? styles.proposed)}>
       {labels[status] ?? status}
     </span>
   );
@@ -69,7 +69,7 @@ function VerificationBar({ v }: { v: PatchProposal['verification'] }) {
     <div className={cn('border-t border-border/60', v.passed ? 'bg-success/5' : 'bg-warning/10')}>
       <button
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[12px]"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-caption"
       >
         {v.passed
           ? <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-success" />
@@ -84,7 +84,7 @@ function VerificationBar({ v }: { v: PatchProposal['verification'] }) {
       {open && (
         <ul className="space-y-1 px-4 pb-2.5">
           {v.checks.map((c) => (
-            <li key={c.id} className="flex items-start gap-1.5 text-[11px] text-foreground-secondary">
+            <li key={c.id} className="flex items-start gap-1.5 text-micro text-foreground-secondary">
               {c.status === 'pass'
                 ? <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-success" />
                 : <XCircle className="mt-0.5 h-3 w-3 shrink-0 text-danger" />}
@@ -106,13 +106,13 @@ function FileSection({ file }: { file: PatchFileDiff }) {
         <button onClick={() => setOpen((o) => !o)} className="flex min-w-0 flex-1 items-center gap-2 text-left">
           {open ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-foreground-secondary" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-foreground-secondary" />}
           {changeIcon(file.changeType)}
-          <code className="truncate font-mono text-[12px] font-medium text-foreground" title={file.path}>
+          <code className="truncate font-mono text-caption font-medium text-foreground" title={file.path}>
             {file.path}
           </code>
-          {file.changeType === 'create' && <span className="rounded bg-success/15 px-1.5 py-px text-[10px] font-medium text-success">new file</span>}
+          {file.changeType === 'create' && <span className="rounded bg-success/15 px-1.5 py-px text-micro font-medium text-success">new file</span>}
           {file.fuzzyMatched && (
             <Tooltip label="An edit anchor needed whitespace-tolerant matching — worth a second look">
-              <span className="rounded bg-warning/15 px-1.5 py-px text-[10px] font-medium text-warning">fuzzy match</span>
+              <span className="rounded bg-warning/15 px-1.5 py-px text-micro font-medium text-warning">fuzzy match</span>
             </Tooltip>
           )}
         </button>
@@ -130,7 +130,7 @@ function FileSection({ file }: { file: PatchFileDiff }) {
       {open && (
         <>
           {file.explanation && (
-            <p className="border-t border-border/40 bg-surface px-3 py-1.5 text-[12px] italic text-foreground-secondary">
+            <p className="border-t border-border/40 bg-surface px-3 py-1.5 text-caption italic text-foreground-secondary">
               {file.explanation}
             </p>
           )}
@@ -180,10 +180,10 @@ export const PatchCard = memo(function PatchCard({ patch, messageId }: { patch: 
       {/* ── Header ── */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5">
         <FileDiff className="h-4 w-4 shrink-0 text-primary" />
-        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground" title={patch.summary}>
+        <span className="min-w-0 flex-1 truncate text-body font-semibold text-foreground" title={patch.summary}>
           {patch.summary}
         </span>
-        <span className="text-[11px] text-foreground-secondary">
+        <span className="text-micro text-foreground-secondary">
           {patch.stats.filesChanged} file{patch.stats.filesChanged === 1 ? '' : 's'}
         </span>
         <StatChip added={patch.stats.added} removed={patch.stats.removed} />
@@ -194,13 +194,13 @@ export const PatchCard = memo(function PatchCard({ patch, messageId }: { patch: 
       {(patch.breakingChanges?.length > 0 || patch.risks?.length > 0) && (
         <div className="border-t border-border/60 bg-warning/5 px-3 py-2">
           {patch.breakingChanges?.length > 0 && (
-            <div className="flex items-start gap-1.5 text-[12px] text-warning">
+            <div className="flex items-start gap-1.5 text-caption text-warning">
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span><strong>Breaking:</strong> {patch.breakingChanges.join(' · ')}</span>
             </div>
           )}
           {patch.risks?.length > 0 && (
-            <div className={cn('flex items-start gap-1.5 text-[12px] text-foreground-secondary', patch.breakingChanges?.length > 0 && 'mt-1')}>
+            <div className={cn('flex items-start gap-1.5 text-caption text-foreground-secondary', patch.breakingChanges?.length > 0 && 'mt-1')}>
               <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-foreground-secondary/70" />
               <span><strong>Risks:</strong> {patch.risks.join(' · ')}</span>
             </div>
@@ -216,12 +216,12 @@ export const PatchCard = memo(function PatchCard({ patch, messageId }: { patch: 
 
       {/* ── Skipped operations ── */}
       {patch.failedOperations?.length > 0 && (
-        <div className="border-t border-border/60 bg-danger/5 px-3 py-2 text-[12px] text-foreground-secondary">
+        <div className="border-t border-border/60 bg-danger/5 px-3 py-2 text-caption text-foreground-secondary">
           <span className="font-medium text-danger">Skipped operations:</span>
           <ul className="mt-1 space-y-0.5">
             {patch.failedOperations.map((fo, i) => (
               <li key={i}>
-                <code className="font-mono text-[11px]">{fo.file}</code> — {fo.error}
+                <code className="font-mono text-micro">{fo.file}</code> — {fo.error}
                 {fo.suggestion ? <span className="text-foreground-secondary/80"> ({fo.suggestion})</span> : null}
               </li>
             ))}
@@ -232,12 +232,12 @@ export const PatchCard = memo(function PatchCard({ patch, messageId }: { patch: 
       {/* ── Related files ── */}
       {patch.relatedFiles?.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-t border-border/60 px-3 py-2">
-          <span className="flex items-center gap-1 text-[11px] font-medium text-foreground-secondary">
+          <span className="flex items-center gap-1 text-micro font-medium text-foreground-secondary">
             <Link2 className="h-3 w-3" /> May need follow-up:
           </span>
           {patch.relatedFiles.map((rf) => (
             <Tooltip key={rf.path} label={rf.reason}>
-              <code className="rounded bg-surface-secondary px-1.5 py-0.5 font-mono text-[10px] text-foreground-secondary">
+              <code className="rounded bg-surface-secondary px-1.5 py-0.5 font-mono text-micro text-foreground-secondary">
                 {rf.path.split('/').pop()}
               </code>
             </Tooltip>
@@ -247,20 +247,20 @@ export const PatchCard = memo(function PatchCard({ patch, messageId }: { patch: 
 
       {/* ── Conflicts (apply failed 409) ── */}
       {conflicts && (
-        <div className="border-t border-border/60 bg-danger/5 px-3 py-2 text-[12px]">
+        <div className="border-t border-border/60 bg-danger/5 px-3 py-2 text-caption">
           <div className="flex items-center gap-1.5 font-medium text-danger">
             <GitBranch className="h-3.5 w-3.5" /> Patch no longer applies cleanly
           </div>
           <ul className="mt-1 space-y-0.5 text-foreground-secondary">
             {conflicts.map((c) => (
-              <li key={c.file}><code className="font-mono text-[11px]">{c.file}</code> — {c.reason}</li>
+              <li key={c.file}><code className="font-mono text-micro">{c.file}</code> — {c.reason}</li>
             ))}
           </ul>
-          <p className="mt-1 text-foreground-secondary/80">Ask again to regenerate the patch against the current workspace.</p>
+          <p className="mt-1 text-foreground-secondary/80">Ask again to regenerate the patch against the current project.</p>
         </div>
       )}
       {actionError && !conflicts && (
-        <div className="border-t border-border/60 bg-danger/5 px-3 py-2 text-[12px] text-danger">{actionError}</div>
+        <div className="border-t border-border/60 bg-danger/5 px-3 py-2 text-caption text-danger">{actionError}</div>
       )}
 
       {/* ── Footer: review workflow ── */}
@@ -278,16 +278,16 @@ export const PatchCard = memo(function PatchCard({ patch, messageId }: { patch: 
           )}
           {applied && (
             <>
-              <span className="flex items-center gap-1 text-[12px] font-medium text-success">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Applied to workspace
+              <span className="flex items-center gap-1 text-caption font-medium text-success">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Applied to your project
               </span>
               <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => run('revert')}>
                 {busy === 'revert' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />} Revert
               </Button>
             </>
           )}
-          {patch.status === 'rejected' && <span className="text-[12px] text-foreground-secondary">Changes discarded — nothing was applied.</span>}
-          {patch.status === 'reverted' && <span className="text-[12px] text-warning">Reverted — workspace restored.</span>}
+          {patch.status === 'rejected' && <span className="text-caption text-foreground-secondary">Changes discarded — nothing was applied.</span>}
+          {patch.status === 'reverted' && <span className="text-caption text-warning">Reverted — your project is back as it was.</span>}
         </div>
       </div>
     </motion.div>

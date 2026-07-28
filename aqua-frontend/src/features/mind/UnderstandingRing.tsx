@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import type { MindModel, Dimension } from '@/api/mind';
 import { DIMENSIONS, dimensionConfidence, understandingScore } from '@/stores/mindStore';
-import { CountUp } from './primitives';
+import { CountUp } from '@/components/ui/count-up';
 
 /* ────────────────────────────────────────────────────────────────────────
    The signature element: an evidence ring.
@@ -84,12 +84,12 @@ export function UnderstandingRing({ model }: { model: MindModel }) {
             <CountUp value={score} />
             <span className="ml-0.5 align-top text-xl text-foreground-secondary">%</span>
           </div>
-          <div className="mt-1 text-[11px] uppercase tracking-[0.16em] text-foreground-secondary">understanding</div>
+          <div className="mt-1 text-micro uppercase tracking-[0.16em] text-foreground-secondary">understanding</div>
         </div>
       </motion.div>
 
       <div className="max-w-sm text-center md:text-left">
-        <div className="text-[11px] font-medium uppercase tracking-[0.16em] text-foreground-secondary">Aqua’s understanding</div>
+        <div className="text-micro font-medium uppercase tracking-[0.16em] text-foreground-secondary">Aqua’s understanding</div>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight text-foreground md:text-4xl">
           A living model of you
         </h1>

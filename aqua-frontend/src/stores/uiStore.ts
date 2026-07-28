@@ -10,6 +10,8 @@ interface UiState {
   toasts: ToastItem[];
 
   toggleSidebar: () => void;
+  /** Explicit set — the ⌘K handler has to OPEN the sidebar, never flip it. */
+  setSidebarCollapsed: (collapsed: boolean) => void;
   setMobileSidebarOpen: (open: boolean) => void;
   setSettingsOpen: (open: boolean) => void;
   setProjectUploadOpen: (open: boolean) => void;
@@ -28,6 +30,7 @@ export const useUiStore = create<UiState>()(
       toasts: [],
 
       toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+      setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
       setMobileSidebarOpen: (open) => set({ mobileSidebarOpen: open }),
       setSettingsOpen: (open) => set({ settingsOpen: open }),
       setProjectUploadOpen: (open) => set({ projectUploadOpen: open }),

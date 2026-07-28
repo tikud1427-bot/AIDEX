@@ -1,6 +1,7 @@
 import { motion, useReducedMotion } from 'framer-motion';
 import type { CompactBelief } from '@/api/mind';
-import { Card, ConfidenceBadge } from './primitives';
+import { ConfidenceBadge } from '@/components/ui/confidence-badge';
+import { Panel } from '@/components/ui/panel';
 import { beliefTitle } from './IdentitySection';
 
 /* ── Knowledge — growing proficiency bars ───────────────────────────────── */
@@ -17,7 +18,7 @@ export function KnowledgeSection({ beliefs, onSelect }: { beliefs: CompactBelief
   }
 
   return (
-    <Card className="p-5">
+    <Panel className="p-5">
       <div className="space-y-3.5">
         {rows.map((b, i) => (
           <button
@@ -28,7 +29,7 @@ export function KnowledgeSection({ beliefs, onSelect }: { beliefs: CompactBelief
           >
             <div className="mb-1 flex items-baseline justify-between gap-3">
               <span className="text-sm text-foreground group-hover:text-primary">{beliefTitle(b)}</span>
-              <span className="font-mono text-[11px] tabular-nums text-foreground-secondary">
+              <span className="font-mono text-micro tabular-nums text-foreground-secondary">
                 {Math.round(b.confidence * 100)}% · {b.evidenceCount} obs
               </span>
             </div>
@@ -43,7 +44,7 @@ export function KnowledgeSection({ beliefs, onSelect }: { beliefs: CompactBelief
           </button>
         ))}
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -73,7 +74,7 @@ export function CommunicationSection({ beliefs, decision, onSelect }: {
   }
 
   return (
-    <Card className="space-y-5 p-5">
+    <Panel className="space-y-5 p-5">
       {axes.map((a) => (
         <button
           key={a.label}
@@ -93,11 +94,11 @@ export function CommunicationSection({ beliefs, decision, onSelect }: {
               transition={{ type: 'spring', stiffness: 220, damping: 24 }}
             />
           </div>
-          <div className="mt-1 flex justify-between text-[11px] text-foreground-secondary">
+          <div className="mt-1 flex justify-between text-micro text-foreground-secondary">
             <span>{a.left}</span><span>{a.right}</span>
           </div>
         </button>
       ))}
-    </Card>
+    </Panel>
   );
 }

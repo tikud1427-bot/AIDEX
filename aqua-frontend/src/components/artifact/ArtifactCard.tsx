@@ -71,10 +71,10 @@ export const ArtifactCard = memo(function ArtifactCard({
         <div className="flex items-center gap-2.5 px-3.5 py-2.5">
           <Loader2 className="h-4 w-4 animate-spin text-primary" />
           <div className="min-w-0 flex-1">
-            <div className="truncate text-[13px] font-medium text-foreground">
+            <div className="truncate text-body font-medium text-foreground">
               {plan?.title ?? 'Building artifact…'}
             </div>
-            <div className="truncate text-[11px] text-foreground-secondary">
+            <div className="truncate text-micro text-foreground-secondary">
               {progress?.index != null && total
                 ? <>File {progress.index}/{total}{progress.path ? <> · <span className="font-mono">{progress.path}</span></> : null}</>
                 : plan
@@ -83,7 +83,7 @@ export const ArtifactCard = memo(function ArtifactCard({
             </div>
           </div>
           {plan && (
-            <span className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+            <span className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-micro font-semibold uppercase tracking-wide text-primary">
               {plan.format}
             </span>
           )}
@@ -105,24 +105,24 @@ export const ArtifactCard = memo(function ArtifactCard({
           {formatIcon(artifact.format)}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="truncate text-[13px] font-medium text-foreground">{artifact.title}</div>
-          <div className="text-[11px] text-foreground-secondary">
+          <div className="truncate text-body font-medium text-foreground">{artifact.title}</div>
+          <div className="text-micro text-foreground-secondary">
             {artifact.files.length} file{multi ? 's' : ''} · {fmtBytes(artifact.totalBytes)}
             {artifact.packaging !== 'raw' ? ` · downloads as .${artifact.packaging}` : ''}
           </div>
         </div>
         {artifact.version > 1 && (
-          <span className="rounded-full border border-border bg-surface-secondary px-1.5 py-0.5 text-[10px] font-semibold text-foreground-secondary">
+          <span className="rounded-full border border-border bg-surface-secondary px-1.5 py-0.5 text-micro font-semibold text-foreground-secondary">
             v{artifact.version}
           </span>
         )}
-        <span className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+        <span className="rounded-full border border-primary/25 bg-primary/10 px-2 py-0.5 text-micro font-semibold uppercase tracking-wide text-primary">
           {artifact.format}
         </span>
         <a
           href={artifactDownloadUrl(artifact.id)}
           download
-          className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-secondary px-2.5 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-surface-secondary px-2.5 py-1.5 text-caption font-medium text-foreground transition-colors hover:border-primary/40 hover:text-primary"
         >
           <Download className="h-3.5 w-3.5" /> Download
         </a>
@@ -133,7 +133,7 @@ export const ArtifactCard = memo(function ArtifactCard({
           <button
             type="button"
             onClick={() => setExpanded((e) => !e)}
-            className="flex w-full items-center gap-1.5 px-3.5 py-2 text-[11px] font-medium text-foreground-secondary transition-colors hover:text-foreground"
+            className="flex w-full items-center gap-1.5 px-3.5 py-2 text-micro font-medium text-foreground-secondary transition-colors hover:text-foreground"
           >
             {expanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
             {expanded ? 'Hide files' : 'Show files'}
@@ -142,9 +142,9 @@ export const ArtifactCard = memo(function ArtifactCard({
             <ul className="space-y-0.5 px-3.5 pb-2.5">
               {artifact.files.map((f) => (
                 <li key={f.path} className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 hover:bg-surface-secondary">
-                  <span className={cn('truncate font-mono text-[11px] text-foreground-secondary')}>{f.path}</span>
+                  <span className={cn('truncate font-mono text-micro text-foreground-secondary')}>{f.path}</span>
                   <span className="flex shrink-0 items-center gap-2">
-                    <span className="text-[10px] text-foreground-secondary/70">{fmtBytes(f.size)}</span>
+                    <span className="text-micro text-foreground-secondary/70">{fmtBytes(f.size)}</span>
                     <a
                       href={artifactFileUrl(artifact.id, f.path)}
                       download

@@ -1,7 +1,9 @@
 import { motion, useReducedMotion, AnimatePresence } from 'framer-motion';
 import { CircleDot, OctagonPause, CheckCircle2, Clock3, HelpCircle, Lightbulb, ShieldAlert } from 'lucide-react';
 import type { Goal, MindModel, Prediction } from '@/api/mind';
-import { Card, ConfidenceBadge, staleOpacity, timeAgo } from './primitives';
+import { ConfidenceBadge } from '@/components/ui/confidence-badge';
+import { Panel } from '@/components/ui/panel';
+import { staleOpacity, timeAgo } from '@/lib/format';
 
 /* ── Goals ──────────────────────────────────────────────────────────────── */
 
@@ -29,7 +31,7 @@ export function GoalsSection({ goals }: { goals: Goal[] }) {
       {shown.map((g) => {
         const meta = GOAL_STATUS_META[g.status];
         return (
-          <Card key={g.id}>
+          <Panel key={g.id}>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-semibold text-foreground">{g.title}</div>
@@ -62,8 +64,8 @@ export function GoalsSection({ goals }: { goals: Goal[] }) {
                 ))}
               </div>
             )}
-            <div className="mt-2.5 text-[11px] text-foreground-secondary/80">Last mentioned {timeAgo(g.lastMentionedAt)}</div>
-          </Card>
+            <div className="mt-2.5 text-micro text-foreground-secondary/80">Last mentioned {timeAgo(g.lastMentionedAt)}</div>
+          </Panel>
         );
       })}
     </div>
@@ -76,7 +78,7 @@ function WorkingList({ icon, title, items }: { icon: React.ReactNode; title: str
   if (!items.length) return null;
   return (
     <div>
-      <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.14em] text-foreground-secondary">
+      <div className="mb-1.5 flex items-center gap-1.5 text-micro font-medium uppercase tracking-[0.14em] text-foreground-secondary">
         {icon}{title}
       </div>
       <ul className="space-y-1">
@@ -99,10 +101,10 @@ export function WorkingMemorySection({ model }: { model: MindModel }) {
   if (empty) return <p className="text-sm text-foreground-secondary">Aqua’s attention is clear right now.</p>;
 
   return (
-    <Card className="p-5">
+    <Panel className="p-5">
       {focus.length > 0 && (
         <div className="mb-4">
-          <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-foreground-secondary">Current focus</div>
+          <div className="mb-2 text-micro font-medium uppercase tracking-[0.14em] text-foreground-secondary">Current focus</div>
           <div className="flex flex-wrap gap-2">
             {focus.map((f) => (
               <span
@@ -126,7 +128,7 @@ export function WorkingMemorySection({ model }: { model: MindModel }) {
         <WorkingList icon={<HelpCircle className="h-3 w-3" />} title="Open questions"
           items={w.openQuestions.map((q) => ({ text: q.text, at: q.lastSeenAt }))} />
       </div>
-    </Card>
+    </Panel>
   );
 }
 
@@ -148,10 +150,10 @@ export function PredictionsSection({ predictions }: { predictions: Prediction[] 
             exit={{ opacity: 0 }}
             transition={{ delay: reduce ? 0 : i * 0.05 }}
           >
-            <Card className="flex items-center justify-between gap-4 py-3">
+            <Panel className="flex items-center justify-between gap-4 py-3">
               <div className="min-w-0">
                 <div className="truncate text-sm text-foreground">{p.label}</div>
-                <div className="mt-0.5 text-[11px] text-foreground-secondary">{p.basis}</div>
+                <div className="mt-0.5 text-micro text-foreground-secondary">{p.basis}</div>
               </div>
               <div className="flex shrink-0 items-center gap-3">
                 <div className="hidden h-1 w-24 overflow-hidden rounded-full bg-surface-secondary sm:block">
@@ -159,7 +161,7 @@ export function PredictionsSection({ predictions }: { predictions: Prediction[] 
                 </div>
                 <span className="font-mono text-sm tabular-nums text-foreground">{Math.round(p.probability * 100)}%</span>
               </div>
-            </Card>
+            </Panel>
           </motion.div>
         ))}
       </AnimatePresence>

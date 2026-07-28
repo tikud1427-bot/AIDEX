@@ -4,7 +4,7 @@ import { BrainCircuit, Download, Trash2, Lock, Hourglass, Eye } from 'lucide-rea
 import type { MindModel } from '@/api/mind';
 import { exportMindUrl, eraseMind } from '@/api/mind';
 import { useMindStore, DIMENSIONS } from '@/stores/mindStore';
-import { Card } from './primitives';
+import { Panel } from '@/components/ui/panel';
 
 /* ── Reflection — watch Aqua think (plays when a reflection lands) ───────── */
 
@@ -79,7 +79,7 @@ export function PrivacyPanel({ model }: { model: MindModel }) {
   };
 
   return (
-    <Card className="p-5">
+    <Panel className="p-5">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat icon={<Eye className="h-3.5 w-3.5" />} label="Remembered" value={beliefs.length + model.goals.length} />
         <Stat icon={<BrainCircuit className="h-3.5 w-3.5" />} label="Permanent" value={permanent} />
@@ -122,14 +122,14 @@ export function PrivacyPanel({ model }: { model: MindModel }) {
           </span>
         )}
       </div>
-    </Card>
+    </Panel>
   );
 }
 
 function Stat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
     <div>
-      <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.14em] text-foreground-secondary">{icon}{label}</div>
+      <div className="flex items-center gap-1.5 text-micro uppercase tracking-[0.14em] text-foreground-secondary">{icon}{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</div>
     </div>
   );

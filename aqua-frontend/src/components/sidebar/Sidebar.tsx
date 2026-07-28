@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  BrainCircuit, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen,
+  Brain, BrainCircuit, ChevronDown, ChevronRight, FolderGit2, PanelLeftClose, PanelLeftOpen,
   Search, Settings, SquarePen, X,
 } from 'lucide-react';
 import { ConversationItem } from './ConversationItem';
@@ -14,7 +14,9 @@ import { useConversationStore } from '@/stores/conversationStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useUiStore } from '@/stores/uiStore';
 import { modKey } from '@/hooks/useKeyboardShortcuts';
+import { DATE_BUCKETS, dateBucket, type DateBucket } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import type { UiConversation } from '@/types';
 
 interface Props {
   collapsed: boolean;
@@ -23,6 +25,25 @@ interface Props {
 }
 
 export const searchInputId = 'aqua-sidebar-search';
+
+/* The user's world — the second tier of the sidebar.
+   The first tier is the conversation, which is the product. The second is
+   everything the conversation draws on. These live in the footer rather than
+   the scroll area so a hundred threads can never bury them, and below the
+   list rather than above it because the brief puts conversations first. */
+const WORLD = [
+  { to: '/projects', label: 'Projects', icon: FolderGit2 },
+  { to: '/memory', label: 'Memory', icon: Brain },
+  { to: '/mind', label: 'Understanding', icon: BrainCircuit },
+];
+
+const navRow = (isActive: boolean) =>
+  cn(
+    'tap row-touch flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors',
+    isActive
+      ? 'bg-surface-secondary font-medium text-foreground'
+      : 'text-foreground-secondary hover:bg-surface-secondary hover:text-foreground',
+  );
 
 export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
   const navigate = useNavigate();
@@ -61,6 +82,20 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
   const pinned = active.filter((c) => c.pinned);
   const unpinned = active.filter((c) => !c.pinned);
 
+  /* Recent, grouped by day. A flat list of a hundred threads is a wall: it
+     gives no sense of when anything happened, so scanning it means reading
+     every title. Buckets with nothing in them are never rendered. */
+  const byDay = useMemo(() => {
+    const map = new Map<DateBucket, UiConversation[]>();
+    for (const c of unpinned) {
+      const b = dateBucket(c.updatedAt);
+      const list = map.get(b) ?? [];
+      list.push(c);
+      map.set(b, list);
+    }
+    return DATE_BUCKETS.filter((b) => map.has(b)).map((b) => [b, map.get(b)!] as const);
+  }, [unpinned]);
+
   // Searching is a deliberate hunt — never make someone expand a drawer to
   // discover the thing they just searched for.
   const archivedOpen = showArchived || (!!searchQuery.trim() && archived.length > 0);
@@ -75,23 +110,36 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
     return (
       <div className="flex h-full w-[60px] flex-col items-center gap-1 border-r border-border bg-surface py-3">
         <Tooltip label="Expand sidebar" side="right">
-          <button onClick={toggleSidebar} className="rounded-lg p-2.5 text-foreground-secondary hover:bg-surface-secondary hover:text-foreground">
+          <button onClick={toggleSidebar} className="tap flex h-11 w-11 items-center justify-center rounded-lg text-foreground-secondary hover:bg-surface-secondary hover:text-foreground">
             <PanelLeftOpen className="h-4.5 w-4.5" />
           </button>
         </Tooltip>
         <Tooltip label="New chat" side="right">
-          <button onClick={handleNewChat} className="rounded-lg p-2.5 text-foreground-secondary hover:bg-surface-secondary hover:text-foreground">
+          <button onClick={handleNewChat} className="tap flex h-11 w-11 items-center justify-center rounded-lg text-foreground-secondary hover:bg-surface-secondary hover:text-foreground">
             <SquarePen className="h-4.5 w-4.5" />
           </button>
         </Tooltip>
         <div className="flex-1" />
-        <Tooltip label="Aqua’s mind" side="right">
-          <button onClick={() => { navigate('/mind'); onNavigate?.(); }} className="rounded-lg p-2.5 text-foreground-secondary hover:bg-surface-secondary hover:text-foreground">
-            <BrainCircuit className="h-4.5 w-4.5" />
-          </button>
-        </Tooltip>
+        {WORLD.map(({ to, label, icon: Icon }) => (
+          <Tooltip key={to} label={label} side="right">
+            <NavLink
+              to={to}
+              onClick={onNavigate}
+              className={({ isActive }) =>
+                cn(
+                  'tap flex h-11 w-11 items-center justify-center rounded-lg transition-colors',
+                  isActive
+                    ? 'bg-surface-secondary text-foreground'
+                    : 'text-foreground-secondary hover:bg-surface-secondary hover:text-foreground',
+                )
+              }
+            >
+              <Icon className="h-4.5 w-4.5" />
+            </NavLink>
+          </Tooltip>
+        ))}
         <Tooltip label="Settings" side="right">
-          <button onClick={() => setSettingsOpen(true)} className="rounded-lg p-2.5 text-foreground-secondary hover:bg-surface-secondary hover:text-foreground">
+          <button onClick={() => setSettingsOpen(true)} className="tap flex h-11 w-11 items-center justify-center rounded-lg text-foreground-secondary hover:bg-surface-secondary hover:text-foreground">
             <Settings className="h-4.5 w-4.5" />
           </button>
         </Tooltip>
@@ -123,7 +171,7 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
       <div className="px-3">
         <button
           onClick={handleNewChat}
-          className="tap mb-2 flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-secondary active:bg-surface-secondary"
+          className="tap row-touch mb-2 flex w-full items-center gap-2 rounded-lg border border-border px-3 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-surface-secondary active:bg-surface-secondary"
         >
           <SquarePen className="h-3.5 w-3.5" /> New chat
         </button>
@@ -156,7 +204,7 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
           <>
             {pinned.length > 0 && (
               <div className="mb-3">
-                <p className="px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground-secondary/60">Pinned</p>
+                <GroupLabel>Pinned</GroupLabel>
                 <div className="space-y-0.5">
                   {pinned.map((c) => (
                     <ConversationItem key={c.id} conversation={c} onNavigate={onNavigate} />
@@ -164,19 +212,20 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
                 </div>
               </div>
             )}
-            {unpinned.length > 0 && (
-              <div className="space-y-0.5 pb-2">
-                {pinned.length > 0 && (
-                  <p className="px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground-secondary/60">Recent</p>
-                )}
-                {unpinned.map((c) => (
-                  <ConversationItem key={c.id} conversation={c} onNavigate={onNavigate} />
-                ))}
+
+            {byDay.map(([bucket, list]) => (
+              <div key={bucket} className="mb-3">
+                <GroupLabel>{bucket}</GroupLabel>
+                <div className="space-y-0.5">
+                  {list.map((c) => (
+                    <ConversationItem key={c.id} conversation={c} onNavigate={onNavigate} />
+                  ))}
+                </div>
               </div>
-            )}
+            ))}
 
             {active.length === 0 && archived.length > 0 && !searchQuery && (
-              <p className="px-3 py-6 text-center text-xs leading-relaxed text-foreground-secondary/70">
+              <p className="px-3 py-6 text-center text-caption leading-relaxed text-foreground-secondary/70">
                 Everything here is archived. Start a new chat, or reopen one below.
               </p>
             )}
@@ -186,7 +235,7 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
                 <button
                   onClick={() => setShowArchived((v) => !v)}
                   aria-expanded={archivedOpen}
-                  className="tap flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground-secondary/60 transition-colors hover:bg-surface-secondary/60 hover:text-foreground-secondary"
+                  className="tap flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-micro font-medium uppercase tracking-wide text-foreground-secondary/60 transition-colors hover:bg-surface-secondary/60 hover:text-foreground-secondary"
                 >
                   {archivedOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                   Archived
@@ -206,21 +255,31 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
       </ScrollArea>
 
       <div className="border-t border-border p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))]">
-        <button
-          onClick={() => { navigate('/mind'); onNavigate?.(); }}
-          className="tap flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm text-foreground-secondary transition-colors hover:bg-surface-secondary hover:text-foreground"
-        >
-          <BrainCircuit className="h-4 w-4" />
-          Aqua’s mind
-        </button>
-        <button
-          onClick={() => setSettingsOpen(true)}
-          className="tap flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2.5 text-sm text-foreground-secondary transition-colors hover:bg-surface-secondary hover:text-foreground"
-        >
-          <Settings className="h-4 w-4" />
-          Settings
-        </button>
+        <p className="px-2.5 pb-1 pt-1 text-micro font-medium uppercase tracking-[0.14em] text-foreground-secondary/60">
+          Your world
+        </p>
+        {WORLD.map(({ to, label, icon: Icon }) => (
+          <NavLink key={to} to={to} onClick={onNavigate} className={({ isActive }) => navRow(isActive)}>
+            <Icon className="h-4 w-4 shrink-0" />
+            {label}
+          </NavLink>
+        ))}
+
+        <div className="mt-1 border-t border-border/60 pt-1">
+          <button onClick={() => setSettingsOpen(true)} className={navRow(false)}>
+            <Settings className="h-4 w-4 shrink-0" />
+            Settings
+          </button>
+        </div>
       </div>
     </div>
+  );
+}
+
+function GroupLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="px-2.5 py-1.5 text-micro font-medium uppercase tracking-wide text-foreground-secondary/60">
+      {children}
+    </p>
   );
 }

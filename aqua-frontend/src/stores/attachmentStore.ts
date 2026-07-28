@@ -139,7 +139,7 @@ export const useAttachmentStore = create<AttachmentState>((set, get) => ({
           return {
             ...it,
             stage: 'ready',
-            stageLabel: it.kind === 'repository' ? 'Workspace ready' : 'Ready',
+            stageLabel: it.kind === 'repository' ? 'Project ready' : 'Ready',
             serverId: result.attachmentId,
             format: result.format ?? attachment?.format,
             pages: result.pages ?? attachment?.pages ?? null,

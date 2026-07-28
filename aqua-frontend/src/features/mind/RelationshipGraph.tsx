@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
 import { fetchGraph, type GraphNode, type GraphEdge } from '@/api/mind';
-import { Card } from './primitives';
+import { Panel } from '@/components/ui/panel';
 
 /* ────────────────────────────────────────────────────────────────────────
    Relationship graph — radial constellation, no graph library.
@@ -84,11 +84,11 @@ export function RelationshipGraph() {
   }, []);
 
   if (error) return <p className="text-sm text-foreground-secondary">The graph couldn’t load — it will return with the next update.</p>;
-  if (!nodes) return <Card className="flex h-72 items-center justify-center text-sm text-foreground-secondary">Mapping relationships…</Card>;
+  if (!nodes) return <Panel className="flex h-72 items-center justify-center text-sm text-foreground-secondary">Mapping relationships…</Panel>;
   if (positioned.length <= 1) return <p className="text-sm text-foreground-secondary">Mention people, projects and tools — the map draws itself.</p>;
 
   return (
-    <Card className="p-2">
+    <Panel className="p-2">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${W} ${H}`}
@@ -157,13 +157,13 @@ export function RelationshipGraph() {
         </g>
       </svg>
       <div className="flex flex-wrap items-center justify-between gap-2 px-3 pb-2 pt-1">
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-foreground-secondary">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-micro text-foreground-secondary">
           {[...new Set(nodes.filter((n) => n.key !== 'person:__self__').map((n) => n.type))].map((t) => (
             <span key={t}>{TYPE_LABEL[t] ?? t}</span>
           ))}
         </div>
-        <span className="text-[11px] text-foreground-secondary">Scroll to zoom · drag to pan</span>
+        <span className="text-micro text-foreground-secondary">Scroll to zoom · drag to pan</span>
       </div>
-    </Card>
+    </Panel>
   );
 }

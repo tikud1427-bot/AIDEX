@@ -264,10 +264,23 @@ export interface GetConversationResponse {
 export interface MemoryFact {
   key: string;
   value: string;
+  /** Grouping label the extractor assigned, e.g. 'preference', 'identity'. */
+  category?: string | null;
   confidence?: number;
   importance?: number;
+  /** The message this was learned from — the evidence behind the claim. */
+  sourceMessage?: string;
   sourceText?: string;
+  createdAt?: number;
+  updatedAt?: number;
   ts?: number;
+  /** Bumped on every correction — a fact at revision 3 has been revised twice. */
+  revision?: number;
+  status?: 'active' | 'archived';
+  /** Pinned facts are exempt from archiving and hold a floor importance. */
+  pinned?: boolean;
+  retrievalCount?: number;
+  lastRetrievedAt?: number | null;
   isCorrection?: boolean;
 }
 
@@ -276,6 +289,30 @@ export interface ListFactsResponse {
   conversationId: string;
   factCount: number;
   facts: MemoryFact[];
+}
+
+/** GET /memory — owner-scoped, which is how memory is actually stored. */
+export interface ListMemoryResponse {
+  success: true;
+  ownerId: string;
+  factCount: number;
+  facts: MemoryFact[];
+}
+
+/** One entry in the GET /memory/timeline "what changed" feed. */
+export interface MemoryChange {
+  at: number;
+  kind: 'fact_new' | 'fact_change' | string;
+  label: string;
+  importance?: number | null;
+  evidence?: { factKey?: string; revision?: number | null };
+}
+
+export interface MemoryTimelineResponse {
+  success: true;
+  ownerId: string;
+  days: number;
+  changes: MemoryChange[];
 }
 
 // ── Project / workspace ──────────────────────────────────────────────────

@@ -1,7 +1,9 @@
 import { motion, useReducedMotion } from 'framer-motion';
 import { Lock } from 'lucide-react';
 import type { CompactBelief } from '@/api/mind';
-import { Card, ConfidenceBadge, timeAgo } from './primitives';
+import { ConfidenceBadge } from '@/components/ui/confidence-badge';
+import { Panel } from '@/components/ui/panel';
+import { timeAgo } from '@/lib/format';
 
 const IDENTITY_BLURB: Record<string, string> = {
   founder: 'Talks about the company, users and fundraising like an owner.',
@@ -41,7 +43,7 @@ export function BeliefCard({ belief, onSelect }: { belief: CompactBelief; onSele
       transition={{ type: 'spring', stiffness: 320, damping: 26 }}
       aria-label={`${beliefTitle(belief)} — ${Math.round(belief.confidence * 100)} percent confidence. See why.`}
     >
-      <Card className="h-full transition-colors hover:border-primary/40">
+      <Panel className="h-full transition-colors hover:border-primary/40">
         <div className="flex items-start justify-between gap-2">
           <div className="text-sm font-semibold text-foreground">
             {beliefTitle(belief)}
@@ -59,8 +61,8 @@ export function BeliefCard({ belief, onSelect }: { belief: CompactBelief; onSele
         </div>
         {value && <div className="mt-1 truncate text-sm text-foreground-secondary">{value}</div>}
         <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-foreground-secondary">{blurb}</p>
-        <div className="mt-3 text-[11px] text-foreground-secondary/80">Updated {timeAgo(belief.updatedAt)}</div>
-      </Card>
+        <div className="mt-3 text-micro text-foreground-secondary/80">Updated {timeAgo(belief.updatedAt)}</div>
+      </Panel>
     </motion.button>
   );
 }

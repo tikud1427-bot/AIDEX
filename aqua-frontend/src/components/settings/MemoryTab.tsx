@@ -1,112 +1,105 @@
 import { useEffect, useState } from 'react';
-import { Brain, Loader2, Trash2 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, Brain, Loader2, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { listFacts, deleteFact, clearFacts } from '@/api/memory';
-import { normalizeError } from '@/api/client';
-import { useChatStore } from '@/stores/chatStore';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { forgetAllMemory, listMemory } from '@/api/memory';
 import { useUiStore } from '@/stores/uiStore';
-import type { MemoryFact } from '@/types';
 
+/**
+ * Memory in Settings is now controls only.
+ *
+ * This tab used to BE the memory interface: a `font-mono` list of storage
+ * keys and values with a delete button per row, scoped to whichever
+ * conversation happened to be open — which meant the product's defining
+ * capability was filed under configuration, shown as a database table, and
+ * showed you a fraction of what AQUA actually knew. The facts live at
+ * /memory now, owner-scoped, written as sentences. What stays here is what
+ * genuinely belongs in settings: the count, and the way out.
+ */
 export function MemoryTab() {
-  const conversationId = useChatStore((s) => s.conversationId);
+  const navigate = useNavigate();
+  const setSettingsOpen = useUiStore((s) => s.setSettingsOpen);
   const toast = useUiStore((s) => s.toast);
-  const [facts, setFacts] = useState<MemoryFact[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const [count, setCount] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   useEffect(() => {
-    if (!conversationId) {
-      setFacts([]);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    listFacts(conversationId)
-      .then((res) => setFacts(res.facts))
-      .catch((err) => setError(normalizeError(err).message))
+    listMemory()
+      .then((res) => setCount(res.factCount))
+      .catch(() => setCount(null))
       .finally(() => setLoading(false));
-  }, [conversationId]);
+  }, []);
 
-  async function handleDelete(key: string) {
-    if (!conversationId) return;
-    const prev = facts;
-    setFacts((f) => f.filter((x) => x.key !== key));
+  function openMemory() {
+    setSettingsOpen(false);
+    navigate('/memory');
+  }
+
+  async function handleForgetAll() {
     try {
-      await deleteFact(conversationId, key);
+      await forgetAllMemory();
+      setCount(0);
+      toast('success', 'Memory cleared', 'AQUA starts fresh from your next message.');
     } catch {
-      setFacts(prev);
-      toast('error', 'Could not delete that fact');
+      toast('error', 'Could not clear memory', 'Check your connection and try again.');
     }
-  }
-
-  async function handleClearAll() {
-    if (!conversationId) return;
-    const prev = facts;
-    setFacts([]);
-    try {
-      await clearFacts(conversationId);
-      toast('success', 'Memory cleared for this conversation');
-    } catch {
-      setFacts(prev);
-      toast('error', 'Could not clear memory');
-    }
-  }
-
-  if (!conversationId) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-10 text-center">
-        <Brain className="h-8 w-8 text-foreground-secondary/40" />
-        <p className="text-sm text-foreground-secondary">Start a conversation to see what AQUA remembers.</p>
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="flex justify-center py-10">
-        <Loader2 className="h-5 w-5 animate-spin text-foreground-secondary" />
-      </div>
-    );
-  }
-
-  if (error) {
-    return <p className="py-6 text-center text-sm text-danger">{error}</p>;
-  }
-
-  if (facts.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-2 py-10 text-center">
-        <Brain className="h-8 w-8 text-foreground-secondary/40" />
-        <p className="text-sm text-foreground-secondary">Nothing remembered yet in this conversation.</p>
-      </div>
-    );
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-foreground-secondary">{facts.length} fact{facts.length === 1 ? '' : 's'} for this conversation</p>
-        <Button size="sm" variant="ghost" onClick={handleClearAll} className="text-danger hover:bg-danger/10">
-          <Trash2 className="h-3.5 w-3.5" /> Clear all
+    <div className="space-y-5">
+      <div className="flex items-start gap-3">
+        <Brain className="mt-0.5 h-5 w-5 shrink-0 text-foreground-secondary/60" aria-hidden="true" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm text-foreground">
+            {loading ? (
+              <span className="inline-flex items-center gap-2 text-foreground-secondary">
+                <Loader2 className="h-3.5 w-3.5 animate-spin" /> Checking&hellip;
+              </span>
+            ) : count === null ? (
+              'AQUA picks things up as you work and carries them between conversations.'
+            ) : count === 0 ? (
+              'AQUA hasn’t learned anything about you yet.'
+            ) : (
+              `AQUA remembers ${count} ${count === 1 ? 'thing' : 'things'} about you.`
+            )}
+          </p>
+          <p className="mt-1 text-caption leading-relaxed text-foreground-secondary">
+            Everything it has learned is yours to read, correct or remove.
+          </p>
+        </div>
+      </div>
+
+      <Button size="sm" variant="secondary" onClick={openMemory}>
+        Open memory <ArrowRight className="h-3.5 w-3.5" />
+      </Button>
+
+      <div className="border-t border-border pt-4">
+        <p className="text-caption leading-relaxed text-foreground-secondary">
+          Clearing memory removes everything AQUA has learned about you. Your conversations stay where they are.
+        </p>
+        <Button
+          size="sm"
+          variant="ghost"
+          className="mt-2 text-danger hover:bg-danger/10"
+          disabled={count === 0}
+          onClick={() => setConfirmClear(true)}
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Forget everything
         </Button>
       </div>
-      <div className="max-h-72 space-y-1.5 overflow-y-auto">
-        {facts.map((f) => (
-          <div key={f.key} className="flex items-start justify-between gap-2 rounded-lg border border-border bg-surface-secondary/40 px-3 py-2">
-            <div className="min-w-0">
-              <p className="font-mono text-[11px] text-foreground-secondary">{f.key}</p>
-              <p className="text-sm text-foreground">{f.value}</p>
-            </div>
-            <button
-              onClick={() => handleDelete(f.key)}
-              className="shrink-0 rounded p-1 text-foreground-secondary/50 hover:bg-surface hover:text-danger"
-              aria-label={`Forget ${f.key}`}
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
-      </div>
+
+      <ConfirmDialog
+        open={confirmClear}
+        onOpenChange={setConfirmClear}
+        title="Forget everything?"
+        description="AQUA will lose all of it and start building its picture of you again from your next message. This can’t be undone."
+        confirmLabel="Forget everything"
+        destructive
+        onConfirm={() => void handleForgetAll()}
+      />
     </div>
   );
 }

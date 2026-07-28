@@ -100,7 +100,7 @@ export function Composer() {
   return (
     <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:pb-6">
       {(workspaceId || readyAttachments > 0) && (
-        <div className="mb-1.5 flex items-center gap-1.5 px-1 text-[11px] text-foreground-secondary">
+        <div className="mb-1.5 flex items-center gap-1.5 px-1 text-micro text-foreground-secondary">
           <FolderPlus className="h-3 w-3" />
           {workspaceId && readyAttachments > 0
             ? `Project context + ${readyAttachments} attachment${readyAttachments === 1 ? '' : 's'} active for this chat`
@@ -123,7 +123,7 @@ export function Composer() {
         {isDragActive && (
           <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center rounded-2xl bg-surface/90 text-sm font-medium text-primary">
             Drop anything — repos, PDFs, slides, images, audio, video
-            <span className="mt-0.5 text-[11px] font-normal text-foreground-secondary">AQUA routes it automatically</span>
+            <span className="mt-0.5 text-micro font-normal text-foreground-secondary">AQUA routes it automatically</span>
           </div>
         )}
 
@@ -153,7 +153,7 @@ export function Composer() {
           }}
           placeholder={readyAttachments > 0 ? 'Ask about your files…' : 'Message AQUA…'}
           rows={1}
-          className="max-h-60 min-h-[52px] px-4 py-3.5 pr-14 text-[15px]"
+          className="max-h-60 min-h-[52px] px-4 py-3.5 pr-14 text-lead"
         />
 
         <div className="flex items-center justify-between px-2.5 pb-2.5">
@@ -191,7 +191,7 @@ export function Composer() {
             </Tooltip>
 
             {text.length > MAX_CHARS - 500 && (
-              <span className={cn('ml-1 text-[11px] tabular-nums', overLimit ? 'text-danger' : 'text-foreground-secondary/60')}>
+              <span className={cn('ml-1 text-micro tabular-nums', overLimit ? 'text-danger' : 'text-foreground-secondary/60')}>
                 {text.length}/{MAX_CHARS}
               </span>
             )}
@@ -217,19 +217,19 @@ export function Composer() {
         </div>
       </div>
 
-      <p className="mt-2 text-center text-[11px] text-foreground-secondary/50">
+      <p className="mt-2 text-center text-micro text-foreground-secondary/50">
         AQUA can make mistakes. Verify important information.
       </p>
 
-      <div className="mt-1.5 hidden items-center justify-center gap-3 text-[11px] text-foreground-secondary/50 sm:flex">
+      <div className="mt-1.5 hidden items-center justify-center gap-3 text-micro text-foreground-secondary/50 sm:flex">
         <span className="flex items-center gap-1">
-          <kbd className="rounded border border-border/70 bg-surface-secondary px-1 py-0.5 font-mono text-[10px]">
+          <kbd className="rounded border border-border/70 bg-surface-secondary px-1 py-0.5 font-mono text-micro">
             {isMac ? '⌘K' : 'Ctrl+K'}
           </kbd>
           Search
         </span>
         <span className="flex items-center gap-1">
-          <kbd className="rounded border border-border/70 bg-surface-secondary px-1 py-0.5 font-mono text-[10px]">
+          <kbd className="rounded border border-border/70 bg-surface-secondary px-1 py-0.5 font-mono text-micro">
             {isMac ? `${modKey}⇧U` : 'Ctrl+Shift+U'}
           </kbd>
           Upload repository

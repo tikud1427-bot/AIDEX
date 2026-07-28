@@ -120,7 +120,7 @@ export const CodeBlock = memo(function CodeBlock({ language, code }: CodeBlockPr
   return (
     <div className="group/code my-3 overflow-hidden rounded-lg border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border bg-surface-secondary px-3 py-1.5">
-        <span className="font-mono text-[11px] font-medium text-foreground-secondary">
+        <span className="font-mono text-micro font-medium text-foreground-secondary">
           {lang}
           {collapsible && (
             <span className="ml-2 text-foreground-secondary/60">{lineCount} lines</span>

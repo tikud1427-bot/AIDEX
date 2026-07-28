@@ -53,7 +53,7 @@ export function ResponseConfidence({
   ];
 
   return (
-    <div className="mt-2 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border/70 bg-surface-secondary/40 px-2.5 py-1.5 text-[11px]">
+    <div className="mt-2 inline-flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-border/70 bg-surface-secondary/40 px-2.5 py-1.5 text-micro">
       <span className="flex items-center gap-1.5 font-medium text-foreground-secondary">
         <ShieldCheck className="h-3 w-3" />
         Confidence

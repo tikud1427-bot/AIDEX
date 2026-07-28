@@ -4,7 +4,8 @@ import { X, Lock, LockOpen, Hourglass, Trash2, Check } from 'lucide-react';
 import type { CompactBelief, BeliefExplanation } from '@/api/mind';
 import { explainBelief, correctBelief, setBeliefLock, setBeliefTemporary, deleteBelief } from '@/api/mind';
 import { useMindStore } from '@/stores/mindStore';
-import { ConfidenceBadge, timeAgo } from './primitives';
+import { ConfidenceBadge } from '@/components/ui/confidence-badge';
+import { timeAgo } from '@/lib/format';
 import { beliefTitle, beliefValueText } from './IdentitySection';
 
 /* Explainability (why Aqua believes this) + corrections (change it) in one
@@ -69,7 +70,7 @@ export function BeliefDrawer({ belief, onClose }: { belief: CompactBelief | null
           >
             <header className="flex items-start justify-between gap-3 border-b border-border p-5">
               <div>
-                <div className="text-[11px] uppercase tracking-[0.16em] text-foreground-secondary">{belief.dimension}</div>
+                <div className="text-micro uppercase tracking-[0.16em] text-foreground-secondary">{belief.dimension}</div>
                 <h3 className="mt-1 text-lg font-semibold text-foreground">{beliefTitle(belief)}</h3>
                 <div className="mt-1.5 flex items-center gap-2">
                   <ConfidenceBadge value={belief.confidence} />
@@ -84,7 +85,7 @@ export function BeliefDrawer({ belief, onClose }: { belief: CompactBelief | null
             <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
               {/* Why */}
               <section>
-                <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-foreground-secondary">Why Aqua believes this</div>
+                <div className="mb-2 text-micro font-medium uppercase tracking-[0.14em] text-foreground-secondary">Why Aqua believes this</div>
                 {explanation ? (
                   <>
                     <p className="text-sm leading-relaxed text-foreground">{explanation.explanation}</p>
@@ -106,7 +107,7 @@ export function BeliefDrawer({ belief, onClose }: { belief: CompactBelief | null
 
               {/* Correct */}
               <section>
-                <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-foreground-secondary">Correct it</div>
+                <div className="mb-2 text-micro font-medium uppercase tracking-[0.14em] text-foreground-secondary">Correct it</div>
                 <p className="mb-2 text-xs text-foreground-secondary">Your word outranks inference. Aqua learns from the correction.</p>
                 <div className="flex gap-2">
                   <input
@@ -127,7 +128,7 @@ export function BeliefDrawer({ belief, onClose }: { belief: CompactBelief | null
 
               {/* Control */}
               <section>
-                <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-foreground-secondary">Control</div>
+                <div className="mb-2 text-micro font-medium uppercase tracking-[0.14em] text-foreground-secondary">Control</div>
                 <div className="grid grid-cols-1 gap-2">
                   <button
                     disabled={busy}
