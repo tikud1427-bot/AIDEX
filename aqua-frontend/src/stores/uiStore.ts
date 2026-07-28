@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ToastItem, ToastVariant } from '@/types';
+import type { ToastAction, ToastItem, ToastVariant } from '@/types';
 
 interface UiState {
   sidebarCollapsed: boolean;
@@ -14,7 +14,7 @@ interface UiState {
   setSettingsOpen: (open: boolean) => void;
   setProjectUploadOpen: (open: boolean) => void;
 
-  toast: (variant: ToastVariant, title: string, description?: string) => string;
+  toast: (variant: ToastVariant, title: string, description?: string, action?: ToastAction) => string;
   dismissToast: (id: string) => void;
 }
 
@@ -32,9 +32,12 @@ export const useUiStore = create<UiState>()(
       setSettingsOpen: (open) => set({ settingsOpen: open }),
       setProjectUploadOpen: (open) => set({ projectUploadOpen: open }),
 
-      toast: (variant, title, description) => {
+      // `action` is optional and additive — every existing caller is
+      // unchanged. It exists so a reversible action can offer its own undo
+      // rather than leaving the user to hunt for where the thing went.
+      toast: (variant, title, description, action) => {
         const id = crypto.randomUUID();
-        set({ toasts: [...get().toasts, { id, variant, title, description, durationMs: 4500 }] });
+        set({ toasts: [...get().toasts, { id, variant, title, description, action, durationMs: 4500 }] });
         return id;
       },
       dismissToast: (id) => set({ toasts: get().toasts.filter((t) => t.id !== id) }),

@@ -9,6 +9,9 @@ import { refreshMind } from './mindStore';
 import { refreshWallet } from './walletStore';
 import { useUiStore } from './uiStore';
 import { useConversationStore } from './conversationStore';
+// Read at call time only, never at module init — same contract artifactsStore
+// already relies on for its import of this file.
+import { useUploadStore } from './uploadStore';
 import type { ChatSuccessResponse, MessageDiagnostics, PatchProposal, UiMessage } from '@/types';
 
 interface ChatState {
@@ -61,6 +64,25 @@ function toDiagnostics(res: ChatSuccessResponse): MessageDiagnostics {
     verification: res.verification,
     project: res.project,
   };
+}
+
+/**
+ * Sidebar reconcile, debounced.
+ *
+ * Every turn used to fire a full GET /conversations (up to 100 rows) — a
+ * request per message, on a list the client had already updated locally. The
+ * server owns updatedAt and messageCount, so it still has the last word; it
+ * just doesn't need it after every sentence. touch() keeps the ordering
+ * correct in the meantime.
+ */
+let sidebarSyncTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleSidebarSync(delayMs: number) {
+  if (sidebarSyncTimer) clearTimeout(sidebarSyncTimer);
+  sidebarSyncTimer = setTimeout(() => {
+    sidebarSyncTimer = null;
+    void useConversationStore.getState().fetchConversations();
+  }, delayMs);
 }
 
 /** Sent by the "Continue" affordance when an answer was cut off (budget/interrupt). */
@@ -148,8 +170,13 @@ export const useChatStore = create<ChatState>((set, get) => {
         convStore.ensureLocalEntry(res.conversationId, Date.now());
         convStore.cacheTitle(res.conversationId, outgoingText);
       }
-      // Refresh sidebar message counts without blocking this turn on it.
-      convStore.fetchConversations();
+      // A workspace attached before the first message had no conversation to
+      // bind to yet. It does now — record the pairing so a reload can restore
+      // this conversation's project context.
+      if (workspaceId) convStore.linkWorkspace(res.conversationId, workspaceId);
+      // Reorder the sidebar now; reconcile with the server shortly after.
+      convStore.touch(res.conversationId);
+      scheduleSidebarSync(wasNewConversation ? 1_500 : 5_000);
     };
 
     const failTurn = (message: string) => {
@@ -408,15 +435,48 @@ export const useChatStore = create<ChatState>((set, get) => {
         error: null,
         abortController: null,
       });
+      // workspaceId was already cleared here, but the *visible* project
+      // context never was: uploadStore.overview is global, so a new chat kept
+      // showing the previous project's strip — the interface claiming context
+      // this conversation does not have.
+      useUploadStore.getState().clearOverview();
     },
 
-    setWorkspaceId: (id) => set({ workspaceId: id }),
+    setWorkspaceId: (id) => {
+      set({ workspaceId: id });
+      // Bind it to the conversation immediately when there is one. Uploads
+      // that happen before the first message are bound in finishTurn instead,
+      // once the server has minted the conversation id.
+      const { conversationId } = get();
+      if (conversationId) useConversationStore.getState().linkWorkspace(conversationId, id);
+    },
 
     loadConversation: async (id) => {
       // Same guard as newConversation(): a response still in flight for the
       // previous conversation must not land in this one.
       get().abortController?.abort();
-      set({ loadingHistory: true, error: null, conversationId: id, messages: [], generating: false, abortController: null });
+
+      // ── Project context follows the conversation ──────────────────────────
+      // Two failures fixed here. Reloading a project conversation used to drop
+      // its grounding entirely (workspaceId reset to null, overview never
+      // refetched), and switching to a conversation WITHOUT a project left the
+      // previous project's context strip on screen. Both told the user the
+      // wrong thing about what AQUA can see. Restore this conversation's own
+      // workspace, or clear the view when it has none.
+      const linkedWorkspaceId = useConversationStore.getState().workspaceFor(id);
+      const upload = useUploadStore.getState();
+      if (linkedWorkspaceId) void upload.fetchOverview(linkedWorkspaceId);
+      else upload.clearOverview();
+
+      set({
+        loadingHistory: true,
+        error: null,
+        conversationId: id,
+        workspaceId: linkedWorkspaceId,
+        messages: [],
+        generating: false,
+        abortController: null,
+      });
       try {
         const res = await getConversation(id);
         const messages: UiMessage[] = res.messages.map((m) => ({

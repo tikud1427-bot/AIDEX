@@ -11,6 +11,20 @@ interface ConversationOverlayEntry {
   derivedTitle?: string;
   /** P0 — set once this entry's legacy local-only title/pin was pushed to the server. */
   syncedToServer?: boolean;
+  /**
+   * Which workspace grounds this conversation.
+   *
+   * The server has no conversation→workspace link: `workspaceId` is a
+   * per-request field on the chat body, so the pairing has only ever existed
+   * in the tab that performed the upload. This overlay is now that record,
+   * which is what lets project context survive a reload.
+   *
+   * Per-device, exactly as titles were before they moved server-side. A second
+   * device shows no project bar until it uploads. Making this cross-device
+   * needs `workspaceId` on the conversation meta and the PATCH allowlist —
+   * backend work, deliberately not done in this frontend sprint.
+   */
+  workspaceId?: string;
 }
 
 interface ConversationState {
@@ -26,11 +40,19 @@ interface ConversationState {
   removeConversation: (id: string) => Promise<void>;
   clearAll: () => Promise<{ succeeded: number; failed: number }>;
   togglePin: (id: string) => void;
+  toggleArchive: (id: string) => void;
   rename: (id: string, title: string) => void;
   migrateOverlayToServer: (rows: Array<{ id: string; serverTitle: string | null }>) => Promise<void>;
   cacheTitle: (id: string, firstMessage: string) => void;
   setSearchQuery: (q: string) => void;
   ensureLocalEntry: (id: string, createdAt: number) => void;
+  /** Mark a conversation as just-used so it sorts to the top immediately. */
+  touch: (id: string) => void;
+
+  /** Bind (or unbind) the workspace that grounds a conversation. */
+  linkWorkspace: (conversationId: string, workspaceId: string | null) => void;
+  /** The workspace grounding a conversation, if any. */
+  workspaceFor: (conversationId: string) => string | null;
 }
 
 /**
@@ -216,6 +238,20 @@ export const useConversationStore = create<ConversationState>()(
         });
       },
 
+      /**
+       * Archived has been server-owned since it was introduced, so unlike
+       * pinned it needs no localStorage overlay bridge — the list response is
+       * the only source of truth. Optimistic with rollback, same as togglePin.
+       */
+      toggleArchive: (id) => {
+        const current = get().items.find((c) => c.id === id)?.archived ?? false;
+        const next = !current;
+        set((s) => ({ items: s.items.map((c) => (c.id === id ? { ...c, archived: next } : c)) }));
+        patchConversation(id, { archived: next }).catch(() => {
+          set((s) => ({ items: s.items.map((c) => (c.id === id ? { ...c, archived: current } : c)) }));
+        });
+      },
+
       rename: (id, title) => {
         const prevTitle = get().items.find((c) => c.id === id)?.title;
         set((s) => {
@@ -259,7 +295,29 @@ export const useConversationStore = create<ConversationState>()(
           };
         }),
 
+      /**
+       * Optimistic activity bump. The server owns updatedAt, but waiting for a
+       * round trip to reorder the list makes replying to an old thread feel
+       * like nothing happened. The next fetch reconciles.
+       */
+      touch: (id) =>
+        set((s) => ({
+          items: s.items.map((c) => (c.id === id ? { ...c, updatedAt: Date.now() } : c)),
+        })),
+
       setSearchQuery: (searchQuery) => set({ searchQuery }),
+
+      linkWorkspace: (conversationId, workspaceId) =>
+        set((s) => {
+          const entry = s.overlay[conversationId] ?? { pinned: false };
+          if ((entry.workspaceId ?? null) === workspaceId) return s; // no-op
+          const next = { ...entry };
+          if (workspaceId) next.workspaceId = workspaceId;
+          else delete next.workspaceId;
+          return { overlay: { ...s.overlay, [conversationId]: next } };
+        }),
+
+      workspaceFor: (conversationId) => get().overlay[conversationId]?.workspaceId ?? null,
     }),
     {
       name: 'aqua-conversation-overlay',

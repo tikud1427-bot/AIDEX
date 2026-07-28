@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
-import { MoreHorizontal, Pin, PinOff, Pencil, Trash2, MessageSquare } from 'lucide-react';
+import { Archive, ArchiveRestore, MoreHorizontal, Pin, PinOff, Pencil, Trash2, MessageSquare } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -20,9 +21,25 @@ export function ConversationItem({ conversation, onNavigate }: { conversation: U
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const togglePin = useConversationStore((s) => s.togglePin);
+  const toggleArchive = useConversationStore((s) => s.toggleArchive);
   const rename = useConversationStore((s) => s.rename);
   const removeConversation = useConversationStore((s) => s.removeConversation);
   const toast = useUiStore((s) => s.toast);
+
+  function handleArchive() {
+    const wasArchived = conversation.archived;
+    toggleArchive(conversation.id);
+    // Archiving removes a row from the list. Say where it went and offer the
+    // way back, so the action never reads as a disappearance.
+    if (wasArchived) {
+      toast('success', 'Moved back to your conversations');
+    } else {
+      toast('success', 'Archived', 'Find it under Archived in the sidebar.', {
+        label: 'Undo',
+        onClick: () => toggleArchive(conversation.id),
+      });
+    }
+  }
 
   function commitRename() {
     const trimmed = draft.trim();
@@ -102,6 +119,12 @@ export function ConversationItem({ conversation, onNavigate }: { conversation: U
                 <DropdownMenuItem onSelect={() => { setDraft(conversation.title); setRenaming(true); }}>
                   <Pencil className="h-3.5 w-3.5" /> Rename
                 </DropdownMenuItem>
+                <DropdownMenuItem onSelect={handleArchive}>
+                  {conversation.archived
+                    ? <><ArchiveRestore className="h-3.5 w-3.5" /> Unarchive</>
+                    : <><Archive className="h-3.5 w-3.5" /> Archive</>}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem destructive onSelect={() => setConfirmOpen(true)}>
                   <Trash2 className="h-3.5 w-3.5" /> Delete
                 </DropdownMenuItem>

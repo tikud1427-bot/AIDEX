@@ -66,7 +66,7 @@ export function EmptyState() {
   const conversations = useConversationStore((s) => s.items);
 
   const recent = useMemo(
-    () => [...conversations].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3),
+    () => [...conversations].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 3),
     [conversations],
   );
 

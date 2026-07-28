@@ -36,8 +36,50 @@ import { whoImports, whatImports } from '../project/dependencyGraph.js';
 import { serializeCallGraph, getCallGraphStats, whoCalls, whatCalls, impactOf, traceFrom, getDefinitions } from '../project/callGraph.js';
 
 import { resolveOwner, rememberWorkspace } from '../memory/engine.js';
+import { ownerForUser }                     from '../memory/ownerResolver.js';
 
 const router = express.Router();
+
+// ── Ownership guard (404-uniform, conversations.js / artifacts.js pattern) ────
+//
+// Workspaces recorded an ownerId at creation (resolveOwner below) but nothing
+// ever checked it: every read, the file-upload write, and DELETE were guarded
+// only by "does this id exist", so any authenticated caller could read, write
+// to, or delete any workspace by guessing its UUID. Same IDOR class already
+// fixed for conversations (Phase 1) and artifacts; this closes it for
+// /project/*.
+//
+// Applied through router.param('id') rather than 21 per-handler calls: one
+// hook, and every current AND FUTURE route carrying :id is covered by
+// construction. A route using a different param name would bypass it — the
+// coverage test in routes/tests/projectRoutes.test.js walks the router stack
+// and fails if any :id route is left unprotected.
+//
+// Contract is unchanged: an unowned workspace returns exactly what a missing
+// one returns — same 404, same body — so the guard is not an existence oracle.
+// Dev/standalone (no platform session → req.aquaUserId undefined) enforces
+// nothing, exactly as before. Legacy workspaces with a null ownerId become
+// invisible to authenticated callers rather than readable by all of them,
+// matching the rule conversations.js already set.
+
+function assertWorkspaceOwner(req, res, id) {
+  const workspace = getWorkspace(id);
+  if (!workspace) {
+    res.status(404).json({ success: false, error: 'Workspace not found' });
+    return false;
+  }
+  const scopeUser = req.aquaUserId ?? null;
+  if (scopeUser && workspace.ownerId !== ownerForUser(scopeUser)) {
+    res.status(404).json({ success: false, error: 'Workspace not found' });
+    return false;
+  }
+  return true;
+}
+
+router.param('id', (req, res, next, id) => {
+  if (!assertWorkspaceOwner(req, res, id)) return; // response already sent
+  next();
+});
 
 // ── Create workspace ──────────────────────────────────────────────────────────
 
@@ -202,7 +244,12 @@ router.post('/workspace/:id/query', (req, res) => {
 // ── List all workspaces ───────────────────────────────────────────────────────
 
 router.get('/workspaces', (req, res) => {
-  const workspaces = listWorkspaces();
+  // Scoped like GET /conversations and GET /artifacts: a platform session sees
+  // only its own workspaces. Sessionless (dev/standalone) is unchanged and
+  // still sees everything the local instance holds.
+  const scopeUser = req.aquaUserId ?? null;
+  const owner     = scopeUser ? ownerForUser(scopeUser) : null;
+  const workspaces = listWorkspaces().filter(ws => !owner || ws.ownerId === owner);
   res.json({
     success:    true,
     count:      workspaces.length,

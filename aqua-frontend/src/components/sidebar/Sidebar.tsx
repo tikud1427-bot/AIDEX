@@ -1,8 +1,12 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { BrainCircuit, PanelLeftClose, PanelLeftOpen, Search, Settings, SquarePen, X } from 'lucide-react';
+import {
+  BrainCircuit, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen,
+  Search, Settings, SquarePen, X,
+} from 'lucide-react';
 import { ConversationItem } from './ConversationItem';
 import { SidebarSkeleton } from './SidebarSkeleton';
+import { LoadFailed, NoConversations, NoSearchMatch } from './SidebarEmptyStates';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip } from '@/components/ui/tooltip';
 import { AquaLogo } from '@/components/common/AquaLogo';
@@ -23,9 +27,11 @@ export const searchInputId = 'aqua-sidebar-search';
 export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
   const navigate = useNavigate();
   const searchRef = useRef<HTMLInputElement>(null);
+  const [showArchived, setShowArchived] = useState(false);
 
   const items = useConversationStore((s) => s.items);
   const loading = useConversationStore((s) => s.loading);
+  const loadError = useConversationStore((s) => s.error);
   const searchQuery = useConversationStore((s) => s.searchQuery);
   const setSearchQuery = useConversationStore((s) => s.setSearchQuery);
   const fetchConversations = useConversationStore((s) => s.fetchConversations);
@@ -42,11 +48,22 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
   const filtered = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     const list = q ? items.filter((c) => c.title.toLowerCase().includes(q)) : items;
-    return [...list].sort((a, b) => b.createdAt - a.createdAt);
+    // Latest activity first. Sorting by creation time buried every thread the
+    // moment it was a day old, no matter how recently it was used — and it
+    // discarded the ordering the server already returns.
+    return [...list].sort((a, b) => b.updatedAt - a.updatedAt);
   }, [items, searchQuery]);
 
-  const pinned = filtered.filter((c) => c.pinned);
-  const unpinned = filtered.filter((c) => !c.pinned);
+  // Archived rows were already flowing through the store and the API but were
+  // never filtered out, so anything archived stayed in the main list.
+  const active = filtered.filter((c) => !c.archived);
+  const archived = filtered.filter((c) => c.archived);
+  const pinned = active.filter((c) => c.pinned);
+  const unpinned = active.filter((c) => !c.pinned);
+
+  // Searching is a deliberate hunt — never make someone expand a drawer to
+  // discover the thing they just searched for.
+  const archivedOpen = showArchived || (!!searchQuery.trim() && archived.length > 0);
 
   function handleNewChat() {
     newConversation();
@@ -127,10 +144,14 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
       <ScrollArea className="flex-1 px-2">
         {loading && items.length === 0 ? (
           <SidebarSkeleton />
+        ) : loadError && items.length === 0 ? (
+          <LoadFailed message={loadError} onRetry={() => void fetchConversations()} />
         ) : filtered.length === 0 ? (
-          <p className="px-2.5 py-6 text-center text-xs text-foreground-secondary/60">
-            {searchQuery ? 'No conversations match your search.' : 'No conversations yet.'}
-          </p>
+          searchQuery ? (
+            <NoSearchMatch query={searchQuery.trim()} onClear={() => setSearchQuery('')} />
+          ) : (
+            <NoConversations />
+          )
         ) : (
           <>
             {pinned.length > 0 && (
@@ -151,6 +172,33 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
                 {unpinned.map((c) => (
                   <ConversationItem key={c.id} conversation={c} onNavigate={onNavigate} />
                 ))}
+              </div>
+            )}
+
+            {active.length === 0 && archived.length > 0 && !searchQuery && (
+              <p className="px-3 py-6 text-center text-xs leading-relaxed text-foreground-secondary/70">
+                Everything here is archived. Start a new chat, or reopen one below.
+              </p>
+            )}
+
+            {archived.length > 0 && (
+              <div className="mt-1 border-t border-border/60 pb-2 pt-2">
+                <button
+                  onClick={() => setShowArchived((v) => !v)}
+                  aria-expanded={archivedOpen}
+                  className="tap flex w-full items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-medium uppercase tracking-wide text-foreground-secondary/60 transition-colors hover:bg-surface-secondary/60 hover:text-foreground-secondary"
+                >
+                  {archivedOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                  Archived
+                  <span className="ml-auto tabular-nums normal-case tracking-normal">{archived.length}</span>
+                </button>
+                {archivedOpen && (
+                  <div className="mt-0.5 space-y-0.5 opacity-75 transition-opacity hover:opacity-100">
+                    {archived.map((c) => (
+                      <ConversationItem key={c.id} conversation={c} onNavigate={onNavigate} />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </>
