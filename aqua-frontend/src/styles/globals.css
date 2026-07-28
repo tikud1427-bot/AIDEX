@@ -156,6 +156,28 @@
     border-radius: 4px;
   }
 
+  /* ── Radix ScrollArea: stop the viewport sizing to its content ────────
+     ScrollArea wraps whatever you put in the viewport in a div it styles
+     INLINE as `min-width:100%; display:table` — its trick for measuring
+     content wide enough to scroll horizontally.
+
+     A table box sizes to its content. So one `white-space:nowrap`
+     descendant — which is every `truncate`d conversation title — makes that
+     wrapper wider than the panel. Two things follow, and both were visible
+     in the sidebar: `truncate` never gets the chance to ellipse (titles cut
+     off mid-word at the panel edge instead), and anything laid out to the
+     RIGHT of the title is pushed past the viewport's clip and vanishes —
+     which is where the conversation row's three-dot menu had gone.
+
+     Nothing here scrolls horizontally; the only ScrollArea in the app
+     renders a vertical scrollbar alone. `display:block` makes the wrapper
+     fill exactly 100% and forces its flex children to shrink, which is what
+     `min-w-0 flex-1` was asking for all along. Inline styles need
+     !important to beat. */
+  [data-radix-scroll-area-viewport] > div {
+    display: block !important;
+  }
+
   /* Thin, unobtrusive scrollbars matching the surface palette. */
   * {
     scrollbar-width: thin;
@@ -289,7 +311,7 @@
   }
   @media (hover: hover) and (pointer: fine) {
     .affordance {
-      opacity: 0.4;
+      opacity: 0.55;
       transition: opacity 0.15s ease;
     }
     .group:hover .affordance,
