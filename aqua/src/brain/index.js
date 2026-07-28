@@ -45,9 +45,12 @@ import { resolveEntities } from '../reasoning/entityResolver.js';
 import { transition } from '../pic/knowledgeLifecycle.js';
 import { brainEnabled } from './worldModel/schema.js';
 import { purgeOwner as purgeIds } from './identity/idStore.js';
+import * as canonicalIds from './identity/canonicalId.js';
+import * as pic from '../pic/core.js';
+import { ensureSelfEntity } from './identity/selfEntity.js';
 
 /** Real dependency set. Tests inject their own via the `deps` option. */
-const REAL_DEPS = { graph, peekMind, evidenceStore, annotations, getMind, observeSignals };
+const REAL_DEPS = { graph, peekMind, evidenceStore, annotations, getMind, observeSignals, canonicalIds, pic, ensureSelfEntity };
 
 const metrics = {
   calls: 0, errors: 0, disabled: 0,
@@ -319,7 +322,15 @@ export function removeAnnotation(ownerId, entityId, opts = {}) {
 
 // ── Lifecycle + observability ────────────────────────────────────────────────
 
-/** Account deletion hook. Only annotations are ours to purge. */
+/**
+ * Account deletion hook. Both Brain sidecars are ours to purge — annotations
+ * and the canonical id map. The graphs, Mind and evidence store are purged by
+ * their own owners.
+ *
+ * Neither sidecar holds knowledge, so this erases the Brain's view of an owner
+ * without touching what the other stores must also delete for the erasure to
+ * be complete.
+ */
 export function purgeOwner(ownerId, opts = {}) {
   const { deps = REAL_DEPS } = opts;
   const out = { annotations: 0, canonicalIds: 0 };

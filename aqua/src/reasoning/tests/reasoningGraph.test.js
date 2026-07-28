@@ -38,6 +38,10 @@ test('REASONING CONTRACT: addEdge rejects edges without provenance', () => {
 });
 
 test('edges merge (confidence max, evidence/sourceFiles union) on repeated insert', () => {
+  // Pins the DEFAULT merge rule. Phase 3 puts an alternative formula behind
+  // AQUA_REL_EVOLVE, so this asserts its own precondition rather than
+  // inheriting whatever the ambient environment happens to be.
+  delete process.env.AQUA_REL_EVOLVE;
   G.upsertNode('o', { id: 'a', type: 'entity', label: 'A' });
   G.upsertNode('o', { id: 'b', type: 'entity', label: 'B' });
   G.addEdge('o', { from: 'a', to: 'b', type: 'related_to', confidence: 0.6, sourceFiles: ['f1'], evidence: ['ev1'] });

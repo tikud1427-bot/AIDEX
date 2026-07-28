@@ -73,6 +73,9 @@ const KIND_ALIASES = Object.freeze({
   conversation: 'conversation',
   place: 'place', location: 'place',
   event: 'event',
+  // The owner themselves. Its own kind on purpose: two different SPECIFIC
+  // kinds never match, so a lookup for a named person can never reach it.
+  self: 'self',
 });
 
 /**

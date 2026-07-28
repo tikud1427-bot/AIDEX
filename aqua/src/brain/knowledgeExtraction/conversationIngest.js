@@ -114,6 +114,11 @@ export function ingestConversationTurn(deps, {
   if (!ownerId || !conversationId) { metrics.skipped += 1; return { ok: false, skipped: 'missing-owner' }; }
 
   const { graph: G } = deps;
+
+  // The owner's self node, if enabled. Created lazily on first ingest so that
+  // user-anchored knowledge has somewhere to attach in the next increment.
+  // Fail-open and idempotent; nothing downstream depends on it yet.
+  try { deps.ensureSelfEntity?.(deps, ownerId); } catch { /* fail-open */ }
   const started = Date.now();
   try {
     ensureConversationNodeType();
@@ -168,6 +173,23 @@ export function ingestConversationTurn(deps, {
         reason: `mentioned in conversation ${conversationId}`,
       }, { fileId: sourceId });
       entitiesLinked += 1;
+    }
+
+    // 3b. Tell PIC the resolver merged surface forms here.
+    //
+    //     PIC's document path (onKnowledgeIngested) needs ukoIds and reads
+    //     evidenceStore; a turn has neither, and faking a UKO would push
+    //     conversational claims through a path that treats them as document
+    //     objects. onEntitiesResolved records only the merge revision.
+    //
+    //     Fail-open and fire-and-forget: PIC's bookkeeping must never be able
+    //     to cost the caller a turn.
+    if (entities.length) {
+      try {
+        deps.pic?.onEntitiesResolved?.({
+          ownerId, entities, source: conversationId, traceId: sourceId,
+        });
+      } catch { /* fail-open */ }
     }
 
     // 4. Relationships. extractFacts() is a DOCUMENT heuristic — it requires a

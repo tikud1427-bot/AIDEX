@@ -159,6 +159,9 @@ test('MIGRATION is conservative: unknown prefixes and structural edges are untou
 });
 
 test('MIGRATION: a stored generic edge upgrades in place when the specific type arrives', () => {
+  // Type upgrade is independent of the confidence formula; pin the default so
+  // AQUA_REL_EVOLVE cannot change what this test is actually about.
+  delete process.env.AQUA_REL_EVOLVE;
   G.upsertNode('o', { id: 'a', type: 'entity', label: 'A' });
   G.upsertNode('o', { id: 'b', type: 'entity', label: 'B' });
   // Pinned id, as graphBuilder uses — so the two inserts are the SAME edge.

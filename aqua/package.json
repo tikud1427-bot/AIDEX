@@ -6,7 +6,6 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-
     "test:edit": "node src/project/tests/editEngine.test.js && node src/project/tests/editRoutes.test.js",
     "test:upload": "node --test src/upload/tests/upload.test.js",
     "test:mind": "node --test src/mind/tests/mind.test.js",
@@ -17,9 +16,7 @@
     "test:search": "node --test src/search/tests/search.test.js",
     "test:artifacts": "node --test \"src/artifacts/tests/*.test.js\" src/routes/tests/artifactRoutes.test.js",
     "test:pic": "node --test src/pic/tests/pic.test.js",
-
-    "test:brain": "node --test src/brain/tests/*.test.js src/routes/tests/brainRoutes.test.js src/routes/tests/turnPostProcess.test.js src/reasoning/tests/typeRegistry.test.js src/reasoning/tests/reasoningGraph.test.js src/reasoning/tests/timelineAndRelationships.test.js",
-
+    "test:brain": "node --test src/brain/tests/*.test.js src/routes/tests/brainRoutes.test.js src/routes/tests/turnPostProcess.test.js src/reasoning/tests/relationshipEvolution.test.js src/reasoning/tests/typeRegistry.test.js src/reasoning/tests/reasoningGraph.test.js src/reasoning/tests/timelineAndRelationships.test.js",
     "test:account": "node --test src/account/tests/accountPurge.test.js",
     "test:cognition": "node --test src/cognition/tests/cognition.test.js",
     "bench:cognition": "node src/cognition/tests/cognitionBench.js",

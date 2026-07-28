@@ -61,7 +61,7 @@ import {
 } from './typeRegistry.js';
 
 const STORE_FILE = dataPath('.aqua-reasoning-graph.json');
-const SCHEMA     = 2;   // v2: open edge-type vocabulary + legacy related_to migration
+const SCHEMA     = 3;   // v3: relationship evolution — lastConfirmedAt, history, observations
 
 /**
  * Back-compat snapshots of the SEED vocabularies, taken at import time.
@@ -111,6 +111,92 @@ function migrateLegacyEdge(edge) {
   return { ...edge, type: recovered, reason: edge.reason.slice(m[0].length), migratedFrom: 'related_to' };
 }
 
+
+// ── Relationship evolution (Phase 3 / audit W4) ──────────────────────────────
+
+/**
+ * Confidence merging is FLAGGED; everything else in this section is not.
+ *
+ * `lastConfirmedAt`, `observations` and `history` are pure metadata — they
+ * add information without changing any decision, so they ship unflagged. The
+ * confidence FORMULA is different: it feeds retrieval ranking, so changing it
+ * changes answers, and it gets its own switch.
+ *
+ * Off (default): `Math.max`, exactly as before. On: corroboration-weighted.
+ */
+const relEvolveEnabled = () => process.env.AQUA_REL_EVOLVE === 'on';
+
+/** Bounded — an edge re-asserted thousands of times must not grow forever. */
+const MAX_EDGE_HISTORY = 20;
+
+/**
+ * Corroboration-weighted confidence.
+ *
+ * `Math.max` treats one enthusiastic source as final: an edge asserted once at
+ * 0.95 and then contradicted at 0.2 by ten later documents still reads 0.95.
+ * A running mean weighted by observation count lets the aggregate move toward
+ * what the evidence actually says, while a single strong observation still
+ * dominates a single weak one.
+ *
+ * The result is deliberately NOT allowed below `MIN_MERGED` — a relationship
+ * that real provenance supports should decay toward uncertainty, never to
+ * zero, because zero reads as "known false" and nothing here establishes that.
+ */
+const MIN_MERGED = 0.05;
+
+function mergeConfidence(existing, incoming, observations) {
+  const prior = existing.confidence ?? 0.5;
+  const n = Math.max(2, observations);
+  const merged = prior + (incoming - prior) / n;
+  return round3(Math.max(MIN_MERGED, Math.min(1, merged)));
+}
+
+/**
+ * Append only when the value actually moved — re-confirmations that change
+ * nothing would otherwise flood the ring and push out the real transitions.
+ */
+function appendHistory(history, before, after, at, observations) {
+  const h = Array.isArray(history) ? history : [];
+  if (round3(before) === round3(after)) return h;
+  return [...h, { at, from: round3(before), to: round3(after), observations }].slice(-MAX_EDGE_HISTORY);
+}
+
+/**
+ * Staleness-adjusted confidence — DERIVED, never stored.
+ *
+ * Storing a decayed value would mean the number changes whenever the file is
+ * loaded, making history meaningless and writes non-idempotent. Callers that
+ * care about recency ask for it; the stored value stays a faithful record of
+ * what the evidence said.
+ *
+ * Opt-in: with no options this is the identity function.
+ */
+export function effectiveConfidence(edge, { now = Date.now(), halfLifeDays = null } = {}) {
+  const base = edge?.confidence ?? 0;
+  if (!halfLifeDays || !edge?.lastConfirmedAt) return base;
+  const ageDays = (now - edge.lastConfirmedAt) / 86_400_000;
+  if (ageDays <= 0) return base;
+  return round3(base * Math.pow(0.5, ageDays / halfLifeDays));
+}
+
+const round3 = (n) => Math.round(n * 1000) / 1000;
+
+/**
+ * v2 → v3 self-heal. Same shape as the v1 → v2 related_to recovery: applied on
+ * load, additive, never a rebuild. An edge written before this phase has no
+ * confirmation history, so its creation IS its only confirmation.
+ */
+function migrateEdgeV3(edge) {
+  if (!edge || edge.lastConfirmedAt) return edge;
+  return {
+    ...edge,
+    peakConfidence: edge.peakConfidence ?? edge.confidence,
+    observations: edge.observations ?? 1,
+    lastConfirmedAt: edge.createdAt ?? Date.now(),
+    history: Array.isArray(edge.history) ? edge.history : [],
+  };
+}
+
 // ── Persistence ──────────────────────────────────────────────────────────────
 
 function loadFromDisk() {
@@ -119,12 +205,15 @@ function loadFromDisk() {
   const { data } = unwrapStore(parsed, { expected: SCHEMA, file: STORE_FILE, label: 'reasoning-graph' });
   if (!data || typeof data !== 'object') return;
   let migrated = 0;
+  let migratedV3 = 0;
   for (const [owner, g] of Object.entries(data)) {
     const gr = graph(owner);
     for (const n of Object.values(g.nodes ?? {})) gr.nodes.set(n.id, n);
     for (const raw of Object.values(g.edges ?? {})) {
-      const e = migrateLegacyEdge(raw);
-      if (e !== raw) migrated++;
+      const legacy = migrateLegacyEdge(raw);
+      const e = migrateEdgeV3(legacy);
+      if (legacy !== raw) migrated++;
+      if (e !== legacy) migratedV3++;
       gr.edges.set(e.id, e); indexEdge(gr, e);
     }
     for (const [file, links] of Object.entries(g.byFile ?? {})) {
@@ -135,8 +224,11 @@ function loadFromDisk() {
   if (totals.n) console.log(`[REASONING] Graph loaded: ${totals.n} node(s), ${totals.e} edge(s) across ${store.size} owner(s) from ${STORE_FILE}`);
   if (migrated) {
     console.log(`[GRAPH] B1 migration: ${migrated} legacy related_to edge(s) recovered to their true relationship type`);
-    scheduleSave();
   }
+  if (migratedV3) {
+    console.log(`[GRAPH] v3 migration: ${migratedV3} edge(s) given confirmation history (lastConfirmedAt = createdAt)`);
+  }
+  if (migrated || migratedV3) scheduleSave();
 }
 
 const _writer = createDebouncedWriter(STORE_FILE);
@@ -230,24 +322,49 @@ export function addEdge(ownerId, edge, { fileId = null } = {}) {
   const g = graph(ownerId);
   const id = edge.id ?? `${edge.from}|${edge.type}|${edge.to}`;
   const existing = g.edges.get(id);
-  const rec = existing ? {
-    ...existing,
-    // Type upgrade: a stored generic edge takes the specific type when one
-    // finally arrives (callers that pin an explicit `id` — graphBuilder does
-    // — would otherwise keep the pre-B1 type forever).
-    type: isTypeUpgrade(existing.type, edge.type) ? edge.type : existing.type,
-    reason: isTypeUpgrade(existing.type, edge.type) ? (edge.reason ?? existing.reason) : existing.reason,
-    confidence: Math.max(existing.confidence, edge.confidence ?? 0),
-    evidence: [...new Set([...existing.evidence, ...evidence])],
-    sourceFiles: [...new Set([...existing.sourceFiles, ...sourceFiles])],
-  } : {
-    id, from: edge.from, to: edge.to, type: edge.type,
-    kind: edge.kind ?? 'derived',
-    confidence: edge.confidence ?? 0.5,
-    evidence, sourceFiles,
-    reason: edge.reason ?? edge.type,
-    createdAt: Date.now(),
-  };
+  const now = Date.now();
+  const incoming = edge.confidence ?? (existing ? 0 : 0.5);
+
+  let rec;
+  if (existing) {
+    const observations = (existing.observations ?? 1) + 1;
+    const peak = Math.max(existing.peakConfidence ?? existing.confidence, incoming);
+    const confidence = relEvolveEnabled()
+      ? mergeConfidence(existing, incoming, observations)
+      : Math.max(existing.confidence, incoming);
+
+    rec = {
+      ...existing,
+      // Type upgrade: a stored generic edge takes the specific type when one
+      // finally arrives (callers that pin an explicit `id` — graphBuilder does
+      // — would otherwise keep the pre-B1 type forever).
+      type: isTypeUpgrade(existing.type, edge.type) ? edge.type : existing.type,
+      reason: isTypeUpgrade(existing.type, edge.type) ? (edge.reason ?? existing.reason) : existing.reason,
+      confidence,
+      peakConfidence: peak,
+      evidence: [...new Set([...existing.evidence, ...evidence])],
+      sourceFiles: [...new Set([...existing.sourceFiles, ...sourceFiles])],
+      // A relationship that keeps being re-asserted is not the same as one
+      // asserted once and never seen again. Without this, an edge contradicted
+      // by every later document keeps its peak forever (audit W4).
+      observations,
+      lastConfirmedAt: now,
+      history: appendHistory(existing.history, existing.confidence, confidence, now, observations),
+    };
+  } else {
+    rec = {
+      id, from: edge.from, to: edge.to, type: edge.type,
+      kind: edge.kind ?? 'derived',
+      confidence: incoming,
+      peakConfidence: incoming,
+      evidence, sourceFiles,
+      reason: edge.reason ?? edge.type,
+      observations: 1,
+      createdAt: now,
+      lastConfirmedAt: now,
+      history: [],
+    };
+  }
   g.edges.set(id, rec);
   indexEdge(g, rec);
   if (fileId) linkFile(g, fileId).edges.add(id);
@@ -384,5 +501,14 @@ export function graphStats(ownerId) {
   for (const e of g.edges.values()) byEdgeType[e.type] = (byEdgeType[e.type] ?? 0) + 1;
   return { nodes: g.nodes.size, edges: g.edges.size, files: g.byFile.size, byNodeType: byType, byEdgeType };
 }
+
+/**
+ * Every owner with a graph. Read-only enumeration for admin tooling —
+ * backfills and migrations need to walk owners without guessing at the
+ * store's internal shape.
+ */
+export function listOwners() { return [...store.keys()]; }
+
+export function _migrateEdgeV3ForTests(edge) { return migrateEdgeV3(edge); }
 
 export function _resetGraphForTests() { store.clear(); }

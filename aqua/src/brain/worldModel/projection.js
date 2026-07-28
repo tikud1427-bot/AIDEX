@@ -83,8 +83,40 @@ const MIND_SELF_KEY = 'person:__self__';
  * @param {object} deps - { graph, peekMind }
  * @returns {{ byId: Map, byName: Map, mindOnly: Map }}
  */
+/**
+ * Canonical-ID joining (Phase 1 / M2).
+ *
+ * Off (default): the join is by normalized name, exactly as before.
+ * On: identity is asked first, and the string match remains as a FALLBACK.
+ *
+ * The fallback is what makes the cutover non-regressive by construction. The
+ * ID join can only ADD matches the string match missed — it can never take
+ * one away, because anything the string match still finds is still used. That
+ * turns the backfill's diff from a gate against loss into a measurement of
+ * gain, which is a far safer thing to flip on production data.
+ */
+const canonicalIdsEnabled = () => process.env.AQUA_CANONICAL_IDS === 'on';
+
+/**
+ * Resolve a mind node to a reasoning entity id through canonical identity.
+ * Returns null whenever identity has nothing to say, so the caller falls back.
+ */
+function idJoin(deps, ownerId, label, type) {
+  const C = deps.canonicalIds;
+  if (!C) return null;
+  try {
+    const hit = C.lookup(ownerId, label, type);
+    if (!hit?.id) return null;
+    const ref = (C.refs(ownerId, hit.id) ?? []).find(r => r.space === 'reasoning');
+    return ref?.ref ?? null;
+  } catch {
+    return null;   // identity is an optimization; it must never break the join
+  }
+}
+
 export function buildWorldIndex(deps, ownerId) {
   const { graph: G, peekMind } = deps;
+  const useIds = canonicalIdsEnabled();
   ensureMindVocabulary();
   const byId = new Map();     // reasoning entity id → { node, mindNode, mindKey }
   const byName = new Map();   // normalized name → entity id
@@ -104,7 +136,11 @@ export function buildWorldIndex(deps, ownerId) {
     if (key === MIND_SELF_KEY) continue;
     if (!MIND_ENTITY_TYPES.has(mindNode.type)) continue;
     const n = normalizeMention(mindNode.label);
-    const matchId = n ? byName.get(n) : null;
+    // Identity first, normalized name second. Both consult the same
+    // similarity rules, so they agree wherever the map has been backfilled;
+    // where the map is empty or stale, the string match still carries it.
+    const viaId = useIds ? idJoin(deps, ownerId, mindNode.label, mindNode.type) : null;
+    const matchId = (viaId && byId.has(viaId)) ? viaId : (n ? byName.get(n) : null);
     if (matchId) {
       const rec = byId.get(matchId);
       // First match wins; a second mind node with the same normalized name

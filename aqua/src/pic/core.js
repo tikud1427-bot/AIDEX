@@ -119,6 +119,51 @@ function scheduleConsolidation(ownerId, deps) {
  * @param {string}  [args.traceId]
  * @param {object}  [args.deps]
  */
+/**
+ * Entity resolution happened, but not from a document.
+ *
+ * `onKnowledgeIngested` is document-shaped: it requires `ukoIds`, walks each
+ * UKO through the ingest lifecycle, and reads facts via
+ * `evidenceStore.factsForFile`. A conversation turn has none of those. It
+ * could be given a synthetic UKO id, but that would push conversational
+ * claims through a path that treats them as document objects — the exact
+ * thing conversationIngest is careful NOT to do when it keeps chat-derived
+ * facts out of evidenceStore.
+ *
+ * So this is the narrow entry point for the part that DOES apply to a
+ * conversation: the resolver merged surface forms, and that merge is a
+ * revision worth recording. No lifecycle, no UKO, no evidence.
+ *
+ * Without it, PIC's versioning and health machinery is blind to everything
+ * learned from chat — which matters most once AQUA_BRAIN_INGEST is on.
+ */
+export function onEntitiesResolved({ ownerId, entities = [], source = null, traceId = null } = {}) {
+  if (!picEnabled() || !ownerId || !entities.length) return { ok: false, skipped: true };
+  try {
+    let merges = 0;
+    for (const e of entities) {
+      if (!e.aliases?.length) continue;
+      recordRevision(ownerId, e.id, {
+        kind: 'entity_merge',
+        before: { surfaceForms: [e.canonical, ...e.aliases] },
+        after:  { canonical: e.canonical, aliases: e.aliases },
+        // Provenance names the conversation, so a merge sourced from chat is
+        // never mistaken later for one a document justified.
+        reason: `resolved in conversation ${source ?? 'unknown'}, confidence ${e.confidence}`,
+      });
+      merges += 1;
+    }
+    if (!merges) return { ok: true, entityMerges: 0 };
+
+    metrics.entitiesMerged += merges;
+    ledger(ownerId, 'conversation-entities-resolved', { entities: entities.length, entityMerges: merges, source, traceId });
+    return { ok: true, entityMerges: merges };
+  } catch (err) {
+    console.warn(`[PIC] onEntitiesResolved failed (non-fatal): ${err?.message ?? err}`);
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+}
+
 export function onKnowledgeIngested({ ownerId, ukoIds = [], entities = [], contradictions = [], traceId = null, deps = {} } = {}) {
   if (!picEnabled() || !ownerId || !ukoIds.length) return { ok: false, skipped: true };
   const d = { ...DEFAULT_DEPS, ...deps };

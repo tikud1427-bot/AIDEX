@@ -152,6 +152,12 @@ export function getMind(ownerId) {
   return mind;
 }
 
+/**
+ * Every owner with a mind. Read-only enumeration for admin tooling — see
+ * the matching helper on the reasoning graph.
+ */
+export function listOwners() { return [...store.keys()]; }
+
 export function peekMind(ownerId) {
   return ownerId ? (store.get(ownerId) ?? null) : null;
 }
