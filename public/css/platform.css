@@ -223,6 +223,10 @@ body.px-page h1, body.px-page h2, body.px-page h3 {
   line-height: 1.2;
   cursor: pointer;
   white-space: nowrap;
+  /* `body.px-page a:not(.px-btn)` deliberately skips buttons, so every
+     <a class="px-btn"> on the site was rendering with the browser's
+     default underline. */
+  text-decoration: none;
   transition: background var(--px-t-fast) var(--px-ease),
               border-color var(--px-t-fast) var(--px-ease),
               color var(--px-t-fast) var(--px-ease),
@@ -411,7 +415,7 @@ body:not(.px-page) .px-nav {
   text-decoration: none !important;
   flex-shrink: 0;
 }
-.px-nav-logo img { width: 22px; height: 22px; object-fit: contain; }
+.px-nav-logo img { width: 22px; height: 22px; object-fit: contain; border-radius: 5px; }
 .px-nav-wordmark {
   font-size: 13px;
   font-weight: 600;
@@ -638,7 +642,7 @@ body:not(.px-page) .px-footer { --px-bg: #0b0e12; color: #9aa4b2; }
   gap: 40px;
 }
 .px-footer-brand { display: flex; align-items: center; gap: 9px; margin-bottom: 14px; }
-.px-footer-brand img { width: 20px; height: 20px; }
+.px-footer-brand img { width: 20px; height: 20px; object-fit: contain; border-radius: 5px; }
 .px-footer-brand span { font-size: 12.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--px-text); }
 .px-footer-tagline { color: var(--px-text-3); max-width: 260px; line-height: 1.55; }
 .px-footer h4 {
