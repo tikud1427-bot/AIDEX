@@ -16,7 +16,9 @@
   --px-line-strong:   rgba(255,255,255,0.12);
   --px-text:          #e8ecf1;
   --px-text-2:        #9aa4b2;
-  --px-text-3:        #667085;
+  /* was #667085 — 3.89:1 on --px-bg, fails WCAG AA for normal text.
+     #7d8798 measures 5.33:1 and stays a clear step below --px-text-2 (7.67:1). */
+  --px-text-3:        #7d8798;
   --px-accent:        #4fa3b8;
   --px-accent-strong: #6fbdd0;
   --px-accent-ink:    #0b0e12;
@@ -34,7 +36,9 @@
 
   --px-font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --px-font-display: 'Newsreader', Georgia, 'Times New Roman', serif;
-  --px-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+  /* JetBrains Mono was declared here but never loaded by any view — every
+     consumer silently fell back. Honest system stack instead; zero requests. */
+  --px-font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
 
   --px-w-content: 1120px;
   --px-w-narrow:  720px;
@@ -48,6 +52,28 @@
   --px-ease: cubic-bezier(0.25, 0.1, 0.25, 1);
   --px-t-fast: 120ms;
   --px-t: 180ms;
+
+  /* ── Type scale (Phase 3) ──────────────────────────────────────────
+     rem, not px, so the site honours a visitor's browser font-size.
+     Names match the React app's tokens so both codebases share one
+     vocabulary: micro / caption / body / lead. */
+  --px-text-micro:   0.75rem;     /* 12px — eyebrow, meta, note        */
+  --px-text-caption: 0.8125rem;   /* 13px — secondary, FAQ body        */
+  --px-text-body:    0.9375rem;   /* 15px — body copy (was the base)   */
+  --px-text-lead:    1.0625rem;   /* 17px — leads, and Aqua's voice    */
+  --px-text-h3:      1.25rem;     /* 20px — sub-headings               */
+  --px-text-h2:      clamp(1.75rem, 3.4vw, 2.5rem);
+  --px-text-h1:      clamp(2.25rem, 6vw, 4rem);
+
+  /* Measures belong to the type, so they are set in the type's unit. */
+  --px-m-h1:    20ch;
+  --px-m-h2:    26ch;
+  --px-m-lead:  46ch;
+  --px-m-body:  62ch;
+  --px-m-voice: 52ch;
+
+  /* Narrative sections need more air than a standard section. */
+  --px-space-story: clamp(96px, 16vw, 180px);
 }
 
 .px-light {
@@ -58,7 +84,8 @@
   --px-line-strong:   #d8d5cf;
   --px-text:          #17191d;
   --px-text-2:        #5c6470;
-  --px-text-3:        #8a919c;
+  /* was #8a919c — 3.04:1 on --px-bg. #6a717c measures 4.71:1. */
+  --px-text-3:        #6a717c;
   --px-accent:        #106b7e;
   --px-accent-strong: #0d5967;
   --px-accent-ink:    #ffffff;
@@ -67,13 +94,35 @@
   --px-shadow-lg: 0 24px 60px rgba(23,25,29,0.12);
 }
 
+/* D4 — the marketing site follows the OS preference. No JS, no flash of
+   the wrong theme. `.px-light` / `.px-dark` still win for explicit
+   overrides on views that set them. */
+@media (prefers-color-scheme: light) {
+  :root:not(.px-dark) {
+    --px-bg:            #fafaf8;
+    --px-surface:       #ffffff;
+    --px-surface-2:     #f3f3f0;
+    --px-line:          #e8e6e1;
+    --px-line-strong:   #d8d5cf;
+    --px-text:          #17191d;
+    --px-text-2:        #5c6470;
+    --px-text-3:        #6a717c;
+    --px-accent:        #106b7e;
+    --px-accent-strong: #0d5967;
+    --px-accent-ink:    #ffffff;
+    --px-shadow-sm: 0 1px 2px rgba(23,25,29,0.06);
+    --px-shadow:    0 8px 30px rgba(23,25,29,0.08);
+    --px-shadow-lg: 0 24px 60px rgba(23,25,29,0.12);
+  }
+}
+
 /* ── Base (opt-in pages only) ─────────────────────────────────────── */
 body.px-page {
   margin: 0;
   background: var(--px-bg);
   color: var(--px-text);
   font-family: var(--px-font-sans);
-  font-size: 15px;
+  font-size: var(--px-text-body);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
@@ -427,6 +476,7 @@ body:not(.px-page) .px-nav {
 }
 .px-nav-dropdown a:hover { color: var(--px-text) !important; background: var(--px-surface-2); }
 
+.px-nav-actions .px-nav-link { padding: 0; }
 .px-nav-actions {
   display: flex;
   align-items: center;
@@ -541,10 +591,29 @@ body:not(.px-page) .px-nav-mobile { background: #0b0e12; }
 @media (max-width: 860px) {
   .px-nav-links { display: none; }
   .px-nav-actions .px-nav-plan { display: none; }
-  .px-nav-actions .px-btn { display: none; }
+  /* The primary action stays in the header on the device most first
+     visits arrive on. Only the secondary one moves into the menu. */
+  .px-nav-actions .px-nav-login { display: none; }
+  .px-nav-actions .px-btn { min-height: 40px; padding: 9px 15px; }
   .px-nav-burger { display: inline-flex; }
-  .px-nav-inner { gap: 12px; justify-content: space-between; }
+  .px-nav-inner { gap: 10px; justify-content: space-between; }
 }
+
+/* Skip link — visible only when focused. */
+.px-skip {
+  position: absolute;
+  left: 12px; top: -60px;
+  z-index: 10000;
+  padding: 10px 16px;
+  background: var(--px-surface);
+  color: var(--px-text) !important;
+  border: 1px solid var(--px-line-strong);
+  border-radius: var(--px-radius-sm);
+  font-size: var(--px-text-caption);
+  font-weight: 550;
+  transition: top var(--px-t) var(--px-ease);
+}
+.px-skip:focus { top: 12px; }
 
 /* legacy pages have body padding-top:70px for the old 70px header;
    new header is 60px — compensate visually is unnecessary; safe. */
@@ -686,156 +755,427 @@ body:not(.px-page) .px-footer { --px-bg: #0b0e12; color: #9aa4b2; }
 .px-light .px-auth-switch a { color: var(--px-accent) !important; }
 
 /* ═══════════════════════════════════════════════════════════════════
-   LANDING
+   LANDING  —  rebuilt Phase 4
+   One narrative, one accent, one signature (the throughline).
+   Rules this block holds itself to:
+     · zero cards, zero shadows, zero borders except the FAQ hairlines
+     · the accent appears in exactly two roles: the throughline, the button
+     · four animated behaviours on the whole page, and no fifth
    ═══════════════════════════════════════════════════════════════════ */
-.px-hero {
-  padding: clamp(116px, 18vw, 168px) 0 clamp(56px, 10vw, 88px);
-  text-align: center;
+
+/* The landing page separates with space, not rules. `.px-section +
+   .px-section` gives every other view a top border; the throughline
+   does that job here. */
+body.px-lp .px-section + .px-section { border-top: 0; }
+
+/* x-position of the throughline. One custom property, read by the line
+   itself and by the three rest nodes, so they can never disagree.
+   50% resolves against the full-bleed parent in both cases. */
+body.px-lp { --px-thread-x: var(--px-gutter); }
+@media (min-width: 900px) {
+  body.px-lp {
+    --px-thread-x: max(var(--px-gutter), calc(50% - (var(--px-w-content) / 2) + var(--px-gutter)));
+  }
 }
+
+/* ── The throughline ─────────────────────────────────────────────────
+   A hairline running the length of the narrative, carrying one light
+   pass in the reader's direction of travel. It passes behind content
+   and never through type. */
+.px-story { position: relative; }
+.px-thread {
+  position: absolute;
+  top: 0; bottom: 0;
+  left: var(--px-thread-x);
+  width: 1px;
+  background: var(--px-line-strong);
+  pointer-events: none;
+  z-index: 0;
+}
+.px-thread-light {
+  position: absolute;
+  left: 0; top: 0;
+  width: 1px;
+  height: 22vh;
+  background: linear-gradient(180deg, transparent, var(--px-accent), transparent);
+  opacity: 0.9;
+}
+/* Scroll-linked, not scroll-triggered: the light tracks position, so
+   scrolling up moves it up. Zero JS. Where unsupported the light simply
+   rests at the top and nothing is missing but the movement. */
+@supports (animation-timeline: scroll()) {
+  .px-thread-light {
+    animation: px-thread-travel linear both;
+    animation-timeline: scroll(root block);
+  }
+}
+@keyframes px-thread-travel {
+  from { top: 0; }
+  to   { top: calc(100% - 22vh); }
+}
+.px-story > section { position: relative; z-index: 1; }
+
+/* Three rests — the page's structural beats. The line is the only
+   element that knows about all three. */
+.px-beat::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: var(--px-thread-x);
+  width: 7px; height: 7px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  background: var(--px-accent);
+  z-index: 2;
+}
+
+/* ── Aqua's voice ────────────────────────────────────────────────────
+   The company speaks in Inter. The product speaks in the serif. Used in
+   exactly three places: the hero artifact, the three demonstrations,
+   and the three opening lines. Framed with corner marks, not a card. */
+.px-voice {
+  position: relative;
+  font-family: var(--px-font-display);
+  font-weight: 400;
+  font-size: var(--px-text-lead);
+  line-height: 1.55;
+  color: var(--px-text);
+  max-width: var(--px-m-voice);
+  padding: 4px 22px;
+  margin: 0;
+}
+.px-voice::before,
+.px-voice::after {
+  position: absolute;
+  font-family: var(--px-font-sans);
+  font-size: var(--px-text-micro);
+  color: var(--px-text-3);
+  line-height: 1;
+}
+.px-voice::before { content: '\231C'; top: 0; left: 0; }
+.px-voice::after  { content: '\231F'; bottom: 0; right: 0; }
+.px-voice-note {
+  font-size: var(--px-text-micro);
+  color: var(--px-text-3);
+  margin: 14px 0 0;
+}
+
+/* ── 1 · Hero ────────────────────────────────────────────────────────
+   The thesis, and one sample of the behaviour. No screenshot. */
+.px-hero { padding: clamp(104px, 16vw, 152px) 0 clamp(56px, 10vw, 88px); }
 .px-hero h1 {
   font-family: var(--px-font-display);
-  font-size: clamp(33px, 6.5vw, 68px);
+  font-size: var(--px-text-h1);
   font-weight: 500;
-  letter-spacing: -0.02em;
-  line-height: 1.08;
-  max-width: 820px;
-  margin: 0 auto 22px;
+  letter-spacing: -0.025em;
+  line-height: 1.06;
+  max-width: var(--px-m-h1);
+  margin: 0 0 clamp(18px, 3vw, 24px);
 }
 .px-hero-sub {
-  font-size: clamp(15px, 2.2vw, 17px);
+  font-size: var(--px-text-lead);
+  line-height: 1.55;
   color: var(--px-text-2);
-  max-width: 560px;
-  margin: 0 auto clamp(28px, 5vw, 36px);
-  line-height: 1.65;
+  max-width: var(--px-m-lead);
+  margin: 0 0 clamp(28px, 5vw, 36px);
 }
 .px-hero-ctas {
   display: flex;
-  gap: 12px;
-  justify-content: center;
+  align-items: center;
+  gap: 20px;
   flex-wrap: wrap;
-  margin-bottom: 20px;
+  margin-bottom: clamp(48px, 9vw, 72px);
 }
-@media (max-width: 480px) {
-  .px-hero-ctas { flex-direction: column; align-items: stretch; max-width: 320px; margin-left: auto; margin-right: auto; }
-  .px-hero-ctas .px-btn { width: 100%; }
+/* The only secondary action on the page, and it is a text link. Two
+   buttons of equal weight is a page admitting it has not decided. */
+.px-link {
+  font-size: var(--px-text-body);
+  font-weight: 450;
+  color: var(--px-text-2);
+  border-bottom: 1px solid transparent;
+  transition: color var(--px-t-fast) var(--px-ease), border-color var(--px-t-fast) var(--px-ease);
 }
-.px-hero-note { font-size: 13px; color: var(--px-text-3); }
+.px-link:hover { color: var(--px-text); border-bottom-color: var(--px-line-strong); }
 
-/* product frame */
-.px-frame-wrap { padding: 40px 0 0; }
-.px-frame {
-  max-width: 960px;
-  margin: 0 auto;
-  border: 1px solid var(--px-line-strong);
+.px-artifact {
+  background: var(--px-surface);
   border-radius: var(--px-radius-lg);
-  background: var(--px-surface);
-  box-shadow: var(--px-shadow-lg);
-  overflow: hidden;
-  text-align: left;
-}
-.px-frame-bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 11px 16px;
-  border-bottom: 1px solid var(--px-line);
-  background: var(--px-surface-2);
-}
-.px-frame-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--px-line-strong); }
-.px-frame-url {
-  margin-left: 10px;
-  font-size: 12px;
-  color: var(--px-text-3);
-  font-family: var(--px-font-mono);
-}
-.px-frame-body { display: grid; grid-template-columns: 200px 1fr; min-height: 380px; }
-.px-frame-side {
-  border-right: 1px solid var(--px-line);
-  padding: 16px 12px;
-  font-size: 12.5px;
-  color: var(--px-text-3);
-  background: var(--px-surface);
-}
-.px-frame-side-item { padding: 7px 10px; border-radius: var(--px-radius-sm); margin-bottom: 2px; }
-.px-frame-side-item.active { background: var(--px-surface-2); color: var(--px-text); }
-.px-frame-main { padding: 28px 32px; }
-.px-frame-msg { max-width: 460px; margin-bottom: 18px; }
-.px-frame-msg-user {
-  margin-left: auto;
-  background: var(--px-surface-2);
-  border: 1px solid var(--px-line);
-  border-radius: var(--px-radius);
-  padding: 10px 14px;
-  font-size: 13.5px;
-  color: var(--px-text);
-  width: fit-content;
-}
-.px-frame-msg-label {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--px-text-3);
-  margin-bottom: 8px;
-}
-.px-frame-msg-body { font-size: 13.5px; color: var(--px-text-2); line-height: 1.7; }
-.px-frame-step { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
-.px-frame-check {
-  width: 14px; height: 14px;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--px-success) 18%, transparent);
-  color: var(--px-success);
-  font-size: 9px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-@media (max-width: 720px) {
-  .px-frame-body { grid-template-columns: 1fr; min-height: 0; }
-  .px-frame-side { display: none; }
-  .px-frame-main { padding: 20px 18px; }
-  .px-frame-msg { max-width: 100%; }
+  padding: clamp(24px, 5vw, 34px) clamp(20px, 4vw, 32px);
+  max-width: 620px;
 }
 
-/* trust strip */
-.px-trust {
-  padding: 48px 0;
-  border-top: 1px solid var(--px-line);
+/* ── 2 · The daily tax ───────────────────────────────────────────────
+   The layout is the argument: "again" accumulating down the page. */
+.px-tax-lead {
+  font-family: var(--px-font-display);
+  font-size: var(--px-text-h2);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.14;
+  max-width: var(--px-m-h2);
+  margin: 0 0 clamp(36px, 6vw, 56px);
 }
-.px-trust p {
-  text-align: center;
-  font-size: 12px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--px-text-3);
-  margin: 0 0 24px;
-}
-.px-trust-row {
+.px-tax-list { list-style: none; margin: 0; padding: 0; max-width: 620px; }
+.px-tax-row {
   display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: clamp(22px, 5vw, 48px) clamp(24px, 5vw, 48px);
-  flex-wrap: wrap;
-  opacity: 0.55;
-}
-.px-trust-row span {
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  font-size: var(--px-text-lead);
   color: var(--px-text-2);
 }
+.px-tax-row .px-again {
+  font-size: var(--px-text-caption);
+  color: var(--px-text-3);
+  flex-shrink: 0;
+  opacity: 1;
+  transition: opacity 320ms var(--px-ease);
+}
+.px-tax-close {
+  font-size: var(--px-text-lead);
+  color: var(--px-text-2);
+  margin: clamp(32px, 5vw, 44px) 0 0;
+  max-width: var(--px-m-lead);
+}
+
+/* ── 3 · What it costs ───────────────────────────────────────────────
+   Deliberately less content than the width allows. */
+/* The opening statement is an h2 so the cost beat survives a
+   headline-only reading, and is set identically so the section still
+   reads as three sentences rather than a heading with two notes. */
+.px-cost h2,
+.px-cost p {
+  font-family: var(--px-font-display);
+  font-size: var(--px-text-h3);
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--px-text);
+  max-width: var(--px-m-lead);
+  margin: 0 0 clamp(20px, 3.5vw, 28px);
+}
+.px-cost p:last-child { margin-bottom: 0; }
+.px-cost h2 { letter-spacing: 0; }
+.px-cost p { color: var(--px-text-2); }
+
+/* ── 4 · The turn ────────────────────────────────────────────────────
+   One sentence. The page stops. */
+.px-turn {
+  min-height: 68vh;
+  display: flex;
+  align-items: center;
+  padding: var(--px-space-sec) 0;
+}
+.px-turn h2 {
+  font-family: var(--px-font-display);
+  font-size: var(--px-text-h1);
+  font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.06;
+  max-width: var(--px-m-h1);
+  margin: 0;
+}
+
+/* ── 5 · How it understands ──────────────────────────────────────────
+   Three moments, because there are genuinely three. */
+.px-mech { display: grid; gap: clamp(40px, 7vw, 64px); max-width: 640px; }
+.px-mech h3 {
+  font-family: var(--px-font-display);
+  font-size: var(--px-text-h3);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin: 0 0 10px;
+}
+.px-mech p {
+  font-size: var(--px-text-body);
+  line-height: 1.65;
+  color: var(--px-text-2);
+  max-width: var(--px-m-body);
+  margin: 0;
+}
+
+/* ── 6 · One world, three demonstrations ─────────────────────────────
+   The only multi-column moment on the page, which is what makes it
+   read as deliberate. No cards, no borders, no icons. */
+.px-world { display: grid; gap: clamp(44px, 7vw, 72px); }
+.px-world-label {
+  font-size: var(--px-text-micro);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--px-text-3);
+  margin: 0 0 14px;
+}
+.px-world-item p:last-child {
+  font-size: var(--px-text-body);
+  line-height: 1.65;
+  color: var(--px-text-2);
+  max-width: var(--px-m-body);
+  margin: 16px 0 0;
+}
+.px-world-item code {
+  font-family: var(--px-font-mono);
+  font-size: 0.94em;
+}
+
+/* ── 7 · What it will not claim ──────────────────────────────────────
+   Four promises. Each one is a constraint that already exists in the
+   engine. Trust sections do not animate and do not get a container. */
+.px-promise { display: grid; gap: clamp(32px, 5.5vw, 48px); max-width: 720px; }
+.px-promise h3 {
+  font-size: var(--px-text-h3);
+  font-weight: 550;
+  letter-spacing: -0.01em;
+  margin: 0 0 8px;
+}
+.px-promise p {
+  font-size: var(--px-text-body);
+  line-height: 1.65;
+  color: var(--px-text-2);
+  max-width: var(--px-m-body);
+  margin: 0;
+}
+
+/* ── 8 · It gets better because you use it ───────────────────────────
+   A time axis told in the product's own opening lines. Not a chart. */
+.px-grow { display: grid; gap: clamp(36px, 6vw, 56px); }
+.px-grow-when {
+  font-size: var(--px-text-micro);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--px-text-3);
+  margin: 0 0 12px;
+}
+
+/* ── 9 · Questions ───────────────────────────────────────────────────
+   Native <details>: keyboard-operable, find-in-page discoverable,
+   zero JS. The only hairlines left on the page. */
+.px-faq { max-width: 720px; }
+.px-faq details { border-bottom: 1px solid var(--px-line); }
+.px-faq summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 56px;
+  padding: 16px 0;
+  font-size: var(--px-text-body);
+  font-weight: 550;
+}
+.px-faq summary::-webkit-details-marker { display: none; }
+.px-faq summary::after {
+  content: '+';
+  color: var(--px-text-3);
+  font-size: var(--px-text-h3);
+  font-weight: 400;
+  line-height: 1;
+  transition: transform var(--px-t) var(--px-ease);
+}
+.px-faq details[open] summary::after { transform: rotate(45deg); }
+.px-faq details p {
+  margin: 0;
+  padding: 0 0 22px;
+  font-size: var(--px-text-caption);
+  line-height: 1.7;
+  color: var(--px-text-2);
+  max-width: var(--px-m-body);
+}
+
+/* ── 10 · Close ──────────────────────────────────────────────────────
+   One action, in the page's own words. */
+.px-close { padding: var(--px-space-story) 0 clamp(80px, 13vw, 120px); }
+.px-close h2 {
+  font-family: var(--px-font-display);
+  font-size: var(--px-text-h2);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.14;
+  max-width: var(--px-m-h2);
+  margin: 0 0 14px;
+}
+.px-close p {
+  font-size: var(--px-text-caption);
+  color: var(--px-text-3);
+  margin: 0 0 clamp(28px, 5vw, 36px);
+}
+
+/* ── Narrative rhythm ────────────────────────────────────────────────
+   Story sections get more air than a standard section. The cost section
+   runs long at the top and short at the bottom so the turn arrives
+   sooner than the reader expects. */
+.px-story-sec { padding: var(--px-space-story) 0; }
+.px-story-sec.is-tight-bottom { padding-bottom: var(--px-space-sec); }
+
+/* ── Motion (4 behaviours, counted) ──────────────────────────────────
+   1. throughline light      scroll-linked, above
+   2. section entry          fade + 8px rise, once
+   3. the "again" stagger    §2 only — accumulation is that section's
+                             meaning, so it is the only stagger here
+   4. hover/focus colour     120ms, in the component rules above
+
+   The hidden state is scoped to html.js so the page renders complete
+   when the script does not run. JS only ever ADDS the animation. */
+.px-reveal { opacity: 1; transform: none; }
+html.js .px-reveal {
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 400ms var(--px-ease), transform 400ms var(--px-ease);
+}
+html.js .px-reveal.in { opacity: 1; transform: none; }
+
+html.js .px-tax-row .px-again { opacity: 0; }
+html.js .px-tax-list.in .px-tax-row .px-again { opacity: 1; }
+html.js .px-tax-list.in .px-tax-row:nth-child(1) .px-again { transition-delay: 60ms; }
+html.js .px-tax-list.in .px-tax-row:nth-child(2) .px-again { transition-delay: 120ms; }
+html.js .px-tax-list.in .px-tax-row:nth-child(3) .px-again { transition-delay: 180ms; }
+html.js .px-tax-list.in .px-tax-row:nth-child(4) .px-again { transition-delay: 240ms; }
+html.js .px-tax-list.in .px-tax-row:nth-child(5) .px-again { transition-delay: 300ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  html.js .px-reveal { opacity: 1; transform: none; }
+  html.js .px-tax-row .px-again { opacity: 1; }
+  .px-thread-light { animation: none; top: 0; }
+}
+
+/* ── Breakpoints ─────────────────────────────────────────────────────
+   Two, coordinated. Designed at 375px and given room, not shrunk. */
+@media (min-width: 900px) {
+  .px-world-item {
+    display: grid;
+    grid-template-columns: 5fr 7fr;
+    gap: clamp(24px, 4vw, 48px);
+    align-items: start;
+  }
+  .px-world-item p:last-child { margin-top: 0; }
+  .px-promise { grid-template-columns: 1fr 1fr; gap: clamp(36px, 4vw, 56px) clamp(40px, 5vw, 72px); }
+}
+@media (max-width: 640px) {
+  .px-tax-row { flex-direction: column; align-items: flex-start; gap: 2px; }
+  .px-turn { min-height: 60vh; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   SHARED EDITORIAL BLOCKS
+   The landing page no longer uses any of these — it separates with
+   space and speaks in its own voice. They stay because /about,
+   /founders and /delete-account still render them. Migrated onto the
+   type tokens so they follow the scale like everything else.
+   ═══════════════════════════════════════════════════════════════════ */
 
 /* section headers */
 .px-sec-head { max-width: 640px; margin-bottom: clamp(36px, 6.5vw, 56px); }
 .px-sec-head.center { margin-left: auto; margin-right: auto; text-align: center; }
 .px-sec-head h2 {
   font-family: var(--px-font-display);
-  font-size: clamp(28px, 3.6vw, 38px);
+  font-size: var(--px-text-h2);
   font-weight: 500;
   margin-bottom: 14px;
 }
-.px-sec-head p { color: var(--px-text-2); font-size: 15.5px; margin: 0; line-height: 1.65; }
+.px-sec-head p { color: var(--px-text-2); font-size: var(--px-text-lead); margin: 0; line-height: 1.65; }
 
 /* features */
 .px-feature-grid {
@@ -864,8 +1204,8 @@ body:not(.px-page) .px-footer { --px-bg: #0b0e12; color: #9aa4b2; }
   margin-bottom: 18px;
 }
 .px-light .px-feature-icon { color: var(--px-accent); }
-.px-feature h3 { font-size: 15.5px; margin-bottom: 8px; font-weight: 600; }
-.px-feature p { font-size: 13.5px; color: var(--px-text-2); line-height: 1.65; margin: 0; }
+.px-feature h3 { font-size: var(--px-text-lead); margin-bottom: 8px; font-weight: 600; }
+.px-feature p { font-size: var(--px-text-caption); color: var(--px-text-2); line-height: 1.65; margin: 0; }
 @media (max-width: 900px) { .px-feature-grid { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 600px) { .px-feature-grid { grid-template-columns: 1fr; } }
 
@@ -873,70 +1213,24 @@ body:not(.px-page) .px-footer { --px-bg: #0b0e12; color: #9aa4b2; }
 .px-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 40px; }
 .px-step-num {
   font-family: var(--px-font-mono);
-  font-size: 12px;
+  font-size: var(--px-text-micro);
   color: var(--px-text-3);
   margin-bottom: 14px;
   display: block;
 }
-.px-step h3 { font-size: 16px; margin-bottom: 8px; }
-.px-step p { font-size: 14px; color: var(--px-text-2); line-height: 1.65; margin: 0; }
+.px-step h3 { font-size: var(--px-text-h3); margin-bottom: 8px; }
+.px-step p { font-size: var(--px-text-body); color: var(--px-text-2); line-height: 1.65; margin: 0; }
 @media (max-width: 760px) { .px-steps { grid-template-columns: 1fr; gap: 32px; } }
-
-/* FAQ */
-.px-faq { max-width: 720px; margin: 0 auto; }
-.px-faq details {
-  border-bottom: 1px solid var(--px-line);
-  padding: 4px 0;
-}
-.px-faq summary {
-  cursor: pointer;
-  list-style: none;
-  padding: 18px 0;
-  font-size: 15px;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-.px-faq summary::-webkit-details-marker { display: none; }
-.px-faq summary::after {
-  content: '+';
-  color: var(--px-text-3);
-  font-size: 18px;
-  font-weight: 300;
-  transition: transform var(--px-t) var(--px-ease);
-}
-.px-faq details[open] summary::after { transform: rotate(45deg); }
-.px-faq details p {
-  margin: 0;
-  padding: 0 0 20px;
-  color: var(--px-text-2);
-  font-size: 14px;
-  line-height: 1.7;
-  max-width: 620px;
-}
 
 /* CTA */
 .px-cta { text-align: center; padding: clamp(72px, 12vw, 120px) 0; }
 .px-cta h2 {
   font-family: var(--px-font-display);
-  font-size: clamp(26px, 4vw, 44px);
+  font-size: var(--px-text-h2);
   font-weight: 500;
   margin-bottom: 16px;
 }
 .px-cta p { color: var(--px-text-2); margin: 0 0 32px; }
-
-/* scroll reveal */
-.px-reveal {
-  opacity: 0;
-  transform: translateY(14px);
-  transition: opacity 0.55s var(--px-ease), transform 0.55s var(--px-ease);
-}
-.px-reveal.in { opacity: 1; transform: translateY(0); }
-@media (prefers-reduced-motion: reduce) {
-  .px-reveal { opacity: 1; transform: none; }
-}
 
 /* ═══════════════════════════════════════════════════════════════════
    DASHBOARD (home)

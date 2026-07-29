@@ -1,28 +1,32 @@
+<script>document.documentElement.classList.add('js');</script>
+
+<%# Fonts load here for every view that does not load them itself. A view
+    that already has the <link> in its own <head> — where it belongs — opts
+    out with include("partials/nav", { pxFonts: false }). %>
+<% if (typeof pxFonts === "undefined" || pxFonts !== false) { %>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;700&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@450;550;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap" rel="stylesheet">
+<% } %>
 
 <header class="px-nav">
   <div class="px-nav-inner">
 
     <a href="/" class="px-nav-logo" aria-label="Aquiplex home">
-      <img src="/logo/logo.png" alt="">
       <span class="px-nav-wordmark">AQUIPLEX</span>
     </a>
 
     <nav class="px-nav-links" aria-label="Main navigation">
-      <a href="/aqua" class="px-nav-link">Aqua AI</a>
-      <a href="/bundles" class="px-nav-link">Projects</a>
       <a href="/pricing" class="px-nav-link">Pricing</a>
       <div class="px-nav-more" id="pxNavMore">
-        <button type="button" onclick="pxToggleMore(event)" aria-expanded="false" aria-controls="pxMoreDropdown">
+        <button type="button" onclick="pxToggleMore(event)" aria-expanded="false" aria-controls="pxMoreDropdown" aria-haspopup="true">
           Company
           <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true"><path d="M2 3.5L5 6.5L8 3.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <div class="px-nav-dropdown" id="pxMoreDropdown" role="menu">
-          <a href="/about" role="menuitem">About</a>
-          <a href="/founders" role="menuitem">Founders</a>
-          <a href="/blogs" role="menuitem">Blog</a>
+        <div class="px-nav-dropdown" id="pxMoreDropdown">
+          <a href="/about">About</a>
+          <a href="/founders">Founders</a>
+          <a href="/blogs">Blog</a>
         </div>
       </div>
     </nav>
@@ -39,10 +43,10 @@
         <a href="/aqua" class="px-btn px-btn-primary px-btn-sm">Open Aqua</a>
 
         <div class="px-nav-user">
-          <button class="px-nav-avatar-btn" onclick="toggleUserMenu(event)" aria-label="Account menu" aria-expanded="false" aria-controls="navUserDropdown">
+          <button class="px-nav-avatar-btn" onclick="toggleUserMenu(event)" aria-label="Account menu" aria-expanded="false" aria-controls="navUserDropdown" aria-haspopup="true">
             <%= (user.username || user.email || 'U')[0].toUpperCase() %>
           </button>
-          <div class="px-nav-user-dropdown" id="navUserDropdown" role="menu">
+          <div class="px-nav-user-dropdown" id="navUserDropdown">
             <div class="px-nav-user-meta">
               <div class="px-nav-user-email"><%= user.email || user.username %></div>
             </div>
@@ -50,16 +54,16 @@
               <span class="px-badge <%= (user.plan && user.plan !== 'free') ? 'px-badge-accent' : '' %>"><%= (user.plan || 'free').toUpperCase() %></span>
             </div>
             <div class="px-nav-divider"></div>
-            <a href="/billing" class="px-nav-item" role="menuitem">Billing &amp; credits</a>
-            <a href="/wallet" class="px-nav-item" role="menuitem">Wallet</a>
-            <a href="/pricing" class="px-nav-item" role="menuitem">Upgrade plan</a>
+            <a href="/billing" class="px-nav-item">Billing &amp; credits</a>
+            <a href="/wallet" class="px-nav-item">Wallet</a>
+            <a href="/pricing" class="px-nav-item">Upgrade plan</a>
             <div class="px-nav-divider"></div>
-            <a href="/logout" class="px-nav-item" role="menuitem">Log out</a>
+            <a href="/logout" class="px-nav-item">Log out</a>
           </div>
         </div>
 
       <% } else { %>
-        <a href="/login" class="px-btn px-btn-ghost px-btn-sm">Log in</a>
+        <a href="/login" class="px-nav-link px-nav-login">Log in</a>
         <a href="/signup" class="px-btn px-btn-primary px-btn-sm">Get started</a>
       <% } %>
 
@@ -70,30 +74,26 @@
 
   </div>
 
-  <div class="px-nav-mobile" id="mobileMenu" role="navigation" aria-label="Mobile navigation">
+  <div class="px-nav-mobile" id="mobileMenu">
     <% if (typeof user !== "undefined" && user) { %>
       <a href="/aqua" class="px-btn px-btn-primary">Open Aqua</a>
       <% if (user.plan === 'free' || !user.plan) { %>
         <a href="/pricing" class="px-btn px-btn-secondary">Upgrade plan</a>
       <% } else { %>
-        <a href="/billing" class="px-btn px-btn-secondary"><%= (user.plan || 'free').toUpperCase() %> plan · Billing</a>
+        <a href="/billing" class="px-btn px-btn-secondary"><%= (user.plan || 'free').toUpperCase() %> plan &middot; Billing</a>
       <% } %>
-    <% } else { %>
-      <a href="/signup" class="px-btn px-btn-primary">Get started</a>
-      <a href="/login" class="px-btn px-btn-secondary">Log in</a>
     <% } %>
 
     <div class="px-nav-mobile-divider"></div>
-    <a href="/aqua">Aqua AI</a>
-    <a href="/bundles">Projects</a>
     <a href="/pricing">Pricing</a>
-    <div class="px-nav-mobile-divider"></div>
     <a href="/about">About</a>
     <a href="/founders">Founders</a>
     <a href="/blogs">Blog</a>
+    <div class="px-nav-mobile-divider"></div>
     <% if (typeof user !== "undefined" && user) { %>
-      <div class="px-nav-mobile-divider"></div>
       <a href="/logout">Log out</a>
+    <% } else { %>
+      <a href="/login">Log in</a>
     <% } %>
   </div>
 </header>
@@ -136,6 +136,8 @@ document.addEventListener("click", function (e) {
   var more = document.getElementById("pxNavMore");
   if (more && more.classList.contains("open") && !more.contains(e.target)) {
     more.classList.remove("open");
+    var btn = more.querySelector("button");
+    if (btn) btn.setAttribute("aria-expanded", "false");
   }
 });
 document.addEventListener("keydown", function (e) {
@@ -145,5 +147,6 @@ document.addEventListener("keydown", function (e) {
     if (el) el.classList.remove("open");
   });
   document.body.classList.remove("px-menu-open");
+  document.querySelectorAll('[aria-expanded="true"]').forEach(function (b) { b.setAttribute("aria-expanded", "false"); });
 });
 </script>
