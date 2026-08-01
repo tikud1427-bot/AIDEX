@@ -59,6 +59,10 @@ import { generateText, generateTextStream } from '../providers/router.js';
 import { buildSystemPrompt }      from '../core/promptBuilder.js';
 import { buildContextWindow, estimateTokens } from '../core/tokenManager.js';
 import { classifyTask }           from '../core/classifier.js';
+import { uusEnabled }             from '../understanding/flags.js';
+import { UNDERSTANDING_TASK, classifyForMode, isInterviewTurn } from '../understanding/interviewMode.js';
+import { directive as interviewSteer } from '../understanding/interview.js';
+import { beliefsForCoverage, goalsForCoverage } from '../understanding/mindView.js';
 import { createContext, logMemoryEvent, logPlanEvent, logIntelligenceEvent, logOrchestratorEvent, logVerificationEvent, logCognitionEvent } from '../core/observability.js';
 import { createExecutionPlan }    from '../core/executionPlanner.js';
 import { getReasoningStrategy }   from '../core/reasoningStrategy.js';
@@ -366,7 +370,7 @@ const REPO_INTENT_RE = /\b(repo(sitory)?|codebase|this project|the project|archi
  * provider calls. Both call sites (`await prepareTurn(...)`) are inside
  * async handlers in this file — no external caller exists.
  */
-async function prepareTurn({ userMessage, workspaceId, conversationId, userId = null, ctx, requestId, onStage = () => {}, skipReasoningPass = false }) {
+async function prepareTurn({ userMessage, workspaceId, conversationId, userId = null, ctx, requestId, onStage = () => {}, skipReasoningPass = false, mode = null }) {
   // ── 1. Resolve the ONE memory owner (unified engine) ────────────────────────
   // Platform user identity when present (cross-conversation, cross-device),
   // else this conversation as a dev/standalone fallback (adopted into the
@@ -383,7 +387,28 @@ async function prepareTurn({ userMessage, workspaceId, conversationId, userId = 
   const fileChunksP = semanticFileChunks(memoryOwner, userMessage);
   // ── 2. Classify (once — result passed to router, no double classification) ──
   onStage('classify', 'Understanding your request…');
-  const { task: taskType, confidence, labels } = classifyTask(userMessage);
+  // Mark the intro conversation so the first-run gate can tell an account that
+  // has done this from one that has not — DERIVED state, not a stored "has
+  // onboarded" flag. conversation.meta is an open bag, so this is zero schema
+  // change, and a marker that lives beside the conversation itself cannot end
+  // up disagreeing with whether the conversation actually happened.
+  if (isInterviewTurn(mode) && conversationId) {
+    try { updateConversationMeta(conversationId, { kind: 'understanding_intro' }); }
+    catch { /* fail open — a missing marker costs a re-offer, not a turn */ }
+  }
+
+  // The interview declares its own intent. classifyTask() scores ordinary
+  // first-person speech at 0.45 — below LOW_CONFIDENCE_THRESHOLD — which fires
+  // verification and debate on 4 of 8 typical answers: up to five extra LLM
+  // calls, 1.5-16.7s measured, and the drafted answer visibly REPLACED
+  // mid-stream. Against a promise of "about two minutes", in the conversation
+  // whose entire job is to earn trust.
+  //
+  // This is not a classifier fix. The classifier is still wrong about
+  // first-person statements everywhere else, and that is a separate change
+  // with a much wider blast radius. Here the caller already KNOWS the intent,
+  // so guessing it is the mistake.
+  const { task: taskType, confidence, labels } = classifyForMode(mode, userMessage, classifyTask);
   console.log(`[CLASSIFIER] task=${taskType} conf=${confidence.toFixed(2)} req=${requestId}`);
 
   // ── 1b. Smart Router — is this a question about AQUA/Aquiplex itself? ────────
@@ -613,13 +638,28 @@ async function prepareTurn({ userMessage, workspaceId, conversationId, userId = 
 
   // ── 6. Build system prompt ────────────────────────────────────────────────────
   onStage('prompt', 'Preparing response…');
+  // UUS — steer the interviewer toward what is still unknown. Deterministic
+  // ranking over the same coverage math the understanding card uses, so the
+  // conversation and the summary can never disagree about what is known. Rides
+  // the existing directive channel; empty for every non-interview turn, so
+  // ordinary traffic is byte-identical. Fail-open: a steering hint is never
+  // worth failing a turn over.
+  let interviewDirective = '';
+  if (isInterviewTurn(mode)) {
+    try {
+      interviewDirective = interviewSteer({
+        beliefsByDimension: beliefsForCoverage(memoryOwner),
+        goals: goalsForCoverage(memoryOwner),
+      });
+    } catch { interviewDirective = ''; }
+  }
   // Attachment context rides the projectContext slot — same injection point,
   // same budget handling in promptBuilder, no signature change.
   const combinedContext = [attachmentContext, projectContext, knowledgeContext].filter(Boolean).join('\n\n');
   // CIE directive rides the SAME channel the Phase-4 reasoning directive
   // already owns — appended after it, never replacing it. Empty when CIE is
   // off or the style is 'fast', keeping casual traffic byte-identical.
-  const reasoningDirective = [reasoning.directive, cognition.directive].filter(Boolean).join('\n');
+  const reasoningDirective = [reasoning.directive, cognition.directive, interviewDirective].filter(Boolean).join('\n');
   const { prompt: systemPrompt, modules: promptModules } = buildSystemPrompt(taskType, memoryBlock, reasoningDirective, combinedContext, intelligence.synthesis.text, identityIntent, searchContext);
 
   // ── 7. Build context window (short-term message history) ─────────────────────
@@ -880,7 +920,7 @@ router.post('/', async (req, res) => {
   const ctx = createContext({ conversationId, requestId });
 
   try {
-    const { message, workspaceId } = req.body ?? {};
+    const { message, workspaceId, mode = null } = req.body ?? {};
     if (!message || typeof message !== 'string' || !message.trim()) {
       return res.status(400).json({
         success: false,
@@ -912,6 +952,7 @@ router.post('/', async (req, res) => {
 
     const artifactWork = detectArtifactWork(userMessage);
     const prep = await prepareTurn({
+      mode,
       userMessage, workspaceId, conversationId, userId: req.aquaUserId ?? null, ctx, requestId,
       skipReasoningPass: !!(artifactWork.create || artifactWork.edit),
     });
@@ -1100,7 +1141,7 @@ router.post('/stream', async (req, res) => {
   console.log(`[CHAT] ${isNew ? 'CONVERSATION_CREATED' : 'CONVERSATION_REUSED'} id=${conversationId} req=${requestId} (stream)`);
   const ctx = createContext({ conversationId, requestId });
 
-  const { message, workspaceId } = req.body ?? {};
+  const { message, workspaceId, mode = null } = req.body ?? {};
   if (!message || typeof message !== 'string' || !message.trim()) {
     return res.status(400).json({
       success: false,
@@ -1183,6 +1224,7 @@ router.post('/stream', async (req, res) => {
     // corresponds to real work beginning, never a scripted animation.
     const artifactWork = detectArtifactWork(userMessage);
     const prep = await prepareTurn({
+      mode,
       userMessage, workspaceId, conversationId, userId: req.aquaUserId ?? null, ctx, requestId,
       onStage: (id, label) => send('stage', { id, label }),
       skipReasoningPass: !!(artifactWork.create || artifactWork.edit),

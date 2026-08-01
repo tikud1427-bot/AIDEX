@@ -7,6 +7,7 @@ import { NotFoundPage, RouteError } from '@/components/feedback/RouteError';
 import { LazyRoute } from '@/components/feedback/LazyRoute';
 
 const MindPage = lazy(() => import('@/pages/MindPage'));
+const IntroPage = lazy(() => import('@/pages/IntroPage'));
 const ProjectsPage = lazy(() => import('@/pages/ProjectsPage'));
 const MemoryPage = lazy(() => import('@/pages/MemoryPage'));
 
@@ -34,6 +35,14 @@ export const router = createBrowserRouter(
         {
           path: 'mind',
           element: <LazyRoute label="Opening the mind…"><MindPage /></LazyRoute>,
+        },
+
+        {
+          // "Getting to Know You" — never /onboarding, never /setup. The URL is
+          // part of the vocabulary, and a person who looks at it should see the
+          // same word the product uses everywhere else.
+          path: 'understanding/start',
+          element: <LazyRoute label="Getting ready to listen…"><IntroPage /></LazyRoute>,
         },
 
         {

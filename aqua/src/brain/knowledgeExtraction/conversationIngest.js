@@ -32,21 +32,34 @@
  *
  * WHAT THIS DELIBERATELY DOES NOT DO
  * ----------------------------------
- *   • It does not re-implement extraction. extractEntities / extractFacts /
- *     resolveEntities / the B1 predicate typing are reused wholesale.
+ *   • It does not re-implement extraction. resolveEntities and the B1
+ *     predicate typing are reused wholesale, and entity detection still runs
+ *     the shared document extractor — but WRAPPED by
+ *     `conversationEntities.js`, which adds a case-insensitive pass for
+ *     lowercase chat. The shared extractor itself is unchanged, so the
+ *     document pipeline sees none of this.
  *   • It does not touch the Mind. mindObserve still runs; this is additive.
- *   • It does not write conversation FACTS into evidenceStore as if they were
- *     document facts — conversational claims are lower-trust and live only as
- *     graph edges with conversational provenance, so a query can always tell
- *     a stated-in-chat claim from a document-grounded one.
+ *   • It does not write conversation facts as if they were DOCUMENT facts.
+ *     They do now enter evidenceStore (step 3c) — that reversed an earlier
+ *     decision, and the reversal is the point of the change: keeping them out
+ *     did not protect document-grade trust, it made everything said in chat
+ *     unreachable by every retriever and invisible to reflection. What
+ *     protects trust is the LABELLING, which is intact: sourceType
+ *     'conversation', extractionMethod 'heuristic', confidence capped at 0.6,
+ *     provenance pointing at the exact turn. A query can always tell a
+ *     stated-in-chat claim from a document-grounded one.
  *
- * Fail-open, off by default (AQUA_BRAIN_INGEST), bounded per turn.
+ * Fail-open, off by default (AQUA_BRAIN_INGEST; facts additionally behind
+ * AQUA_BRAIN_INGEST_FACTS), bounded per turn.
  */
-import { extractEntities } from '../../files/extractors.js';
 import { resolveEntities } from '../../reasoning/entityResolver.js';
 import { buildRelationships } from '../../reasoning/relationshipEngine.js';
 import { registerNodeType } from '../../reasoning/typeRegistry.js';
 import { brainEnabled } from '../worldModel/schema.js';
+import { buildConversationFacts } from './conversationFacts.js';
+import { extractConversationEntities, knownEntitiesFor } from './conversationEntities.js';
+import { SELF_GRAPH_ID, SELF_LABEL, SELF_KIND, selfEntityEnabled } from '../identity/selfEntity.js';
+import { uusEnabled } from '../../understanding/flags.js';
 
 // `conversation` is a new node CLASS (a source, like `file`). Registered
 // idempotently at the point of use rather than only at import: the registry
@@ -63,6 +76,16 @@ function ingestEnabled() {
   return brainEnabled() && String(process.env.AQUA_BRAIN_INGEST ?? '').toLowerCase() === 'on';
 }
 
+/**
+ * Writing conversational CLAIMS into the evidence store is gated on its own,
+ * beneath entity ingest. Entities are additive to a graph the Brain owns;
+ * facts land in a store the document pipeline owns and reads. Separate switch
+ * so the riskier half can be revoked without losing the safer half.
+ */
+export function factIngestEnabled() {
+  return ingestEnabled() && String(process.env.AQUA_BRAIN_INGEST_FACTS ?? '').toLowerCase() === 'on';
+}
+
 // Per-turn bounds — a runaway message must never balloon the graph.
 const MAX_ENTITIES_PER_TURN = 20;
 const MAX_FACTS_PER_TURN    = 15;
@@ -71,6 +94,7 @@ const MIN_TEXT_LENGTH       = 12;   // below this there is nothing worth resolvi
 const metrics = {
   turns: 0, skipped: 0, errors: 0,
   entitiesLinked: 0, relationshipsAdded: 0, conversationsSeen: 0,
+  factsWritten: 0, factErrors: 0,
   lastDurationMs: 0,
 };
 
@@ -140,18 +164,50 @@ export function ingestConversationTurn(deps, {
       sourceFiles: [sourceId],
     }, { fileId: sourceId });
 
-    // 2. Extract + resolve entities from the turn (reused file machinery).
-    const rawEntities = extractEntities(text, { limit: MAX_ENTITIES_PER_TURN });
+    // 2. Extract + resolve entities from the turn.
+    //
+    //    This used to call the shared `extractEntities` directly, which finds
+    //    proper nouns by capitalisation. Chat is not capitalised, so lowercase
+    //    turns produced zero entities and fell out at the guard below —
+    //    before any fact could be written. `extractConversationEntities`
+    //    wraps the shared extractor rather than replacing it: pass A is still
+    //    the untouched document heuristic, plus a case-insensitive pass over
+    //    entities this owner already has and a narrow set of declaration cues.
+    //    The document pipeline is unaffected; it never calls this module.
+    const rawEntities = extractConversationEntities(text, {
+      limit: MAX_ENTITIES_PER_TURN,
+      knownEntities: knownEntitiesFor(G, ownerId),
+      // U1 — first-person disclosure. The USER's message only: reading AQUA's
+      // own "I can help with…" as the user describing themselves would
+      // manufacture evidence from our own output, the same closed loop the
+      // Digital Twin avoids by observing the user side alone. Requires both
+      // AQUA_UUS and AQUA_SELF_ENTITY — a self subject with no self node to
+      // attach to would resolve into a stray entity called "You".
+      selfText: (uusEnabled() && selfEntityEnabled()) ? userMessage : null,
+    });
     if (!rawEntities.length) {
       metrics.turns += 1; metrics.conversationsSeen += 1;
       return { ok: true, entities: 0, relationships: 0 };
     }
 
-    const mentions = rawEntities.map(e => ({
+    // The speaker never goes through the resolver. resolveEntities mints an id
+    // from a name, and the owner's id is a constant that must not change when
+    // their name is learned — so the self mention is lifted out here and
+    // re-joined afterwards, pointing at the node ensureSelfEntity created.
+    const selfMention = rawEntities.find(e => e.isSelf) ?? null;
+    const namedMentions = rawEntities.filter(e => !e.isSelf);
+
+    const mentions = namedMentions.map(e => ({
       value: e.value, type: e.type, fileId: sourceId, fileName: sourceId,
       factId: null, evidenceId: `${sourceId}#ev`,
     }));
     const { entities } = resolveEntities(mentions);
+    if (selfMention) {
+      entities.push({
+        id: SELF_GRAPH_ID, canonical: SELF_LABEL, type: SELF_KIND,
+        aliases: [], confidence: 1, isSelf: true,
+      });
+    }
 
     // 3. Entity nodes + `mentions` edges from the conversation (provenance =
     //    the turn). Same node shape/id scheme as graphBuilder, so a
@@ -160,11 +216,18 @@ export function ingestConversationTurn(deps, {
     let entitiesLinked = 0;
     const entityNodeByName = new Map();
     for (const e of entities) {
-      G.upsertNode(ownerId, {
-        id: e.id, type: 'entity', label: e.canonical, kind: 'derived',
-        data: { entityType: e.type, aliases: e.aliases, resolutionConfidence: e.confidence, fromConversation: true },
-        sourceFiles: [sourceId],
-      }, { fileId: sourceId });
+      // The self node already exists, created declaratively by ensureSelfEntity
+      // with kind 'declared' and isSelf true. Re-upserting it here as a
+      // 'derived' entity would overwrite that provenance with a claim that
+      // something inferred the user into existence. The `mentions` edge is the
+      // part worth writing — it records that this turn was about them.
+      if (!e.isSelf) {
+        G.upsertNode(ownerId, {
+          id: e.id, type: 'entity', label: e.canonical, kind: 'derived',
+          data: { entityType: e.type, aliases: e.aliases, resolutionConfidence: e.confidence, fromConversation: true },
+          sourceFiles: [sourceId],
+        }, { fileId: sourceId });
+      }
       for (const name of [e.canonical, ...e.aliases]) entityNodeByName.set(String(name).toLowerCase(), e.id);
       G.addEdge(ownerId, {
         from: `conv:${conversationId}`, to: e.id, type: 'mentions',
@@ -192,13 +255,125 @@ export function ingestConversationTurn(deps, {
       } catch { /* fail-open */ }
     }
 
+    // 3c. KNOWLEDGE — conversational claims enter the evidence layer.
+    //
+    //     This is the seam the audit identified as the single point where AQUA
+    //     stopped being a continuously improving understanding engine. Steps 1-3
+    //     above give a turn's ENTITIES graph standing; nothing gave its CLAIMS
+    //     any. And every retriever reads claims, not entities:
+    //
+    //       pic/retrievalIntelligence.js:55  Lane 1 → retrieveGroundedFacts(ES)
+    //       pic/retrievalIntelligence.js:83  Lane 3 → `about` → ES.getFact
+    //       brain/contextEngine/index.js:148 candidates → ES.getFact
+    //       brain/reflectionV2/…:140         obsolescence → ES.listFacts
+    //
+    //     So a turn wrote entity nodes nobody could retrieve a statement from.
+    //     "Priya owns billing", said in chat, was unreachable and invisible to
+    //     reflection — it could never corroborate or contradict the same claim
+    //     from a document.
+    //
+    //     HONESTY IS PRESERVED, NOT TRADED AWAY. The earlier decision to keep
+    //     chat out of evidenceStore conflated TRUST with REACHABILITY. A fact
+    //     can be in the index and still be labelled: sourceType 'conversation',
+    //     extractionMethod 'heuristic', confidence capped below document grade,
+    //     provenance pointing at the exact turn. Distinguishable at every read.
+    //     Never masquerading as a document.
+    //
+    //     Gated separately from entity ingest (AQUA_BRAIN_INGEST_FACTS) because
+    //     it is the first thing here that writes to a store the document
+    //     pipeline owns, and it must be revocable on its own.
+    let factsWritten = 0;
+    const writtenFactIds = [];
+    if (factIngestEnabled() && deps.evidenceStore) {
+      try {
+        const ES = deps.evidenceStore;
+        const built = buildConversationFacts(
+          { conversationId, turn, userMessage, assistantMessage, entities },
+        );
+        for (const fact of built.facts) {
+          // Evidence first: saveEvidence dedupes on content checksum, so the
+          // id the store hands back is authoritative — re-ingesting a turn
+          // reuses the existing record instead of adding a twin.
+          const stored = (fact.evidence ?? [])
+            .map(evId => built.evidence.find(e => e.id === evId))
+            .filter(Boolean)
+            .map(ev => ES.saveEvidence(ownerId, ev));
+          const evidenceIds = stored.map(ev => ev.id);
+          if (evidenceIds.length) fact.evidence = evidenceIds;
+
+          ES.saveFact(ownerId, fact, { sourceFileId: sourceId });
+
+          // Graph standing: the same node + edge shapes graphBuilder writes for
+          // a document fact (graphBuilder.js:91-98), so a conversational fact
+          // is traversable by machinery that predates it and needs no special
+          // case. `asserts` is seeded as "source → fact"; the conversation node
+          // is a source class, registered as one in step 1.
+          G.upsertNode(ownerId, {
+            id: `fact:${fact.id}`, type: 'fact',
+            label: fact.statement.slice(0, 120), kind: 'observed',
+            data: { confidence: fact.confidence, fromConversation: true },
+            sourceFiles: [sourceId],
+          }, { fileId: sourceId });
+
+          G.addEdge(ownerId, {
+            from: `conv:${conversationId}`, to: `fact:${fact.id}`, type: 'asserts',
+            kind: 'observed', confidence: fact.confidence,
+            evidence: evidenceIds, sourceFiles: [sourceId],
+            reason: `stated in conversation ${conversationId}`,
+          }, { fileId: sourceId });
+
+          // `about` edges are what Lane 3 and the Context Engine hop across.
+          // Without them the fact is in the store but off the graph paths that
+          // reach it, which is half the gap and the easier half to miss.
+          for (const name of fact.entities ?? []) {
+            const entityId = entityNodeByName.get(String(name).toLowerCase());
+            if (!entityId) continue;
+            G.addEdge(ownerId, {
+              from: `fact:${fact.id}`, to: entityId, type: 'about',
+              kind: 'observed', confidence: fact.confidence,
+              evidence: evidenceIds, sourceFiles: [sourceId],
+              reason: 'conversational fact about entity',
+            }, { fileId: sourceId });
+          }
+
+          factsWritten += 1;
+          writtenFactIds.push(fact.id);
+        }
+        metrics.factsWritten += factsWritten;
+
+        // Lifecycle birth. Retrieval would eventually auto-create a record on
+        // first hit, but that history starts at `retrieved` and silently omits
+        // the linking performed immediately above. Recording it here keeps the
+        // lifecycle an account of what actually happened.
+        //
+        // Fail-open and separate from the write loop: PIC bookkeeping must not
+        // undo facts already committed to the store.
+        if (writtenFactIds.length) {
+          try {
+            deps.pic?.onConversationFactsWritten?.({
+              ownerId, factIds: writtenFactIds, source: conversationId, traceId: sourceId,
+            });
+          } catch { /* fail-open */ }
+        }
+      } catch (err) {
+        // Isolated from the rest of ingest: a failure here must not cost the
+        // entity/relationship work that already succeeded above.
+        metrics.factErrors += 1;
+        console.warn(`[BRAIN] conversational fact write failed (fail-open): ${err?.message ?? err}`);
+      }
+    }
+
     // 4. Relationships. extractFacts() is a DOCUMENT heuristic — it requires a
     //    numeric token (funding figures, dates) and would drop almost every
     //    conversational sentence. So build relationship input directly: each
     //    sentence naming ≥2 resolved entities becomes a fact carrying those
-    //    entities, and the SAME B1 predicate engine types it. Conversational
-    //    claims stay graph-only and lower-confidence — never written to
-    //    evidenceStore as if they were document facts.
+    //    entities, and the SAME B1 predicate engine types it.
+    //
+    //    These throwaway fact objects exist only to feed buildRelationships and
+    //    are deliberately NOT the ones step 3c persists: relationships need ≥2
+    //    entities per sentence, knowledge needs ≥1, so the two sets differ and
+    //    conflating them would either lose single-entity claims or invent
+    //    relationships from sentences that name one thing.
     const canonicalByNorm = new Map();
     for (const e of entities) for (const name of [e.canonical, ...e.aliases]) canonicalByNorm.set(String(name).toLowerCase(), e.canonical);
 
@@ -246,10 +421,10 @@ export function ingestConversationTurn(deps, {
     metrics.relationshipsAdded += relationshipsAdded;
     metrics.lastDurationMs = Date.now() - started;
 
-    if (entitiesLinked || relationshipsAdded) {
-      console.log(`[BRAIN] Conversation ingested owner=${ownerId} conv=${conversationId} turn=${turn} entities=${entitiesLinked} relationships=${relationshipsAdded} in ${metrics.lastDurationMs}ms`);
+    if (entitiesLinked || relationshipsAdded || factsWritten) {
+      console.log(`[BRAIN] Conversation ingested owner=${ownerId} conv=${conversationId} turn=${turn} entities=${entitiesLinked} relationships=${relationshipsAdded} facts=${factsWritten} in ${metrics.lastDurationMs}ms`);
     }
-    return { ok: true, entities: entitiesLinked, relationships: relationshipsAdded };
+    return { ok: true, entities: entitiesLinked, relationships: relationshipsAdded, facts: factsWritten };
   } catch (err) {
     metrics.errors += 1;
     console.warn(`[BRAIN] ingestConversationTurn failed (fail-open): ${err?.message ?? err}`);
@@ -258,7 +433,7 @@ export function ingestConversationTurn(deps, {
 }
 
 export function ingestMetrics() {
-  return { ...metrics, enabled: ingestEnabled() };
+  return { ...metrics, enabled: ingestEnabled(), factsEnabled: factIngestEnabled() };
 }
 
 export { ingestEnabled };

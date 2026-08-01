@@ -17,6 +17,16 @@ import type { ChatSuccessResponse, MessageDiagnostics, PatchProposal, UiMessage 
 interface ChatState {
   conversationId: string | null;
   workspaceId: string | null;
+  /**
+   * UUS — set while the "Getting to Know You" intro is on screen.
+   *
+   * Lives on the store rather than being threaded as a Composer prop so the
+   * intro can reuse Composer and MessageList COMPLETELY unchanged. A user who
+   * finishes the intro has therefore already learned the product's main
+   * surface, and every intro turn is a real conversation turn — stored,
+   * ingested, reflected on, correctable.
+   */
+  introMode: boolean;
   messages: UiMessage[];
   generating: boolean;
   loadingHistory: boolean;
@@ -26,6 +36,7 @@ interface ChatState {
   newConversation: () => void;
   loadConversation: (id: string) => Promise<void>;
   setWorkspaceId: (id: string | null) => void;
+  setIntroMode: (on: boolean) => void;
 
   sendMessage: (text: string) => Promise<void>;
   /** Day 4 — PatchCard reports proposal status changes (applied / rejected / reverted). */
@@ -211,7 +222,13 @@ export const useChatStore = create<ChatState>((set, get) => {
     const runLegacy = async () => {
       try {
         const res = await sendChatMessage(
-          { message: outgoingText, conversationId: conversationId ?? undefined, workspaceId: workspaceId ?? undefined },
+          {
+          message: outgoingText,
+          conversationId: conversationId ?? undefined,
+          workspaceId: workspaceId ?? undefined,
+          // Absent outside the intro, so ordinary chat is byte-identical.
+          ...(get().introMode ? { mode: 'understanding' as const } : {}),
+        },
           controller.signal,
         );
         finishTurn(res);
@@ -239,7 +256,20 @@ export const useChatStore = create<ChatState>((set, get) => {
       let serverErrorUpgradeUrl: string | undefined;
 
       await streamChatMessage(
-        { message: outgoingText, conversationId: conversationId ?? undefined, workspaceId: workspaceId ?? undefined },
+        {
+          message: outgoingText,
+          conversationId: conversationId ?? undefined,
+          workspaceId: workspaceId ?? undefined,
+          // The intro runs on THIS path. `mode` was set only on the legacy
+          // fallback below — which never runs, because streaming does not
+          // fail — so every interview turn reached the server as ordinary
+          // chat: classified at 0.45, verification and debate engaged, the
+          // interviewer persona never loaded, and the gap-driven steering
+          // never applied. The intro screen was real and the conversation
+          // behind it was not. Absent outside the intro, so ordinary chat
+          // stays byte-identical.
+          ...(get().introMode ? { mode: 'understanding' as const } : {}),
+        },
         {
           onMeta: (e) => {
             // conversationId arrives up front — later turns/aborts already know it.
@@ -412,6 +442,7 @@ export const useChatStore = create<ChatState>((set, get) => {
   return {
     conversationId: null,
     workspaceId: null,
+    introMode: false,
     messages: [],
     generating: false,
     loadingHistory: false,
@@ -441,6 +472,8 @@ export const useChatStore = create<ChatState>((set, get) => {
       // this conversation does not have.
       useUploadStore.getState().clearOverview();
     },
+
+    setIntroMode: (on) => set({ introMode: on }),
 
     setWorkspaceId: (id) => {
       set({ workspaceId: id });

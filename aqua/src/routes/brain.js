@@ -54,6 +54,7 @@
 import express from 'express';
 import { resolveOwner } from '../memory/engine.js';
 import * as Brain from '../brain/index.js';
+import { selfEntityEnabled } from '../brain/identity/selfEntity.js';
 
 const router = express.Router();
 
@@ -124,9 +125,14 @@ function flagState() {
   return {
     AQUA_BRAIN: Brain.brainEnabled(),
     AQUA_BRAIN_INGEST: Brain.ingestEnabled(),
+    AQUA_BRAIN_INGEST_FACTS: Brain.factIngestEnabled(),
     AQUA_CONTEXT_V2: Brain.contextV2Enabled(),
     AQUA_TWIN_V2: Brain.twinV2Enabled(),
     AQUA_REFLECT_V2: Brain.reflectV2Enabled(),
+    // Phase 3: the sixth switch. It gated a call that was dead anyway until
+    // the deps-forwarding fix, so nothing reported it. Now that it can take
+    // effect, it has to be visible here too.
+    AQUA_SELF_ENTITY: selfEntityEnabled(),
   };
 }
 

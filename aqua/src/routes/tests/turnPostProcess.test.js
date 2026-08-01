@@ -156,7 +156,13 @@ test('only the Mind post-turn runs synchronously; the rest is deferred', () => {
 
   assert.deepEqual(names(), ['memoryAfterTurn'],
     'nothing else may run before the response is sent');
-  assert.equal(deferred.length, 2, 'ingest+twin in one tick, reflection in another');
+  // Three ticks: ingest+twin, then reflection, then consolidation. The last
+  // one is separate rather than appended to reflection's tick because a
+  // consolidation pass is heavy (~90ms at 2k facts) and synchronous — its own
+  // macrotask lets the event loop serve other requests in between. Pinned
+  // deliberately: if a future stage is quietly folded into an existing tick,
+  // that is a latency change and this assertion should be the thing that says so.
+  assert.equal(deferred.length, 3, 'ingest+twin, reflection, consolidation');
 
   for (const fn of deferred) fn();
   assert.deepEqual(names(), ['memoryAfterTurn', 'ingest', 'twin', 'reflect']);

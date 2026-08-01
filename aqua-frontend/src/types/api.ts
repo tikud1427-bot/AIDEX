@@ -59,6 +59,16 @@ export interface ChatRequest {
   message: string;
   conversationId?: string | null;
   workspaceId?: string;
+  /**
+   * UUS — declares this turn is part of the "Getting to Know You" intro.
+   *
+   * The server does not have to guess the intent, which matters because
+   * classifying ordinary first-person speech scores 0.45 and trips the
+   * verification path: extra model calls, seconds of latency, and the drafted
+   * answer visibly replaced mid-stream. Absent this field, behaviour is
+   * byte-identical.
+   */
+  mode?: 'understanding';
 }
 
 export interface ChatSuccessResponse {

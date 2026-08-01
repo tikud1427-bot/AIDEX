@@ -236,11 +236,54 @@ export function purgeOwner(ownerId) {
   return removed;
 }
 
+/**
+ * Is this fact's provenance a conversation rather than a document?
+ *
+ * Read off the EVIDENCE, not the fact: `sourceType` is the evidence's field,
+ * and it is the honest semantic signal. Checking the id prefix (`conv:`)
+ * instead would couple this store to the Brain's id convention.
+ *
+ * Unknown provenance counts as NOT conversational — a fact whose evidence has
+ * been evicted must never become preferentially evictable itself.
+ */
+function isConversationFact(b, fact) {
+  for (const evId of fact.evidence ?? []) {
+    const ev = b.evidence.get(evId);
+    if (ev) return ev.sourceType === 'conversation';
+  }
+  return false;
+}
+
+/**
+ * Evict one fact to stay under MAX_FACTS_PER_OWNER.
+ *
+ * SOURCE-AWARE BY DESIGN
+ * ----------------------
+ * This used to take the globally oldest fact. That is the wrong victim once
+ * conversations write here: documents are uploaded in bursts early and chat
+ * arrives continuously forever, so "oldest" means "the document corpus" and a
+ * talkative week would silently evict the highest-trust knowledge the owner
+ * has.
+ *
+ * So: spend the conversational budget first. Chat claims are lower-confidence,
+ * higher-volume, and recoverable — the conversation history still holds the
+ * sentence, and re-ingest is idempotent. A document fact may be the only
+ * surviving representation of a file the user deleted locally.
+ *
+ * Falls through to oldest-overall when no conversational fact exists, so with
+ * an all-document store the behaviour is byte-identical to before.
+ */
 function evictOldestFact(b) {
-  const oldest = [...b.facts.values()].sort((a, c) => a.createdAt - c.createdAt)[0];
+  const facts = [...b.facts.values()];
+  const byAge = (a, c) => a.createdAt - c.createdAt;
+
+  const conversational = facts.filter(f => isConversationFact(b, f)).sort(byAge)[0];
+  const oldest = conversational ?? facts.sort(byAge)[0];
   if (!oldest) return;
+
   for (const evId of oldest.evidence) b.evidenceRefs.get(evId)?.delete(oldest.id);
   b.facts.delete(oldest.id);
+  return oldest;
 }
 
 function evictOldestEvidence(b) {
@@ -255,9 +298,16 @@ function evictOldestEvidence(b) {
 
 export function getEvidenceStats(ownerId) {
   const b = bucket(ownerId);
+  // The document/conversation split is what makes the rollout measurable: it
+  // answers "is chat ingest actually writing?" and "how much of this owner's
+  // knowledge is now conversational?" without opening the store.
+  let conversationFacts = 0;
+  for (const f of b.facts.values()) if (isConversationFact(b, f)) conversationFacts += 1;
   return {
     facts: b.facts.size, evidence: b.evidence.size, files: b.byFile.size,
     sharedEvidence: [...b.evidenceRefs.values()].filter(s => s.size > 1).length,
+    conversationFacts,
+    documentFacts: b.facts.size - conversationFacts,
   };
 }
 

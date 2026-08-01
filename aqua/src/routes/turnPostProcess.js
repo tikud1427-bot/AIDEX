@@ -42,6 +42,8 @@ import * as Brain from '../brain/index.js';
 import { memoryAfterTurn } from '../memory/engine.js';
 import { getConversation } from '../memory/conversationStore.js';
 import { REFLECT_EVERY_TURNS } from '../mind/reflectionEngine.js';
+import { consolidate, consolidateEnabled, CONSOLIDATE_EVERY_TURNS } from '../pic/core.js';
+import { peekMind } from '../mind/mindStore.js';
 
 /** Real wiring. Overridable so the seam is testable without a live turn. */
 const REAL_DEPS = Object.freeze({
@@ -52,7 +54,35 @@ const REAL_DEPS = Object.freeze({
   reflectTurn: Brain.reflectTurn,
   defer: setImmediate,
   reflectEvery: REFLECT_EVERY_TURNS,
+  consolidate,
+  consolidateEnabled,
+  consolidateEvery: CONSOLIDATE_EVERY_TURNS,
+  // The OWNER's turn count, not the conversation's. Reflection keys off
+  // conversation length, which is fine for reflection but wrong here:
+  // consolidation operates across an owner's whole corpus, and most
+  // conversations are short enough that a conversation-scoped counter would
+  // almost never reach the interval. `mind.turnCount` is already persisted,
+  // already owner-scoped, and already exists to drive exactly this kind of
+  // cadence — reusing it beats introducing a second clock.
+  ownerTurnCount: (ownerId) => peekMind(ownerId)?.turnCount ?? 0,
 });
+
+/**
+ * Owner → turn count at last consolidation.
+ *
+ * Deliberately in memory. Consolidation is idempotent (measured: a second
+ * pass over the same corpus merges 0 and changes nothing), so a watermark lost
+ * to a redeploy costs one redundant pass, never correctness. Persisting it
+ * would mean a schema change to picStore for no behavioural gain.
+ *
+ * A watermark rather than `turnCount % every === 0`: modulo silently skips the
+ * cadence whenever a turn is missed, and turns ARE missed here — this runs
+ * fail-open behind a flag, off a counter another subsystem increments.
+ */
+const lastConsolidatedAt = new Map();
+
+/** Test seam — the watermark is process-local state, so it needs a reset. */
+export function _resetConsolidationWatermark() { lastConsolidatedAt.clear(); }
 
 /**
  * Run every post-turn understanding side-effect.
@@ -116,6 +146,26 @@ export function runPostTurn({
         d.reflectTurn(ownerId);
       }
     } catch { /* fail-open: reflection must never affect the turn */ }
+  });
+
+  // PIC consolidation (audit M6) — knowledge was accumulating and never
+  // maturing: duplicates unmerged, corroborated claims never promoted to
+  // trusted, stale claims never marked. Everything needed already existed;
+  // the only trigger was a human curling POST /intelligence/maintain.
+  //
+  // Its own tick, after reflection, so a heavier pass (~90ms at 2k facts)
+  // cannot delay the lighter stages above. Deferred, fail-open, off by default
+  // (AQUA_CONSOLIDATE).
+  d.defer(() => {
+    try {
+      if (!d.consolidateEnabled()) return;
+      const turns = d.ownerTurnCount(ownerId);
+      if (!turns) return;
+      const last = lastConsolidatedAt.get(ownerId) ?? 0;
+      if (turns - last < d.consolidateEvery) return;
+      lastConsolidatedAt.set(ownerId, turns);
+      d.consolidate(ownerId);
+    } catch { /* fail-open: maintenance must never affect the turn */ }
   });
 }
 

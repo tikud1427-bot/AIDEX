@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import type { CompactBelief } from '@/api/mind';
 import { useMindStore } from '@/stores/mindStore';
 import { SectionHeader } from '@/components/ui/section-header';
+import { UnderstandingSections } from '@/features/understanding/UnderstandingSections';
 import { UnderstandingRing } from '@/features/mind/UnderstandingRing';
 import { IdentitySection } from '@/features/mind/IdentitySection';
 import { GoalsSection, WorkingMemorySection, PredictionsSection } from '@/features/mind/NowSections';
@@ -118,6 +119,13 @@ export default function MindPage() {
             <SectionHeader eyebrow="How to talk to you" title="Communication style" />
             <CommunicationSection beliefs={model.communication} decision={model.decision} onSelect={setSelected} />
           </section>
+        </div>
+
+        {/* 07b — UUS: projects, provenance, and what is still unknown. All three
+            come from data the read model already returns; nothing new is
+            tracked to render them. */}
+        <div className="mb-14 flex flex-col gap-14">
+          <UnderstandingSections />
         </div>
 
         {/* 08 — Predictions */}

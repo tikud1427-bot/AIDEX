@@ -32,6 +32,7 @@ import { getAttachments, removeAttachment, serializeAttachment } from '../upload
 import { getOrCreateConversation, conversationExists, canAccessConversation } from '../memory/conversationStore.js';
 import { resolveOwner }                          from '../memory/engine.js';
 import { ingestFiles }                           from '../files/fileEngine.js';
+import { observeIngest }                         from '../understanding/observeIngest.js';
 import { listParsers }                           from '../files/parserRegistry.js';
 
 const router = express.Router();
@@ -127,6 +128,14 @@ router.post('/', async (req, res) => {
   });
   results.push(...engineOut.results);
   const workspacePayload = engineOut.workspace;
+
+  // UUS U3 — let the Mind learn from what was just read. Until now `mindObserve`
+  // had exactly one caller (the chat pipeline), so uploading a README filled the
+  // evidence store, the graph and the PIC while the understanding card and the
+  // dashboard — which render Mind data — stayed empty. Deferred and fail-open:
+  // the response below does not wait on it, and a file that teaches nothing is
+  // strictly better than an upload that fails.
+  observeIngest({ ownerId: memoryOwner, ukoIds: engineOut.ukoIds ?? [] });
 
   const anyReady = results.some(r => r.status === 'ready') || !!workspacePayload;
 

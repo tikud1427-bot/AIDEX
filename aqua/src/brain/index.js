@@ -32,7 +32,7 @@ import * as evidenceStore from '../files/evidenceStore.js';
 import { peekMind } from '../mind/mindStore.js';
 import * as annotations from './worldModel/annotationStore.js';
 import * as P from './worldModel/projection.js';
-import { ingestConversationTurn, ingestMetrics, ingestEnabled } from './knowledgeExtraction/conversationIngest.js';
+import { ingestConversationTurn, ingestMetrics, ingestEnabled, factIngestEnabled } from './knowledgeExtraction/conversationIngest.js';
 import { assembleTurnContext, contextEngineMetrics, contextV2Enabled } from './contextEngine/index.js';
 import { reflectWorldModel, reflectionV2Metrics, reflectV2Enabled, forgetOwner as forgetReflectionOwner } from './reflectionV2/index.js';
 import { observeTwinTurn, twinView, twinMetrics, twinV2Enabled } from './digitalTwin/index.js';
@@ -293,11 +293,30 @@ export function contextV2Active() { return contextV2Enabled(); }
  * until deliberately turned on. The graph module is the only real dependency.
  *
  * Called from chat.js §9b, right after the turn is persisted.
+ *
+ * DEPENDENCY FORWARDING (fixed)
+ * -----------------------------
+ * This used to pass `{ graph: deps.graph }` only. conversationIngest also
+ * reaches for `deps.pic` and `deps.ensureSelfEntity`, both via optional
+ * chaining — so in production both silently resolved to undefined and did
+ * nothing, while `brain/tests/picConversationSync.test.js` passed because it
+ * injects `pic` directly into the module. The module was proven; the WIRING
+ * was not. Same class of gap the audit called W6.
+ *
+ * Consequences of the gap, both now closed:
+ *   • PIC was never told the resolver merged conversational surface forms,
+ *     so those merges recorded no revision.
+ *   • The owner's self entity was never created on ingest, leaving
+ *     user-anchored conversational knowledge nothing to attach to.
+ *
+ * Forwarding the whole set (not a hand-picked subset) is the fix AND the
+ * guard against it recurring: a dependency conversationIngest starts using
+ * arrives already wired.
  */
 export function observeConversationTurn(args = {}, opts = {}) {
   const { deps = REAL_DEPS } = opts;
   return guard('observeConversationTurn', { ok: false }, () =>
-    ingestConversationTurn({ graph: deps.graph }, args));
+    ingestConversationTurn(deps, args));
 }
 
 // ── Annotations ──────────────────────────────────────────────────────────────
@@ -361,4 +380,4 @@ export function brainMetrics() {
   return { ...metrics, enabled: brainEnabled(), annotations: annotations.annotationStats(), ingest: ingestMetrics(), contextEngine: contextEngineMetrics(), reflectionV2: reflectionV2Metrics(), twin: twinMetrics() };
 }
 
-export { brainEnabled, ingestEnabled, contextV2Enabled, reflectV2Enabled, twinV2Enabled };
+export { brainEnabled, ingestEnabled, factIngestEnabled, contextV2Enabled, reflectV2Enabled, twinV2Enabled };

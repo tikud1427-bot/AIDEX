@@ -24,9 +24,11 @@ const STROKE = 10;
 const C = 2 * Math.PI * R;
 const GAP = 0.018; // arc gap as fraction of circumference
 
-export function UnderstandingRing({ model }: { model: MindModel }) {
+export function UnderstandingRing({ model, serverScore }: { model: MindModel; serverScore?: number | null }) {
   const reduce = useReducedMotion();
-  const score = understandingScore(model);
+  // Server value wins — see mindStore.understandingScore. The local formula is
+  // a first-paint fallback only, so the number never jumps when the fetch lands.
+  const score = understandingScore(model, serverScore);
 
   const segments = useMemo(() => {
     const dims = DIMENSIONS.map((d) => ({ d, ...dimensionConfidence(model, d) }))

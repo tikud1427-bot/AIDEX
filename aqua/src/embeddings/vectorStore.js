@@ -28,6 +28,7 @@
  */
 import { createDebouncedWriter, loadJsonFile } from '../core/atomicStore.js';
 import { migrateLegacyFile } from '../core/dataDir.js';
+import { modelSignature } from './embeddingModel.js';
 
 // P0 — canonical data dir (survives redeploys) + one-time legacy migration.
 const STORE_FILE  = migrateLegacyFile('.aqua-vectors.json');
@@ -44,14 +45,27 @@ function loadFromDisk() {
   // Corrupt-safe: bad parse preserves the file aside + tries .bak, never wipes.
   const data = loadJsonFile(STORE_FILE, { label: 'vectors' });
   if (!data || typeof data !== 'object') return;
+  // Records are only comparable to vectors from the SAME model. A record
+  // written by a different model — or by a build predating the stamp, which
+  // means the retired text-embedding-004 — is silently wrong to score against,
+  // so it is dropped rather than loaded. The cost is one re-embed; the
+  // alternative is retrieval that looks healthy and ranks by noise.
+  const signature = modelSignature();
+  let kept = 0, discarded = 0;
   for (const [ns, items] of Object.entries(data)) {
     const m = new Map();
     for (const [id, rec] of Object.entries(items)) {
-      if (Array.isArray(rec?.vec)) m.set(id, rec);
+      if (!Array.isArray(rec?.vec)) continue;
+      if (rec.model !== signature) { discarded += 1; continue; }
+      m.set(id, rec);
+      kept += 1;
     }
-    store.set(ns, m);
+    if (m.size) store.set(ns, m);
   }
-  console.log(`[VECTORS] Loaded ${store.size} namespace(s) from ${STORE_FILE}`);
+  console.log(
+    `[VECTORS] Loaded ${store.size} namespace(s), ${kept} vector(s) for ${signature} from ${STORE_FILE}` +
+    (discarded ? ` — discarded ${discarded} from a different embedding model (will re-embed on demand)` : ''),
+  );
 }
 
 // Phase 3b — atomic + async persistence via the shared primitive; persist flag
@@ -90,7 +104,7 @@ function enforceCap(m) {
 export function upsert(namespace, id, vec, hash = '', meta = null) {
   if (!namespace || !id || !Array.isArray(vec) || !vec.length) return;
   const m = ns(namespace);
-  const rec = { vec, hash, ts: Date.now(), dim: vec.length };
+  const rec = { vec, hash, ts: Date.now(), dim: vec.length, model: modelSignature() };
   if (meta != null) rec.meta = meta;
   m.set(id, rec);
   enforceCap(m);

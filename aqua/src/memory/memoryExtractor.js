@@ -173,6 +173,11 @@ function toLegacyFact(resolved) {
   const value = resolved.mergedValue !== undefined ? resolved.mergedValue : resolved.normalizedValue;
   return {
     key: resolved.key, value, confidence: resolved.confidence, importance: resolved.importance || 5,
+    // Which extractor produced this. Dropped until now, which meant every
+    // downstream consumer saw a curated first-person schema match and an
+    // opaque custom_ fallback as the same thing. The Mind's fact bridge needs
+    // the difference to decide what counts as an explicit declaration.
+    extractor: resolved.extractor ?? null,
     sourceText: (resolved.rawText || '').slice(0, 200), ts: resolved.ts || Date.now(), isCorrection: !!resolved.isCorrection,
     category: resolved.category, normalizedValue: resolved.normalizedValue, sentence: resolved.sentence,
     reason: resolved.reason, action: resolved.action, previousValue: resolved.previousValue, _isDuplicate: resolved._isDuplicate,

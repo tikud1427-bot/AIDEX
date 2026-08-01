@@ -162,7 +162,20 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
 
 function renderBlock({ scored, entityMatches, timelineEvents, charBudget }) {
   if (!scored.length && !entityMatches.length && !timelineEvents.length) return '';
-  const lines = ['── CONNECTED KNOWLEDGE (verified across your files) ──'];
+
+  // The header used to say "verified across your files" unconditionally, which
+  // was true only while documents were the sole writer into evidenceStore.
+  // Conversational facts can now appear here, and telling the model a chat
+  // claim was "verified across your files" is a false provenance claim — the
+  // one thing the citation discipline exists to prevent. So the header states
+  // what the block actually contains.
+  const hasConversation = scored.some(h => h.citations?.[0]?.startsWith('Conversation'));
+  const hasDocument     = scored.some(h => !h.citations?.[0]?.startsWith('Conversation'))
+    || entityMatches.length || timelineEvents.length;
+  const scope = hasConversation && hasDocument ? 'from your files and conversations'
+    : hasConversation ? 'from your conversations'
+    : 'verified across your files';
+  const lines = [`── CONNECTED KNOWLEDGE (${scope}) ──`];
 
   for (const h of scored) {
     const cite = h.citations?.[0] ? ` [${h.citations[0]}]` : '';

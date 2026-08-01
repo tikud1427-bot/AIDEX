@@ -26,9 +26,12 @@
  * or a different model touches ONLY this file.
  */
 import { GoogleGenAI } from '@google/genai';
+import { EMBED_MODEL, EMBED_DIM } from './embeddingModel.js';
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const EMBED_MODEL = process.env.AQUA_EMBED_MODEL || 'text-embedding-004';
+// Model identity lives in embeddingModel.js because the VECTOR STORE needs the
+// same value to stamp records — see the note there on why a same-dimension
+// model swap is more dangerous than a dimension change.
 const DISABLED     = String(process.env.AQUA_EMBEDDINGS || '').toLowerCase() === 'off';
 const CACHE_MAX    = 2_000;   // bounded content-hash → vector cache
 const BATCH_MAX    = 64;      // items per embedContent call
@@ -101,7 +104,13 @@ async function callEmbedContent(texts) {
     // @google/genai embedContent accepts a single string or an array via
     // `contents`. Response shape has varied across SDK minors, so read both
     // the batched (`embeddings[]`) and single (`embedding`) forms defensively.
-    const res = await ai.models.embedContent({ model: EMBED_MODEL, contents: texts });
+    // outputDimensionality is what lets a 3072-native model fill a store sized
+    // for 768. The model does not renormalise when reduced; cosineSim divides
+    // by both magnitudes, so that is harmless here.
+    const res = await ai.models.embedContent({
+      model: EMBED_MODEL, contents: texts,
+      config: { outputDimensionality: EMBED_DIM },
+    });
     const list = res?.embeddings ?? (res?.embedding ? [res.embedding] : null);
     if (!Array.isArray(list)) return texts.map(() => null);
     return texts.map((_, i) => {

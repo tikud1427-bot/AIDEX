@@ -63,6 +63,24 @@ export function picEnabled() {
   return String(process.env.AQUA_PIC ?? 'on').toLowerCase() !== 'off';
 }
 
+/**
+ * Background consolidation is opt-in, subordinate to PIC.
+ *
+ * OFF by default like every other write-side switch in this codebase: it is
+ * the first thing that MUTATES stored knowledge without a human asking —
+ * merging duplicates, promoting to trusted, marking stale. Reversible (merges
+ * archive rather than delete, and every change is a lifecycle transition), but
+ * still a write, so it earns its own flag.
+ */
+export function consolidateEnabled() {
+  return picEnabled() && String(process.env.AQUA_CONSOLIDATE ?? '').toLowerCase() === 'on';
+}
+
+/** Owner turns between background consolidation passes. */
+export const CONSOLIDATE_EVERY_TURNS = Number(process.env.AQUA_CONSOLIDATE_EVERY) > 0
+  ? Math.floor(Number(process.env.AQUA_CONSOLIDATE_EVERY))
+  : 25;
+
 // ── Observability ────────────────────────────────────────────────────────────
 
 const metrics = {
@@ -160,6 +178,63 @@ export function onEntitiesResolved({ ownerId, entities = [], source = null, trac
     return { ok: true, entityMerges: merges };
   } catch (err) {
     console.warn(`[PIC] onEntitiesResolved failed (non-fatal): ${err?.message ?? err}`);
+    return { ok: false, error: String(err?.message ?? err) };
+  }
+}
+
+/**
+ * Give conversationally-derived facts lifecycle standing.
+ *
+ * WHY A SECOND NARROW ENTRY POINT
+ * -------------------------------
+ * Same reasoning as `onEntitiesResolved` above: `onKnowledgeIngested` is
+ * document-shaped (needs ukoIds, walks UKO stages, reads `factsForFile`), and
+ * routing a turn through it would make a conversation pretend to be a
+ * document. This is the part that genuinely applies — the facts exist and they
+ * are linked into the graph — and nothing more.
+ *
+ * WHICH STATES, AND WHY NOT THE DOCUMENT SET
+ * ------------------------------------------
+ * Documents walk created → parsed → enriched → verified → linked. A turn earns
+ * exactly two of those:
+ *
+ *   created  the fact exists.
+ *   linked   `about` edges to entities and `asserts` from the conversation node
+ *            were actually written — this is a claim about work performed.
+ *
+ * NOT `parsed` or `enriched`: no parser and no enrichment pipeline ran, and
+ * asserting a processing stage that did not happen is the same lie as faking
+ * provenance. NOT `verified` — that state means evidence-grounded, and the
+ * entire reason conversational confidence is capped is that it is not. A chat
+ * claim reaches `verified` only through consolidation, by being corroborated
+ * by an independent source and repeatedly retrieved. That promotion path stays
+ * open; it is simply not granted at birth.
+ *
+ * WHAT THIS UNLOCKS (deliberately modest)
+ * ---------------------------------------
+ * Retrieval already auto-creates a lifecycle record on first hit, so this is
+ * not the difference between "tracked" and "untracked". It is the difference
+ * between a truthful history and one that skips straight to `retrieved`,
+ * silently omitting the linking that happened. Concretely: staleness is
+ * measured from when the claim was learned rather than when it was first read
+ * back, `lifecycleStats` and `subjectsInState('linked')` stop under-reporting
+ * the conversational corpus, and the promotion preconditions are evaluated
+ * against a record that reflects reality.
+ *
+ * Fail-open. Bookkeeping must never cost a turn.
+ */
+export function onConversationFactsWritten({ ownerId, factIds = [], source = null, traceId = null } = {}) {
+  if (!picEnabled() || !ownerId || !factIds.length) return { ok: false, skipped: true };
+  try {
+    for (const factId of factIds) {
+      advanceThrough(ownerId, `fact:${factId}`, ['created', 'linked'], {
+        reason: `stated in conversation ${source ?? 'unknown'}`,
+      });
+    }
+    ledger(ownerId, 'conversation-facts-written', { facts: factIds.length, source, traceId });
+    return { ok: true, facts: factIds.length };
+  } catch (err) {
+    console.warn(`[PIC] onConversationFactsWritten failed (non-fatal): ${err?.message ?? err}`);
     return { ok: false, error: String(err?.message ?? err) };
   }
 }
@@ -267,6 +342,45 @@ export function recordReasoningOutcome(ownerId, session) {
 export function getHealth(ownerId, deps = {}) {
   const d = { ...DEFAULT_DEPS, ...deps };
   return healthReport(d, ownerId);
+}
+
+/**
+ * Consolidation on a cadence — the maturation half of the loop.
+ *
+ * WHY THIS EXISTS ALONGSIDE `maintain()`
+ * --------------------------------------
+ * `maintain()` is dashboard-shaped: it brackets consolidation with a health
+ * report before and after and returns a ledger dump, because a human is
+ * looking at the response. Its only caller is the manual
+ * `POST /intelligence/maintain` endpoint.
+ *
+ * That meant consolidation had exactly one trigger: someone remembering to
+ * curl it. So knowledge accumulated and never matured — duplicates were never
+ * merged, corroborated claims were never promoted to trusted, and nothing ever
+ * went stale. The audit called this M6.
+ *
+ * This entry point is the background one: consolidation only, no health
+ * reports, no payload. `consolidateOwner` already writes its own ledger entry,
+ * so observability is unchanged.
+ *
+ * SAFE TO RE-RUN, WHICH IS WHAT MAKES THE CADENCE CHEAP
+ * -----------------------------------------------------
+ * Measured: a first pass over 300 facts merged 250 duplicates; the second and
+ * third passes merged 0 and left the store identical. Because re-running is a
+ * no-op, the caller's cadence watermark does not need to be durable — losing
+ * it on redeploy costs one extra pass, not correctness.
+ */
+export function consolidate(ownerId, opts = {}) {
+  if (!picEnabled() || !ownerId) return { ok: false, skipped: true };
+  try {
+    const d = { ...DEFAULT_DEPS, ...(opts.deps ?? {}) };
+    const report = consolidateOwner(d, ownerId);
+    metrics.maintenanceRuns += 1;
+    return { ok: true, ...report };
+  } catch (err) {
+    console.warn(`[PIC] consolidate failed (non-fatal): ${err?.message ?? err}`);
+    return { ok: false, error: String(err?.message ?? err) };
+  }
 }
 
 export function maintain(ownerId, opts = {}) {

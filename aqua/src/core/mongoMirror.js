@@ -41,6 +41,30 @@
  *   • STATUS — getMirrorStatus() feeds /provider-health: enabled/connected/
  *     canary/lastWriteAt/lastError/conflict at a glance after any deploy.
  *
+ * OUTAGE BEHAVIOUR (Jul-31 audit — the mirror was silently NOT mirroring)
+ *   Production logged ~150 consecutive `heartbeat failed` lines (Atlas DNS
+ *   EAI_AGAIN + secureConnect timeouts). Three defects turned a recoverable
+ *   network outage into silent data loss:
+ *
+ *     1. DROPPED WRITES. upsertLoop() removed a payload from `pending`, tried
+ *        it, and on failure returned — the JSON was gone. "Retries on the next
+ *        write" is only true for a file that gets written again soon; a
+ *        low-traffic store could lose its newest generation until a redeploy
+ *        wiped the disk copy too. Payloads are now RE-QUEUED (newer-wins) and
+ *        retried on bounded exponential backoff until they land.
+ *     2. THE HEALTH CHECK LIED. `connected` was `!!state.collection` and
+ *        `canary` was set once at boot; neither is re-checked, so
+ *        /provider-health stayed green with the cluster unreachable and every
+ *        write failing. Status now also reports evidence-based fields —
+ *        durable / verdict / lastOkAt / consecutiveFailures / queuedFiles —
+ *        derived from whether a mirror operation has recently SUCCEEDED.
+ *     3. LOG STORM. Every 30s heartbeat failure printed an identical line
+ *        forever, burying real errors. Repeats now collapse to a periodic
+ *        summary, and recovery is announced (and re-verified by canary).
+ *
+ *   All three are fail-open exactly as before: a Mongo blip still cannot fail,
+ *   slow, or block a user request. Nothing here changes the healthy path.
+ *
  * ZERO NEW DEPENDENCIES — mongoose is dynamic-imported and resolves from the
  * platform's node_modules (aqua runs in-process). Standalone aqua without it
  * → clean warn + file-only. No MONGO_URI → silent no-op (tests, dev).
@@ -49,6 +73,7 @@ import path from 'path';
 import fs   from 'fs';
 import os   from 'os';
 import crypto from 'crypto';
+import { computeBackoff } from './backoff.js';
 
 const COLLECTION       = 'aqua_kv';
 const CONNECT_TIMEOUT  = 6_000;
@@ -56,6 +81,23 @@ const CANARY_ID        = '.aqua-mirror-canary';
 const LOCK_ID          = '.aqua-mirror-writer';
 const HEARTBEAT_MS     = 30_000;
 const CONFLICT_STRIKES = 3;      // foreign beats before alarming (deploy-overlap grace)
+
+// Retry of a failed mirror write. Shares core/backoff.js with the provider
+// router — one jittered-backoff implementation, no second ad-hoc copy. The
+// cap is deliberately long: an Atlas outage lasting minutes should cost a
+// handful of retries, not a tight loop against a dead socket.
+const RETRY_BASE_MS = Number(process.env.AQUA_MIRROR_RETRY_BASE_MS) || 2_000;
+const RETRY_CAP_MS  = Number(process.env.AQUA_MIRROR_RETRY_CAP_MS)  || 60_000;
+
+// A mirror is only as trustworthy as its last SUCCESS. Past this long with no
+// successful op while writes are queued, /provider-health reports not-durable.
+// The count is a second, time-independent trigger: whatever the clock says,
+// "42 consecutive failures but healthy" must never be a printable state.
+const STALE_AFTER_MS  = Number(process.env.AQUA_MIRROR_STALE_MS) || 120_000;
+const STALE_AFTER_FAILS = Number(process.env.AQUA_MIRROR_STALE_FAILS) || 5;
+
+// Collapse an unchanging failure to one line per this interval (the log storm).
+const WARN_REPEAT_MS = 5 * 60_000;
 
 // Chunking: stay well under Mongo's 16 MB/doc. Parts are sliced by CHARS at
 // CHUNK_BYTES/4 — worst-case UTF-8 is 4 bytes/char, so a part can never
@@ -81,10 +123,66 @@ const state = {
   foreignBeats: 0,
   lastBeatAt:  0,
   heartbeatTimer: null,
+  // outage tracking (Jul-31 audit)
+  lastOkAt:      null,      // last SUCCESSFUL mirror op — the only durability evidence
+  lastFailureAt: null,
+  consecutiveFailures: 0,
+  retryTimers:   new Map(), // filename → pending retry timer
+  retryAttempts: new Map(), // filename → consecutive failed attempts
+  warnKey:       null,      // last warn text, for storm collapsing
+  warnAt:        0,
+  warnSuppressed: 0,
+  retryDelayOverride: null, // test seam
 };
 
 function log(msg)  { console.log(`[MIRROR] ${msg}`); }
 function warn(msg) { console.warn(`[MIRROR] ${msg}`); }
+
+/**
+ * Warn, but collapse an unchanging message. An outage repeats the SAME error
+ * every 30s forever; printing all of them buries everything else in the log.
+ * First occurrence prints immediately, identical repeats are counted and
+ * summarised at most every WARN_REPEAT_MS.
+ */
+function warnThrottled(msg) {
+  const now = Date.now();
+  if (msg === state.warnKey && now - state.warnAt < WARN_REPEAT_MS) {
+    state.warnSuppressed++;
+    return;
+  }
+  const suffix = state.warnSuppressed > 0 && msg === state.warnKey
+    ? ` (repeated ${state.warnSuppressed + 1}× in the last ${Math.round((now - state.warnAt) / 1000)}s)`
+    : '';
+  warn(msg + suffix);
+  state.warnKey = msg;
+  state.warnAt = now;
+  state.warnSuppressed = 0;
+}
+
+/** A mirror operation succeeded — the only evidence that writes are durable. */
+function noteOk() {
+  const recovering = state.consecutiveFailures > 0;
+  const failures   = state.consecutiveFailures;
+  state.lastOkAt = Date.now();
+  state.consecutiveFailures = 0;
+  state.lastError = null;
+  state.warnKey = null;
+  state.warnSuppressed = 0;
+  if (recovering) {
+    log(`recovered after ${failures} failed attempt(s) — ${state.pending.size} file(s) still queued`);
+    // The boot canary proved the driver path on a connection that has since
+    // died. Re-prove it, so `canary` is a live fact rather than history.
+    verifyRoundTrip().catch(() => { /* fail-open: status already reflects it */ });
+  }
+}
+
+/** A mirror operation failed. Never throws; only records + throttled-warns. */
+function noteFailure(what, err) {
+  state.consecutiveFailures++;
+  state.lastFailureAt = Date.now();
+  state.lastError = err?.message ?? String(err);
+  warnThrottled(`${what}: ${state.lastError}`);
+}
 
 // ── Connection + canary + heartbeat ──────────────────────────────────────────
 
@@ -143,6 +241,7 @@ async function verifyRoundTrip() {
     const back = await state.collection.findOne({ _id: CANARY_ID });
     if (back?.json === nonce) {
       state.canary = 'ok';
+      noteOk();
       log('round-trip verified — writes to this cluster are durable ✓');
     } else {
       state.canary = 'failed';
@@ -150,7 +249,7 @@ async function verifyRoundTrip() {
     }
   } catch (err) {
     state.canary = 'failed';
-    warn(`round-trip verification errored: ${err.message}`);
+    noteFailure('round-trip verification errored', err);
   }
 }
 
@@ -181,8 +280,12 @@ async function heartbeatOnce() {
       { upsert: true },
     );
     state.lastBeatAt = now;
+    noteOk();
+    // The cluster answered. Anything the write path parked during the outage
+    // can go now, without waiting out its own backoff timer.
+    flushQueued();
   } catch (err) {
-    warn(`heartbeat failed: ${err.message}`);
+    noteFailure('heartbeat failed', err);
   }
 }
 
@@ -320,15 +423,66 @@ async function upsertLoop(filename) {
     state.pending.delete(filename);
     try {
       const col = await connect();
-      if (!col) return;
+      if (!col) {
+        // Not configured/reachable yet. Keep the payload — it is the newest
+        // state of that store and nothing else is holding a copy.
+        requeue(filename, json);
+        return;
+      }
       await writeOne(col, filename, json);
       state.lastWriteAt = Date.now();
-      state.lastError   = null;
+      state.retryAttempts.delete(filename);
+      noteOk();
     } catch (err) {
-      state.lastError = err.message;
-      warn(`upsert failed for ${filename}: ${err.message} — will retry on next write.`);
-      return; // drop this round; the next schedule() retries with fresher data
+      // DO NOT DROP. Before this, a failed upsert discarded the JSON and only
+      // "retried" if the store happened to be written again — so a transient
+      // Atlas outage silently cost a low-traffic store its newest generation.
+      requeue(filename, json);
+      const attempt = (state.retryAttempts.get(filename) ?? 0) + 1;
+      state.retryAttempts.set(filename, attempt);
+      noteFailure(`upsert failed for ${filename}`, err);
+      scheduleRetry(filename, attempt);
+      return;
     }
+  }
+}
+
+/**
+ * Put a payload back in the queue — but never over a NEWER one. mirrorWrite()
+ * may have coalesced a fresher generation of the same store while this attempt
+ * was in flight; that one wins, and the stale copy is correctly discarded.
+ */
+function requeue(filename, json) {
+  if (!state.pending.has(filename)) state.pending.set(filename, json);
+}
+
+/** Re-drive one file after a jittered backoff. Unref'd: never holds the process open. */
+function scheduleRetry(filename, attempt) {
+  if (state.retryTimers.has(filename)) return;      // one timer per file
+  const delay = state.retryDelayOverride ?? computeBackoff(attempt, {
+    baseMs: RETRY_BASE_MS, capMs: RETRY_CAP_MS, floorMs: 250,
+  });
+  const t = setTimeout(() => {
+    state.retryTimers.delete(filename);
+    drive(filename);
+  }, delay);
+  t.unref?.();
+  state.retryTimers.set(filename, t);
+}
+
+/** Start (or join) the upsert loop for one file. */
+function drive(filename) {
+  if (!state.pending.has(filename) || state.inflight.has(filename)) return;
+  const p = upsertLoop(filename).finally(() => state.inflight.delete(filename));
+  state.inflight.set(filename, p);
+}
+
+/** Re-drive every queued file immediately (used when the cluster answers again). */
+function flushQueued() {
+  for (const filename of [...state.pending.keys()]) {
+    const t = state.retryTimers.get(filename);
+    if (t) { clearTimeout(t); state.retryTimers.delete(filename); }
+    drive(filename);
   }
 }
 
@@ -344,11 +498,7 @@ export function mirrorWrite(filePath, json) {
 
   const filename = path.basename(filePath);
   state.pending.set(filename, json);
-
-  if (!state.inflight.has(filename)) {
-    const p = upsertLoop(filename).finally(() => state.inflight.delete(filename));
-    state.inflight.set(filename, p);
-  }
+  drive(filename);
 }
 
 /**
@@ -357,20 +507,69 @@ export function mirrorWrite(filePath, json) {
  */
 export async function drainMirror(ms = 5_000) {
   if (!state.inflight.size && !state.pending.size) return;
+  // A payload parked behind a backoff timer is NOT in flight, so the old
+  // race resolved instantly and the deploy took it to the grave. Cancel the
+  // timers and drive everything now — this is the last chance before SIGTERM.
+  flushQueued();
   const all = Promise.all([...state.inflight.values()]);
   await Promise.race([all, new Promise(r => setTimeout(r, ms))]);
 }
 
-/** Live status for /provider-health — the post-deploy one-glance check. */
+/**
+ * Live status for /provider-health — the post-deploy one-glance check.
+ *
+ * `connected` and `canary` are BOOT facts: a mongoose Collection handle stays
+ * truthy after the cluster becomes unreachable, and the canary is written once.
+ * During the Jul-31 outage both stayed green while every write failed. They are
+ * kept (existing consumers read them) but are no longer the verdict — `durable`
+ * and `verdict` are, and they are derived from whether a mirror operation has
+ * recently SUCCEEDED.
+ */
 export function getMirrorStatus() {
+  const enabled = state.enabled || !!(process.env.MONGO_URI && process.env.AQUA_DISABLE_MONGO_MIRROR !== '1');
+  const now     = Date.now();
+  const staleFor = state.lastOkAt ? now - state.lastOkAt : null;
+
+  let durable = true;
+  let verdict = 'ok — writes are reaching Mongo';
+  if (!enabled) {
+    durable = false;
+    verdict = 'DISABLED — file-only; data will NOT survive a redeploy';
+  } else if (!state.collection) {
+    durable = false;
+    verdict = 'NOT CONNECTED — file-only; data will NOT survive a redeploy';
+  } else if (state.consecutiveFailures > 0 && state.lastOkAt === null) {
+    // Never landed a single operation. The least durable state there is —
+    // it must never fall through to the transient-blip branch below.
+    durable = false;
+    verdict = `NOT DURABLE — ${state.consecutiveFailures} failure(s), no operation has ever succeeded; data will NOT survive a redeploy`;
+  } else if (state.consecutiveFailures >= STALE_AFTER_FAILS
+             || (state.consecutiveFailures > 0 && staleFor !== null && staleFor > STALE_AFTER_MS)) {
+    durable = false;
+    verdict = `DEGRADED — ${state.consecutiveFailures} consecutive failures, no successful write for ${Math.round((staleFor ?? 0) / 1000)}s; data will NOT survive a redeploy`;
+  } else if (state.consecutiveFailures > 0) {
+    verdict = `retrying — ${state.consecutiveFailures} consecutive failure(s), ${state.pending.size} file(s) queued`;
+  } else if (state.conflict) {
+    durable = false;
+    verdict = 'MULTIPLE LIVE WRITERS — last-writer-wins is eating data; scale to ONE instance';
+  }
+
   return {
-    enabled:      state.enabled || !!(process.env.MONGO_URI && process.env.AQUA_DISABLE_MONGO_MIRROR !== '1'),
+    // verdict first — the field to read
+    durable,
+    verdict,
+    enabled,
     connected:    !!state.collection,
     canary:       state.canary,          // 'ok' after every healthy real boot
     instanceId:   INSTANCE_ID,
     lastWriteAt:  state.lastWriteAt,
+    lastOkAt:     state.lastOkAt,
+    lastFailureAt: state.lastFailureAt,
+    consecutiveFailures: state.consecutiveFailures,
     lastError:    state.lastError,
     pending:      state.pending.size,
+    queuedFiles:  [...state.pending.keys()],
+    retrying:     state.retryTimers.size,
     multiWriterConflict: state.conflict, // true = scale to 1 instance NOW
     conflictWith: state.conflictWith,
     chunkBytes:   CHUNK_BYTES,
@@ -384,14 +583,23 @@ export function __setCollectionForTests(fakeCollection) {
   state.failedOnce = false;
 }
 export function __heartbeatOnceForTests() { return heartbeatOnce(); }
+/** Make retry backoff deterministic in tests (null restores real backoff). */
+export function __setRetryDelayForTests(ms) { state.retryDelayOverride = ms; }
+/** Await whatever the write path currently has in flight (tests only). */
+export function __settleForTests() { return Promise.all([...state.inflight.values()]); }
 export function __resetForTests() {
   if (state.heartbeatTimer) clearInterval(state.heartbeatTimer);
+  for (const t of state.retryTimers.values()) clearTimeout(t);
   Object.assign(state, {
     collection: null, enabled: false, connecting: null, failedOnce: false,
     canary: null, lastWriteAt: null, lastError: null,
     conflict: false, conflictWith: null, foreignBeats: 0, lastBeatAt: 0,
     heartbeatTimer: null,
+    lastOkAt: null, lastFailureAt: null, consecutiveFailures: 0,
+    warnKey: null, warnAt: 0, warnSuppressed: 0, retryDelayOverride: null,
   });
   state.pending.clear();
   state.inflight.clear();
+  state.retryTimers.clear();
+  state.retryAttempts.clear();
 }

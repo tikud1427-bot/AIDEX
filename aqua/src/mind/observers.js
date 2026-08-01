@@ -19,6 +19,7 @@
  * Never asks the user trait questions. Everything is inferred (Layer 2 rule).
  */
 import { DIMENSIONS } from './mindSchema.js';
+import { uusEnabled } from '../understanding/flags.js';
 
 // ── 1. Task-type → trait mapping ──────────────────────────────────────────────
 const TASK_TRAIT_MAP = {
@@ -34,7 +35,42 @@ const TASK_TRAIT_MAP = {
 };
 
 // ── 2. Text heuristics ────────────────────────────────────────────────────────
-const TECH_TERMS = /\b(typescript|javascript|python|rust|golang|go|java|kotlin|swift|ruby|c\+\+|c#|sql|react|vue|svelte|angular|next\.?js|node(\.js)?|express|django|flask|fastapi|postgres(ql)?|mysql|mongodb|redis|docker|kubernetes|k8s|graphql|grpc|terraform|aws|gcp|azure|vite|webpack|tailwind)\b/gi;
+//
+// TECH TERMS — two sets, because half of these are ordinary English words.
+//
+// The single flat list this replaces matched `go` in "go deep, don't
+// over-explain", `rust`, `swift`, `react`, `express`, `java`, `ruby`, `flask`
+// and `azure` the same way. Reproduced 3/3: "Go deep…", "I want to go to the
+// beach", "Just go ahead" each minted knowledge:tech:go. In ordinary chat that
+// is noise buried under real signal. On a "here's what I understand about you"
+// card it is the one line that costs the user's trust, so it is a correctness
+// bug, not a tidy-up.
+//
+// UNAMBIGUOUS terms mean the technology wherever they appear.
+const TECH_UNAMBIGUOUS = String.raw`typescript|javascript|python|golang|kotlin|c\+\+|c#|sql|vue|svelte|next\.?js|node\.js|django|fastapi|postgres(?:ql)?|mysql|mongodb|redis|docker|kubernetes|k8s|graphql|grpc|terraform|aws|gcp|vite|webpack`;
+
+// AMBIGUOUS terms are also ordinary English. They must earn their reading.
+const TECH_AMBIGUOUS = String.raw`rust|go|java|swift|ruby|react|angular|express|node|flask|azure|tailwind`;
+
+const TECH_ANY_RE = new RegExp(String.raw`\b(${TECH_UNAMBIGUOUS}|${TECH_AMBIGUOUS})\b`, 'gi');
+const TECH_UNAMBIGUOUS_RE = new RegExp(String.raw`^(?:${TECH_UNAMBIGUOUS})$`, 'i');
+
+// Local evidence that an ambiguous token is being used technically. Local on
+// purpose: another tech word ELSEWHERE in the message says nothing about which
+// sense THIS token carries — "I go with Python daily" is not about Golang.
+const TECH_PRE = new RegExp(
+  String.raw`\b(?:in|on|using|uses?|used|with|write|writes|writing|wrote|written|codes?|coded|coding|learn(?:s|ing|ed|t)?|knows?|knew|prefers?|preferred|deploy(?:ed|ing)?\s+to|host(?:ed|ing)?\s+on|runs?\s+on|running\s+on|migrat(?:e|es|ing)\s+to|switch(?:es|ing)?\s+to|built\s+(?:in|with)|build\s+(?:in|with))\s+$`,
+  'i',
+);
+const TECH_POST = new RegExp(
+  String.raw`^\s+(?:code|codebase|module|modules|package|packages|library|libraries|framework|frameworks|app|apps|application|service|services|server|api|apis|backend|frontend|project|projects|developer|dev|programmer|engineer|runtime|compiler|version|goroutine|goroutines|routine|hooks|component|components|template|templates|config|cli|sdk|binary|struct|structs|trait|traits|crate|crates|gem|gems|mod|migration|migrations)\b`,
+  'i',
+);
+// A stack listing: "React + Postgres", "Go, Python, Rust", "Node & Express".
+// Only propagates FROM a token that already qualified, and only across a
+// connector that DIRECTLY joins the two — "go and learn Python" never links
+// `go` to `python`, because `learn` sits between them.
+const TECH_JOIN = /^\s*(?:[+,/&]|and|or)\s*$/i;
 const FOUNDER_HINTS = /\b((?:my|our) (?:startup|company|cofounder|co-founder|investors?|product|platform|users|customers)|fundrais|pitch deck|investor (?:demo|meeting|pitch|update)|mvp|go.to.market|runway)\b/i;
 const DEADLINE_RE   = /\b(by|before|due|deadline|ship(ping)? (by|on)|launch(ing)? (by|on))\s+(tomorrow|tonight|today|this week|next week|monday|tuesday|wednesday|thursday|friday|saturday|sunday|jan(uary)?|feb(ruary)?|mar(ch)?|apr(il)?|may|jun(e)?|jul(y)?|aug(ust)?|sep(tember)?|oct(ober)?|nov(ember)?|dec(ember)?|\d)/i;
 const REJECT_FLASHY = /\b(too (flashy|busy|cluttered|noisy|much)|less is more|keep it (simple|clean|minimal)|simpler|cleaner|minimal(ist)?)\b/i;
@@ -43,12 +79,54 @@ const WANTS_BRIEF   = /\b(tl;?dr|be brief|short answer|quick(ly)? (answer|versio
 const RISK_AVERSE   = /\b(don'?t break|be careful|safe(st)? (way|option)|backward.?compat|without breaking|non.?breaking)\b/i;
 const RISK_TOLERANT = /\b(rewrite (it|everything|from scratch)|rip (it )?out|nuke it|start over|move fast)\b/i;
 
+/** Normalization preserved exactly from the original: next.js → nextjs, node.js → node. */
+function normalizeTechTerm(raw) {
+  const lower = raw.toLowerCase();
+  return lower.replace(/\.?js$/, lower === 'next.js' || lower === 'nextjs' ? 'js' : '');
+}
+
+/**
+ * Every tech token in the message, with a qualified/unqualified verdict.
+ * Two passes: local evidence first, then propagation across list connectors
+ * from tokens that already qualified on their own.
+ */
 function techMentions(text) {
-  const found = new Map();
+  const src = String(text ?? '');
+  const hits = [];
+  const re = new RegExp(TECH_ANY_RE.source, 'gi'); // own lastIndex — never share a stateful regex
   let m;
-  TECH_TERMS.lastIndex = 0;
-  while ((m = TECH_TERMS.exec(text)) !== null) {
-    const t = m[0].toLowerCase().replace(/\.?js$/, m[0].toLowerCase() === 'next.js' || m[0].toLowerCase() === 'nextjs' ? 'js' : '');
+  while ((m = re.exec(src)) !== null) {
+    hits.push({ raw: m[0], start: m.index, end: m.index + m[0].length, qualified: false });
+  }
+
+  // Pass 1 — a term qualifies on its own if it is unambiguous, or if the words
+  // touching it read technically.
+  for (const h of hits) {
+    if (TECH_UNAMBIGUOUS_RE.test(h.raw)) { h.qualified = true; continue; }
+    const before = src.slice(Math.max(0, h.start - 40), h.start);
+    const after  = src.slice(h.end, h.end + 40);
+    if (TECH_PRE.test(before) || TECH_POST.test(after)) h.qualified = true;
+  }
+
+  // Pass 2 — propagate along enumerations, in both directions, until stable.
+  // "The React + Postgres stack" qualifies React from Postgres; "I write Rust
+  // and Go" qualifies Go from Rust, which qualified from `write`.
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (let i = 0; i < hits.length - 1; i++) {
+      const a = hits[i], b = hits[i + 1];
+      if (a.qualified === b.qualified) continue;
+      if (!TECH_JOIN.test(src.slice(a.end, b.start))) continue;
+      a.qualified = b.qualified = true;
+      changed = true;
+    }
+  }
+
+  const found = new Map();
+  for (const h of hits) {
+    if (!h.qualified) continue;
+    const t = normalizeTechTerm(h.raw);
     found.set(t, (found.get(t) || 0) + 1);
   }
   return found;
@@ -65,6 +143,30 @@ const FACT_TO_BELIEF = {
   workplace:          (f) => ({ dimension: DIMENSIONS.IDENTITY,    key: 'organization',       value: f.value, strength: 0.85 }),
   goal:               null, // handled by goalTracker, not beliefs
 };
+
+// ── 3b. Explicit declarations ────────────────────────────────────────────────
+//
+// A new belief's confidence is `0.25 + changeRate × strength`. For identity
+// (changeRate 0.12, the slowest by design) a strength-0.85 signal lands at
+// 0.35. That is right for something INFERRED — identity should move slowly —
+// and wrong for something the user just said out loud. "I'm a founder" was
+// arriving at 35% confident.
+//
+// `fromExplicit()` already exists and already means exactly this; until now
+// only correctBelief() reached it. This is the second caller.
+//
+// The bar is deliberately narrow. `schema` means one of the curated
+// first-person patterns in memorySchema matched. The `custom_fallback`
+// extractor is excluded on purpose: it promotes transient states ("I'm
+// exhausted today") into durable stored facts, and granting those 0.9 would
+// amplify a known precision problem rather than fix a confidence one.
+const EXPLICIT_MIN_CONFIDENCE = 0.8;
+
+function isExplicitDeclaration(fact) {
+  return fact?.extractor === 'schema'
+    && Number(fact?.confidence ?? 0) >= EXPLICIT_MIN_CONFIDENCE
+    && !fact?._isDuplicate;
+}
 
 /**
  * Main entry: one turn → array of belief signals + side-channel hints
@@ -129,11 +231,20 @@ export function observeTurn({ userMessage = '', taskType = 'conversation', extra
   if (dl) hints.deadlines.push({ label: dl[0].slice(0, 80), ts: null, source: 'message' });
 
   // 8. FACT BRIDGE — reuse the proven extractor output as high-quality evidence
+  const explicitAllowed = uusEnabled();
   for (const fact of extractedFacts) {
     const map = FACT_TO_BELIEF[fact.key];
     if (!map) continue;
     const sig = map(fact);
-    if (sig) signals.push({ ...sig, note: `extracted fact: ${fact.key}`, conversationId, source: 'fact_bridge' });
+    if (!sig) continue;
+    const explicit = explicitAllowed && isExplicitDeclaration(fact);
+    signals.push({
+      ...sig,
+      note: `extracted fact: ${fact.key}`,
+      conversationId,
+      source: explicit ? 'explicit' : 'fact_bridge',
+      ...(explicit ? { explicit: true } : {}),
+    });
   }
 
   return { signals, hints };

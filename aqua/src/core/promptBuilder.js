@@ -34,6 +34,7 @@ const M = {
   creative:     load('creative.txt'),
   planning:     load('planning.txt'),
   project:      load('project.txt'),
+  understanding: load('understanding.txt'),   // UUS — the interviewer persona
 };
 
 /**
@@ -49,6 +50,12 @@ const MODULE_MAP = {
   simple_qa:             [],
   opinion:               [],
   summarization:         [],
+
+  // UUS — Getting to Know You. Its own module, and deliberately NOT sharing
+  // one with 'conversation': the interviewer has a different job (understand,
+  // do not answer) and mixing the two produces an assistant that helpfully
+  // solves the problem it was supposed to be learning about.
+  understanding_interview: ['understanding'],
 
   // Task-specific
   coding:                ['coding'],

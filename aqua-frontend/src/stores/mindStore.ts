@@ -45,7 +45,22 @@ function allBeliefs(m: MindModel): CompactBelief[] {
 }
 
 /** Composite understanding: confidence mass + dimension coverage + context signals. */
-export function understandingScore(m: MindModel | null): number {
+/**
+ * The understanding score is computed SERVER-SIDE (src/understanding/coverage.js)
+ * and delivered by GET /api/aqua/understanding.
+ *
+ * It used to be computed here. That made it invisible to the server, which
+ * needs the same number to decide which follow-up question to ask — the brief's
+ * stated purpose for confidence. Two implementations of one score is also how
+ * the card and the dashboard end up disagreeing about how well AQUA knows you.
+ *
+ * This wrapper stays so callers keep a single import, and falls back to a local
+ * computation only when the server value has not arrived yet (first paint,
+ * offline). The fallback uses the identical formula on purpose — a different
+ * one would make the number visibly jump when the fetch lands.
+ */
+export function understandingScore(m: MindModel | null, serverScore?: number | null): number {
+  if (typeof serverScore === 'number') return serverScore;
   if (!m) return 0;
   const beliefs = allBeliefs(m).filter((b) => b.status !== 'archived');
   if (!beliefs.length && !m.goals.length) return 0;

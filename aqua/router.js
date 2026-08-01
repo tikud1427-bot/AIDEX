@@ -30,6 +30,16 @@ import artifactsRoute     from "./src/routes/artifacts.js";
 import mindRoute          from "./src/mind/mindRoutes.js";
 import intelligenceRoute  from "./src/routes/intelligence.js";
 import brainRoute         from "./src/routes/brain.js";
+import {
+  brainEnabled, ingestEnabled, factIngestEnabled, contextV2Enabled, reflectV2Enabled, twinV2Enabled,
+} from "./src/brain/index.js";
+import { selfEntityEnabled } from "./src/brain/identity/selfEntity.js";
+import { picEnabled, consolidateEnabled, CONSOLIDATE_EVERY_TURNS } from "./src/pic/core.js";
+import { uusEnabled } from "./src/understanding/flags.js";
+import { DATA_DIR } from "./src/core/dataDir.js";
+import { getMirrorStatus } from "./src/core/mongoMirror.js";
+import { recordBoot, assessDurability, formatDurabilityReport } from "./src/core/durability.js";
+import understandingRoute from "./src/understanding/understandingRoutes.js";
 import { runStartupValidation } from "./src/core/startupValidation.js";
 import { migrateLegacyMemory }  from "./src/memory/migrate.js";
 import { migrateIdentity }      from "./src/memory/identityMigration.js";
@@ -48,6 +58,77 @@ migrateIdentity();
 // misconfigured providers are disabled with a warning, engine still mounts.
 runStartupValidation();
 
+// ── Understanding-loop flag report (Phase 1) ─────────────────────────────────
+// Most of the Brain switches default OFF in code, so which understanding
+// stages actually run in a given deployment is decided entirely by env vars.
+// That state was only readable through GET /brain/metrics — behind auth, after
+// boot, from a running instance. An audit of the deployed system should not
+// require an authenticated round trip: one line in the boot log makes it
+// unambiguous. Read-only, no behaviour change, fail-open.
+//
+// selfEntity was added in Phase 3: it is a sixth switch, also off by default,
+// and it was the one flag no report mentioned — /brain/metrics does not list it
+// either. An unreported flag is how a stage ends up dark for weeks.
+try {
+  const state = (on) => (on ? "on" : "off");
+  console.log(
+    `[BRAIN] flags brain=${state(brainEnabled())} ingest=${state(ingestEnabled())} ` +
+    `ingestFacts=${state(factIngestEnabled())} ` +
+    `contextV2=${state(contextV2Enabled())} reflectV2=${state(reflectV2Enabled())} ` +
+    `twinV2=${state(twinV2Enabled())} selfEntity=${state(selfEntityEnabled())}`,
+  );
+} catch (err) {
+  console.warn(`[BRAIN] flag report unavailable: ${err?.message ?? err}`);
+}
+
+// PIC's own switches. Reported separately because they are not Brain flags and
+// putting them under the [BRAIN] line would misattribute them — but reported,
+// because an unreported flag is how a stage stays dark for weeks.
+try {
+  const state = (on) => (on ? "on" : "off");
+  console.log(
+    `[PIC] flags pic=${state(picEnabled())} consolidate=${state(consolidateEnabled())} ` +
+    `every=${CONSOLIDATE_EVERY_TURNS} turns`,
+  );
+} catch (err) {
+  console.warn(`[PIC] flag report unavailable: ${err?.message ?? err}`);
+}
+
+// User Understanding System. One switch for the whole sprint, reported here for
+// the same reason as the two above: twice now a stage has run dark because
+// nothing printed its flag. Note what is deliberately NOT behind it — the tech
+// word-sense guard and the compound-role pattern are bug fixes and always run.
+try {
+  console.log(`[UUS] flags uus=${uusEnabled() ? "on" : "off"}`);
+} catch (err) {
+  console.warn(`[UUS] flag report unavailable: ${err?.message ?? err}`);
+}
+
+// ── Durability self-check ────────────────────────────────────────────────────
+//
+// AQUA has two independent ways to survive a redeploy — the Mongo mirror, and
+// AQUA_DATA_DIR on a persistent mount — and until now nothing checked whether
+// either was working. The service ran fine, reported healthy, and would lose
+// everything on the next deploy.
+//
+// Deferred one tick so the mirror's boot canary has run and `durable` is a live
+// fact rather than an unanswered question. Fail-open: a diagnostic that crashes
+// the boot it is diagnosing is worse than no diagnostic.
+setTimeout(() => {
+  try {
+    const assessment = assessDurability({
+      dataDir: DATA_DIR,
+      mirror: getMirrorStatus(),
+      bootHistory: recordBoot(DATA_DIR),
+    });
+    // Loud only when it needs to be. A warning printed every boot regardless of
+    // state is a warning nobody reads by the third deploy.
+    (assessment.safe ? console.log : console.warn)(formatDurabilityReport(assessment));
+  } catch (err) {
+    console.warn(`[DURABILITY] self-check unavailable: ${err?.message ?? err}`);
+  }
+}, 2000).unref?.();
+
 const router = express.Router();
 
 router.use("/chat",            chatRoute);
@@ -57,6 +138,7 @@ router.use("/conversations",   conversationsRoute);
 router.use("/memory",          memoryRoute);
 router.use("/upload",          uploadRoute);
 router.use("/artifacts",       artifactsRoute); // Universal Artifact Engine (P1)
+router.use("/understanding",   understandingRoute);  // UUS read model — what AQUA understands about you
 router.use("/mind",            mindRoute);   // persistent cognitive model (Mind layer)
 router.use("/intelligence",    intelligenceRoute); // Persistent Intelligence Core (Phase 4)
 router.use("/brain",           brainRoute);   // World Model read API (Brain V1 / Phase 0)

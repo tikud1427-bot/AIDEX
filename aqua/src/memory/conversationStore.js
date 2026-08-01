@@ -211,7 +211,22 @@ export function addMessage(id, role, content) {
 
 // ── Meta management (P0 v4 — titles/pins/archive live SERVER-side) ───────────
 
-const META_PATCH_WHITELIST = new Set(['title', 'pinned', 'archived']);
+// UUS U5: `kind` marks a conversation's ROLE — currently only
+// 'understanding_intro', which is how the first-run gate knows an account has
+// already done the intro. It is derived first-run state living beside the
+// conversation itself rather than a stored "has onboarded" flag that could
+// disagree with whether the conversation happened.
+//
+// It has to be here. The architecture called conversation.meta "an open bag";
+// it is not — this whitelist silently DROPS anything unlisted, and `continue`
+// makes the drop invisible. U2 wrote `kind` for a full phase and every write
+// was discarded with no error, which is exactly the class of failure this
+// sprint has now hit three times: the code exists, the intent exists, nothing
+// happens, and nobody is told.
+const META_PATCH_WHITELIST = new Set(['title', 'pinned', 'archived', 'kind', 'introCompletedAt']);
+
+/** Values `kind` may take. An unrecognised role is rejected, not stored. */
+const META_KINDS = new Set(['understanding_intro']);
 
 /**
  * Patch a conversation's metadata. Only whitelisted, user-facing fields are
@@ -224,6 +239,16 @@ export function updateConversationMeta(id, patch = {}) {
   if (!conv) return null;
   for (const [k, v] of Object.entries(patch)) {
     if (!META_PATCH_WHITELIST.has(k)) continue;
+    if (k === 'kind') {
+      if (!META_KINDS.has(v)) continue;
+      conv.meta.kind = v;
+      continue;
+    }
+    if (k === 'introCompletedAt') {
+      if (!Number.isFinite(v)) continue;
+      conv.meta.introCompletedAt = v;
+      continue;
+    }
     if (k === 'title') {
       if (typeof v !== 'string') continue;
       const t = v.trim().slice(0, 120);

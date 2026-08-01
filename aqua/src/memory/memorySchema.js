@@ -163,6 +163,30 @@ export const MEMORY_SCHEMA = [
         multiKey: true, reason: 'role_of_org', confidence: 0.92,
         transform: (m) => ({ profession: m[1].trim(), workplace: m[2].trim() }) },
       { regex: /i work as (?:a |an )?([A-Za-z\s-]+?)(?:\s+at|\s+for|\s*[,.]|$)/i, group: 1, reason: 'work_as' },
+      // v5 (UUS U0): "I'm a founder and a software engineer" lost half of
+      // itself. The `i_am_a` pattern below terminates on `\s+and\b`, so the
+      // second role was silently dropped — and a first-run summary card that
+      // says "Founder" to someone who said "founder and software engineer" is
+      // wrong in exactly the way that costs trust. Sits ABOVE `i_am_a` so the
+      // compound form wins; a single role still falls through unchanged.
+      //
+      // Stored as one joined string rather than two values on purpose:
+      // `profession` is multiValue:false with an OVERWRITE conflict policy, and
+      // flipping that would change merge, storage and retrieval semantics for
+      // every existing fact. Display can split on " and "; the data stays true.
+      { regex: /i(?:'m| am) (?:a|an) ([A-Za-z][A-Za-z\s-]{2,30}?) and (?:a |an )?([A-Za-z][A-Za-z\s-]{2,30}?)(?:\s*[,.!?]|$)/i,
+        reason: 'i_am_a_and_a', confidence: 0.85,
+        transform: (m) => {
+          const first  = m[1].trim();
+          const second = m[2].trim();
+          // Same intensity-idiom guard as `i_am_a` ("I'm a bit tired and…").
+          if (/^(bit|little|fan|big|huge|great|good|real|total|complete|proud|happy|new)\b/i.test(first)) return null;
+          // Reject a coordinated CLAUSE rather than a coordinated ROLE:
+          // "I'm a developer and I love Rust" must not become a job title.
+          if (/^(i|we|it|he|she|they|you|my|our|your|the|that|this|there|then|now|also|really|very|so|still|just)\b/i.test(second)) return null;
+          if (second.split(/\s+/).length > 4) return null;
+          return `${first} and ${second}`;
+        } },
       // v3 (Extraction Audit): "I'm a student", "I am a founder", "I'm an
       // engineer at X". Guard rejects intensity idioms ("I'm a bit tired").
       { regex: /i(?:'m| am) (?:a|an) ([A-Za-z][A-Za-z\s-]{2,30}?)(?:\s+(?:at|for|in|and|who|based|working)\b|\s*[,.!?]|$)/i, group: 1, reason: 'i_am_a', confidence: 0.85,

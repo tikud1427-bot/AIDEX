@@ -12,6 +12,10 @@
  *   3. chunking     — a store far over the chunk size round-trips intact
  *   4. heartbeat    — a second live writer raises the multi-writer alarm
  *                     (with deploy-overlap grace)
+ *   5. outage       — Jul-31 audit: a failing cluster must not silently eat
+ *                     writes, must not report itself healthy, and must not
+ *                     bury the log. See the OUTAGE BEHAVIOUR block in
+ *                     mongoMirror.js for what each of these caught.
  *
  * Run: node --test src/core/tests/mongoMirror.test.js
  */
@@ -261,4 +265,168 @@ test('heartbeat: a second live writer raises the multi-writer alarm — with dep
   assert.equal(status.multiWriterConflict, true, 'ping-ponging writers must raise the alarm');
   assert.equal(status.conflictWith, 'other-host:999:beef');
   __resetForTests();
+});
+
+// ── 5. Outage behaviour (Jul-31 audit) ───────────────────────────────────────
+// Production logged ~150 consecutive heartbeat failures against an unreachable
+// Atlas cluster while /provider-health stayed green and failed upserts were
+// discarded. These four tests pin each half of that fix. They drive the REAL
+// mirrorWrite/drainMirror/getMirrorStatus surface in-process against a
+// collection that can be told to fail.
+
+/** A collection whose updateOne fails until `failuresLeft` is exhausted. */
+function flakyCollection() {
+  const store = new Map();
+  const col = {
+    failuresLeft: 0,
+    writes: 0,
+    find() { return { async toArray() { return [...store.values()]; } }; },
+    async findOne(q = {}) { return store.get(q._id) ?? null; },
+    async updateOne(filter, update) {
+      if (col.failuresLeft > 0) { col.failuresLeft--; throw new Error('connection <monitor> timed out'); }
+      col.writes++;
+      store.set(filter._id, { _id: filter._id, ...(store.get(filter._id) ?? {}), ...update.$set });
+    },
+    async deleteMany() {},
+    _get: (id) => store.get(id),
+  };
+  return col;
+}
+
+const settle = async (mod, rounds = 12) => {
+  for (let i = 0; i < rounds; i++) { await mod.__settleForTests(); await new Promise(r => setTimeout(r, 5)); }
+};
+
+test('outage: a failed upsert is RETRIED, never dropped', async () => {
+  const mod = await import('../mongoMirror.js');
+  mod.__resetForTests();
+  mod.__setRetryDelayForTests(1);            // deterministic: no wall-clock waits
+  const col = flakyCollection();
+  col.failuresLeft = 3;                       // three round-trips fail, then recovery
+  mod.__setCollectionForTests(col);
+
+  mod.mirrorWrite('/anywhere/.aqua-ledger.json', '{"turns":42}');
+  await settle(mod);
+
+  // The OLD code deleted the payload from `pending`, warned, and returned —
+  // this store would have lost its newest generation until it was written
+  // again, which for a low-traffic file can be never before a redeploy.
+  assert.equal(col._get('.aqua-ledger.json')?.json, '{"turns":42}', 'payload survived the outage and landed');
+  assert.equal(mod.getMirrorStatus().pending, 0, 'queue drained');
+  assert.equal(mod.getMirrorStatus().consecutiveFailures, 0, 'failure counter cleared on success');
+  mod.__resetForTests();
+});
+
+test('outage: a newer payload wins over a re-queued stale one', async () => {
+  const mod = await import('../mongoMirror.js');
+  mod.__resetForTests();
+  mod.__setRetryDelayForTests(1);
+  const col = flakyCollection();
+  col.failuresLeft = 1;
+  mod.__setCollectionForTests(col);
+
+  mod.mirrorWrite('/anywhere/.aqua-mind.json', '{"v":1}');   // fails, gets re-queued
+  await mod.__settleForTests();
+  mod.mirrorWrite('/anywhere/.aqua-mind.json', '{"v":2}');   // newer state arrives
+  await settle(mod);
+
+  // Re-queueing must never resurrect a stale generation over a fresher one.
+  assert.equal(col._get('.aqua-mind.json')?.json, '{"v":2}', 'newest generation is what persisted');
+  mod.__resetForTests();
+});
+
+test('outage: status stops reporting healthy when nothing is landing', async () => {
+  const mod = await import('../mongoMirror.js');
+  mod.__resetForTests();
+  mod.__setRetryDelayForTests(1);
+  const col = flakyCollection();
+  col.failuresLeft = Number.MAX_SAFE_INTEGER;   // cluster is simply gone
+  mod.__setCollectionForTests(col);
+
+  mod.mirrorWrite('/anywhere/.aqua-conversations.json', '{"a":1}');
+  await settle(mod);
+
+  const bad = mod.getMirrorStatus();
+  // These two are the fields that lied in production: a mongoose handle stays
+  // truthy and the boot canary is history, so both still look fine.
+  assert.equal(bad.connected, true, 'the handle is still truthy — this is exactly why it lied');
+  assert.ok(bad.consecutiveFailures > 0, 'failures are counted');
+  assert.equal(bad.durable, false, 'verdict must be not-durable');
+  assert.match(bad.verdict, /NOT survive a redeploy/, 'verdict must say what it costs');
+  assert.ok(bad.pending > 0 && bad.queuedFiles.includes('.aqua-conversations.json'), 'queue is visible');
+
+  // …and it must clear itself when the cluster comes back.
+  col.failuresLeft = 0;
+  await mod.__heartbeatOnceForTests();          // heartbeat success re-drives the queue
+  await settle(mod);
+  const good = mod.getMirrorStatus();
+  assert.equal(good.durable, true, 'recovery flips the verdict back');
+  assert.equal(good.pending, 0, 'parked writes flushed on recovery');
+  assert.equal(col._get('.aqua-conversations.json')?.json, '{"a":1}', 'the parked payload landed after recovery');
+  mod.__resetForTests();
+});
+
+test('outage: drainMirror flushes a payload parked behind a retry timer', async () => {
+  const mod = await import('../mongoMirror.js');
+  mod.__resetForTests();
+  mod.__setRetryDelayForTests(60_000);          // parked far beyond the deploy window
+  const col = flakyCollection();
+  col.failuresLeft = 1;
+  mod.__setCollectionForTests(col);
+
+  mod.mirrorWrite('/anywhere/.aqua-memory.json', '{"facts":7}');
+  await mod.__settleForTests();
+  assert.equal(mod.getMirrorStatus().retrying, 1, 'payload is parked behind a timer');
+
+  // SIGTERM. The old drain raced only in-flight promises, so a parked payload
+  // resolved instantly as "nothing to do" and died with the container.
+  col.failuresLeft = 0;
+  await mod.drainMirror(3_000);
+  assert.equal(col._get('.aqua-memory.json')?.json, '{"facts":7}', 'drain rescued the parked write');
+  mod.__resetForTests();
+});
+
+test('outage: identical repeated failures collapse to one log line', async () => {
+  const mod = await import('../mongoMirror.js');
+  mod.__resetForTests();
+  const col = flakyCollection();
+  col.failuresLeft = Number.MAX_SAFE_INTEGER;
+  mod.__setCollectionForTests(col);
+
+  const original = console.warn;
+  const lines = [];
+  console.warn = (...a) => lines.push(a.join(' '));
+  try {
+    for (let i = 0; i < 20; i++) await mod.__heartbeatOnceForTests();
+  } finally {
+    console.warn = original;
+  }
+
+  const beats = lines.filter(l => l.includes('heartbeat failed'));
+  assert.equal(beats.length, 1, `20 identical failures must not print 20 lines (got ${beats.length})`);
+  mod.__resetForTests();
+});
+
+test('outage: a sustained failure run is degraded even inside the freshness window', async () => {
+  const mod = await import('../mongoMirror.js');
+  mod.__resetForTests();
+  mod.__setRetryDelayForTests(1);
+  const col = flakyCollection();
+  mod.__setCollectionForTests(col);
+
+  mod.mirrorWrite('/anywhere/.aqua-a.json', '{"ok":1}');   // succeeds → recent lastOkAt
+  await settle(mod);
+  assert.equal(mod.getMirrorStatus().durable, true, 'a healthy mirror reports durable');
+
+  col.failuresLeft = Number.MAX_SAFE_INTEGER;              // cluster dies
+  mod.mirrorWrite('/anywhere/.aqua-b.json', '{"ok":2}');
+  await settle(mod);
+
+  const st = mod.getMirrorStatus();
+  // The time window alone would still call this healthy for two minutes.
+  // A long run of failures is evidence enough on its own.
+  assert.ok(st.consecutiveFailures >= 5, 'failures accumulated');
+  assert.equal(st.durable, false, '"42 consecutive failures but healthy" must not be printable');
+  assert.match(st.verdict, /DEGRADED/);
+  mod.__resetForTests();
 });

@@ -61,19 +61,37 @@ export function observeSignal(mind, signal) {
     note = '', conversationId = null, source = 'inference',
   } = signal;
 
+  // An EXPLICIT signal is something the user stated outright, as opposed to
+  // something observed about them. It takes the same path a correction takes:
+  // fromExplicit() rather than the dimension's changeRate, because the slow
+  // changeRate exists to stop inference from moving identity quickly — it was
+  // never meant to discount a direct statement.
+  //
+  // Only meaningful for SUPPORTING evidence. Nothing in the pipeline emits an
+  // explicit contradiction, and treating one as explicit would let a single
+  // negative reading overwrite a stated fact, so `!support` falls through to
+  // the ordinary contradiction path below.
+  const explicit = signal.explicit === true && support === true;
+
   const dyn = DIMENSION_DYNAMICS[dimension] ?? { changeRate: 0.1 };
   const bk  = beliefKey(dimension, key);
   let belief = mind.beliefs[bk];
   const now  = Date.now();
-  const ev   = { ts: now, conversationId, signal: note || key, delta: 0, support };
+  const ev   = { ts: now, conversationId, signal: note || key, delta: 0, support, ...(explicit ? { explicit: true } : {}) };
 
   // New belief
   if (!belief) {
     if (!support) return null; // can't contradict what isn't believed
     belief = createBelief({
       dimension, key, value,
-      confidence: clamp01(0.25 + dyn.changeRate * strength),
-      source,
+      confidence: explicit ? fromExplicit(0) : clamp01(0.25 + dyn.changeRate * strength),
+      // An explicit statement's provenance IS explicit — otherwise a brand-new
+      // belief could carry 0.9 confidence while claiming something inferred it,
+      // and the understanding card would show "confident" next to the wrong
+      // reason. The update branch below already forces this; the create branch
+      // was inheriting whatever the caller passed. Caught by the route test,
+      // not by reading the code.
+      source: explicit ? 'explicit' : source,
     });
     ev.delta = belief.confidence;
     pushEvidence(belief, ev);
@@ -85,6 +103,25 @@ export function observeSignal(mind, signal) {
   if (belief.privacy?.locked || belief.status === STATUS.LOCKED) return belief; // user-pinned
 
   const before = belief.confidence;
+
+  // Explicit statement about an existing belief: the stated value wins outright
+  // and any prior value is versioned, never overwritten. Same semantics as
+  // correctBelief — a user restating something is not evidence to be weighed
+  // against what we had inferred, it is the answer.
+  if (explicit) {
+    if (!valuesEqual(belief.value, value)) {
+      versionValue(belief, 'superseded_by_explicit_statement');
+      belief.value = value;
+    }
+    belief.confidence = fromExplicit(belief.confidence);
+    belief.privacy.source = 'explicit';
+    belief.status = STATUS.ACTIVE;
+    ev.delta = +(belief.confidence - before).toFixed(4);
+    pushEvidence(belief, ev);
+    belief.updatedAt = now;
+    touchMind(mind);
+    return belief;
+  }
 
   if (support && valuesEqual(belief.value, value)) {
     belief.confidence = reinforce(before, dyn.changeRate, strength);

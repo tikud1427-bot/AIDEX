@@ -135,18 +135,51 @@ test('ISOLATION: one owner never sees another owner\'s world', async () => {
 // ── Metrics ──────────────────────────────────────────────────────────────────
 
 test('METRICS: needs no owner and reports live flag state', async () => {
-  const { status, body } = await req('/brain/metrics');
-  assert.equal(status, 200);
-  assert.equal(body.success, true);
-  assert.equal(body.enabled, true);
-  assert.deepEqual(Object.keys(body.flags).sort(), [
-    'AQUA_BRAIN', 'AQUA_BRAIN_INGEST', 'AQUA_CONTEXT_V2', 'AQUA_REFLECT_V2', 'AQUA_TWIN_V2',
-  ]);
-  assert.equal(body.flags.AQUA_BRAIN, true, 'master flag is on by default');
-  assert.equal(body.flags.AQUA_BRAIN_INGEST, false, 'subordinate flags are off by default');
-  assert.ok('ingest' in body.metrics, 'ingest counters exposed for the rollout');
-  assert.ok('contextEngine' in body.metrics);
-  assert.ok('twin' in body.metrics);
+  // The environment is CONTROLLED here, not inherited. This test asserts what
+  // the defaults are, and it used to do that while reading whatever the
+  // operator happened to have exported — so `AQUA_SELF_ENTITY=on npm test`
+  // failed against completely unmodified code, which makes a red result
+  // uninformative exactly when someone is testing a rollout.
+  const FLAG_KEYS = [
+    'AQUA_BRAIN', 'AQUA_BRAIN_INGEST', 'AQUA_BRAIN_INGEST_FACTS', 'AQUA_CONTEXT_V2',
+    'AQUA_REFLECT_V2', 'AQUA_SELF_ENTITY', 'AQUA_TWIN_V2',
+  ];
+  const saved = Object.fromEntries(FLAG_KEYS.map(k => [k, process.env[k]]));
+  const restore = () => {
+    for (const k of FLAG_KEYS) {
+      if (saved[k] === undefined) delete process.env[k]; else process.env[k] = saved[k];
+    }
+  };
+
+  try {
+    for (const k of FLAG_KEYS) delete process.env[k];
+
+    const { status, body } = await req('/brain/metrics');
+    assert.equal(status, 200);
+    assert.equal(body.success, true);
+    assert.equal(body.enabled, true);
+    // Pinned deliberately: this assertion is what fails when a new switch is
+    // added and NOT reported. AQUA_SELF_ENTITY existed for a while without
+    // appearing here, which is precisely how it stayed invisible.
+    assert.deepEqual(Object.keys(body.flags).sort(), FLAG_KEYS);
+    assert.equal(body.flags.AQUA_BRAIN, true, 'master flag is on by default');
+    assert.equal(body.flags.AQUA_BRAIN_INGEST, false, 'subordinate flags are off by default');
+    assert.equal(body.flags.AQUA_SELF_ENTITY, false, 'self entity is off by default too');
+    assert.equal(body.flags.AQUA_BRAIN_INGEST_FACTS, false, 'and so is conversational fact ingest');
+    assert.ok('ingest' in body.metrics, 'ingest counters exposed for the rollout');
+    assert.ok('contextEngine' in body.metrics);
+    assert.ok('twin' in body.metrics);
+
+    // LIVE, not boot-cached. The test has always been named "reports live flag
+    // state" and never checked the live half — a value read once at module load
+    // would have satisfied every assertion above. This is the check that makes
+    // /brain/metrics usable for confirming a rollout actually took effect.
+    process.env.AQUA_SELF_ENTITY = 'on';
+    const after = await req('/brain/metrics');
+    assert.equal(after.body.flags.AQUA_SELF_ENTITY, true, 'flag state is read per request');
+  } finally {
+    restore();
+  }
 });
 
 // ── Entities ─────────────────────────────────────────────────────────────────
