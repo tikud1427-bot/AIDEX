@@ -53,6 +53,7 @@
  */
 import express from 'express';
 import { resolveOwner } from '../memory/engine.js';
+import { getLedger } from '../pic/picStore.js';
 import * as Brain from '../brain/index.js';
 import { selfEntityEnabled } from '../brain/identity/selfEntity.js';
 
@@ -153,6 +154,13 @@ function emptyHint(kind) {
   }
   if (!Brain.ingestEnabled()) {
     return 'AQUA_BRAIN_INGEST is off, so conversations do not enter the world model. File uploads still do. Set AQUA_BRAIN_INGEST=on to include chat.';
+  }
+  if (kind === 'changes') {
+    // The generic hint below would misdiagnose this one. An owner can have a
+    // full world model and still no revisions: nothing has CHANGED yet. Saying
+    // "the world model fills from uploaded files" would send someone off to
+    // fix a pipeline that is working.
+    return 'No revisions yet. AQUA records a change only when its understanding actually shifts, and it reflects every few turns rather than on each one.';
   }
   return 'No data yet for this owner — the world model fills from uploaded files and (with ingest on) conversation turns.';
 }
@@ -361,6 +369,55 @@ router.get('/twin', guarded((req, res) => {
   });
 
   ok(res, ownerId, { twin }, { empty: twin.inferences.length === 0, kind: 'twin' });
+}));
+
+/**
+ * WHAT CHANGED — AQUA's revisions to its own understanding, newest first.
+ *
+ * Every other endpoint here answers "what does AQUA know". This one answers
+ * "what did AQUA change its mind about, and when", which is the thing an
+ * unlimited context window cannot do: a transcript gives you recall, not a
+ * position that can be revised.
+ *
+ * The data was being thrown away until now. `reflectWorldModel` computed a
+ * structured WorldDelta on every cadence turn, applied it, logged one line to
+ * the console, and returned it to `turnPostProcess`, which discards the return
+ * value. Nothing persisted, nothing readable, nothing a user could ever see.
+ *
+ * READ-ONLY over the PIC ledger, which was already per-owner, bounded,
+ * persisted and mirrored. No new store, and this is its first reader.
+ *
+ * Ledger entries whose `op` is not a reflection are filtered out here rather
+ * than at write time — consolidation and ingest write to the same ring, and
+ * they are legitimate entries that simply are not revisions.
+ */
+router.get('/changes', guarded((req, res) => {
+  const ownerId = requireOwner(req, res);
+  if (!ownerId) return;
+
+  const limit = clampInt(req.query.limit, 20, 1, 100);
+  let entries = [];
+  try {
+    entries = getLedger(ownerId, { limit: 300 })
+      .filter(e => e?.op === 'reflection')
+      .slice(-limit)
+      .reverse();                       // newest first — this reads as a feed
+  } catch { /* fail-open: an empty history is not an error */ }
+
+  ok(res, ownerId, {
+    changes: entries.map(e => ({
+      at: e.at,
+      summary: e.summary ?? null,
+      entities: e.entities ?? 0,
+      relationships: e.relationships ?? 0,
+      obsoleted: e.obsoleted ?? 0,
+      revised: e.revised ?? 0,
+      // Whether AQUA acted on the revision or merely noticed it. With
+      // AQUA_REFLECT_V2 off the delta is still computed (dry-run), so an
+      // unapplied entry is real history, not a failure.
+      applied: e.applied === true,
+    })),
+  }, { empty: entries.length === 0, kind: 'changes' });
 }));
 
 export default router;

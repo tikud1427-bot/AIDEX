@@ -29,6 +29,11 @@
 import { snapshotGraph, diffSnapshots, detectObsolescence, computeWorldDelta } from './deltaReflector.js';
 import { applyWorldDelta } from './deltaApplier.js';
 import { brainEnabled } from '../worldModel/schema.js';
+import {
+  loadSnapshot, loadWatermark, saveReflectionState,
+  forgetReflectionState, reflectionStoreStats,
+} from './reflectionStore.js';
+import { ledger } from '../../pic/picStore.js';
 
 /** owner → last snapshot. LRU-capped. */
 const snapshots = new Map();
@@ -75,12 +80,15 @@ export function reflectWorldModel(deps, ownerId, opts = {}) {
     metrics.reflections += 1;
 
     // 1. Snapshot now, diff against the previous snapshot for this owner.
-    const before = snapshots.get(ownerId) ?? { nodes: new Map(), edges: new Map(), takenAt: 0 };
+    // DURABLE baseline. Read from disk, not a Map that dies with the process —
+    // an empty `before` makes every node look new, which is why the first
+    // reflection after every deploy used to fabricate a full-graph delta.
+    const before = loadSnapshot(ownerId) ?? { nodes: new Map(), edges: new Map(), takenAt: 0 };
     const after = snapshotGraph(deps, ownerId);
     const diff = diffSnapshots(before, after);
 
     // 2. Obsolescence over facts that arrived since the last reflection.
-    const since = lastReflectionAt.get(ownerId) ?? 0;
+    const since = loadWatermark(ownerId);
     const obsolescence = detectObsolescence(deps, ownerId, { since });
 
     // 3. Assemble the structured delta (folding in the Mind's report slices).
@@ -96,9 +104,34 @@ export function reflectWorldModel(deps, ownerId, opts = {}) {
       metrics.dryRuns += 1;
     }
 
-    // 5. Roll state forward.
+    // 5. Roll state forward — to disk, so the next process diffs against this
+    //    and not against nothing.
     rememberSnapshot(ownerId, after);
-    lastReflectionAt.set(ownerId, after.takenAt);
+    saveReflectionState(ownerId, after, after.takenAt);
+
+    // 6. RECORD IT. The delta was previously computed, applied, logged to the
+    //    console and then dropped on the floor: `turnPostProcess` calls
+    //    `reflectTurn(ownerId)` and discards the return value, so nothing could
+    //    ever tell a user what AQUA changed its mind about.
+    //
+    //    Written to the EXISTING PIC ledger rather than a new journal — it is
+    //    already per-owner, bounded, persisted and mirrored, and it is exactly
+    //    what that ring was described as holding ("intelligence operations").
+    //    Its read side (`getLedger`) had zero callers before this.
+    //
+    //    Only real deltas are recorded. A no-change reflection is not an event.
+    if (delta.worldModelUpdated) {
+      try {
+        ledger(ownerId, 'reflection', {
+          summary:  delta.summary,
+          entities: delta.entitiesChanged.length,
+          relationships: delta.relationshipsChanged.length,
+          obsoleted: delta.obsoleted.length,
+          revised:   delta.assumptionsRevised?.length ?? 0,
+          applied:   !!report,
+        });
+      } catch { /* fail-open: bookkeeping must never break reflection */ }
+    }
 
     metrics.entitiesChanged += delta.entitiesChanged.length;
     metrics.relationshipsChanged += delta.relationshipsChanged.length;
@@ -121,10 +154,20 @@ export function reflectWorldModel(deps, ownerId, opts = {}) {
 export function forgetOwner(ownerId) {
   snapshots.delete(ownerId);
   lastReflectionAt.delete(ownerId);
+  forgetReflectionState(ownerId);
 }
 
 export function reflectionV2Metrics() {
-  return { ...metrics, enabled: reflectV2Enabled(), trackedOwners: snapshots.size };
+  const persisted = reflectionStoreStats();
+  return {
+    ...metrics,
+    enabled: reflectV2Enabled(),
+    trackedOwners: snapshots.size,
+    // Durable count, reported separately: the in-memory number is whatever this
+    // process has seen since boot, which is exactly the thing that used to be
+    // mistaken for the whole picture.
+    persistedOwners: persisted.owners,
+  };
 }
 
 export function _resetReflectionV2ForTests() {
