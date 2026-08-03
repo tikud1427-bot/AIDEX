@@ -109,10 +109,19 @@ export function buildCard({
     let items = [];
 
     if (plan.kind === 'projects') {
+      // A project may come from the graph (a document named it) or from the
+      // Mind (the user said it). Both are real; they differ in how they are
+      // corrected, so each carries its OWN ref rather than being stamped with
+      // an entity id it may not have. Falling back to `entity:` keeps every
+      // existing caller byte-identical.
       items = (projects ?? [])
         .filter(p => p?.label)
         .slice(0, plan.limit)
-        .map(p => ({ text: String(p.label), ref: `entity:${p.id}`, confidence: 0.8 }));
+        .map(p => ({
+          text: String(p.label),
+          ref: p.ref ?? `entity:${p.id}`,
+          confidence: typeof p.confidence === 'number' ? +p.confidence.toFixed(3) : 0.8,
+        }));
     } else if (plan.kind === 'goals') {
       items = goalList
         .sort((a, b) => (b.confidence ?? 0) - (a.confidence ?? 0))

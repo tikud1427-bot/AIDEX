@@ -61,9 +61,29 @@ const GTKY = [
 
 // ── 1. The measured defect, and that the mode removes it ─────────────────────
 
-test('U2: the defect is real — 4 of 8 interview answers fall below the verification threshold', () => {
+test('U2: the defect this mode was built around is now fixed AT THE CLASSIFIER', () => {
+  // HISTORY, kept deliberately. This assertion used to read:
+  //
+  //     assert.equal(low.length, 4, "expected the audit's 4/8")
+  //
+  // — it pinned the DEFECT as the justification for interview mode: 4 of these
+  // 8 answers scored 0.45, below LOW_CONFIDENCE_THRESHOLD, so a getting-to-know
+  // -you conversation paid for verification and a debate panel on half its
+  // turns. U2's answer was to have the caller declare its intent, because the
+  // caller already knew it.
+  //
+  // P1 fixed the underlying cause: a first-person statement now resolves to
+  // personal_info at 0.62 everywhere, not only inside the intro. So the mode's
+  // verification-skip rationale is SUBSUMED, and this test flipped from
+  // asserting the bug to asserting its absence.
+  //
+  // Interview mode is NOT redundant — it still owns the interviewer persona,
+  // the gap-steering directive, the `understanding_intro` marker and its own
+  // ledger bucket, and those are what the tests below cover. But the reason
+  // most often quoted for it no longer holds, and a comment saying so is worth
+  // more than a number nobody can source.
   const low = GTKY.filter(m => classifyTask(m).confidence < 0.5);
-  assert.equal(low.length, 4, `expected the audit's 4/8, got ${low.length}/8`);
+  assert.equal(low.length, 0, `P1 regressed — ${low.length}/8 still below 0.5: ${low.join(' | ')}`);
 });
 
 test('U2: in interview mode no answer trips verification', () => {

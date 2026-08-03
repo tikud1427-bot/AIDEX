@@ -80,6 +80,7 @@ import { hasSelfDeclaration } from './selfDeclaration.js';
  * existing callers of this module keep working.
  */
 export { isSelfDeclaration, hasSelfDeclaration } from './selfDeclaration.js';
+import { hasSpeakersWorld } from './selfDeclaration.js';
 
 /** Tokens that are never an entity on their own, whatever cue precedes them. */
 const BLOCK = new Set((
@@ -109,8 +110,181 @@ const DECLARATION_CUES = [
   ['org',  /\bfounded\s+([^.,;:!?()]{2,60})/gi],
 ];
 
+/* ──────────────────────────────────────────────────────────────────────────
+   FUSED PRONOUNS
+   ──────────────────────────────────────────────────────────────────────────
+   The shared extractor's proper-noun rule reads a run of capitalised tokens as
+   ONE name. `I`, `I'm`, `We're` and `Its` are capitalised, so the first thing
+   almost anyone types produces a fused entity:
+
+       "I'm Maya, I run product at Nummo"  →  I'm Maya
+       "I'm Dev and I handle engineering"  →  I'm Dev
+       "We're Nummo, a fintech"            →  We're Nummo
+       "Hi I'm Sarah"                      →  Hi I'm Sarah
+
+   Two costs, and the second is the worse one. The world model shows an entity
+   literally called "I'm Maya"; and when the same person is mentioned plainly
+   later, "Maya" resolves as a SEPARATE node, so their facts split across two
+   entities that never merge.
+
+   This is a chat problem, not a document one — prose rarely opens a sentence
+   with "I'm Maya" — so it is fixed here rather than by loosening the shared
+   extractor, which every uploaded file would pay for. `src/files/` stays
+   byte-identical, and a test pins that the shared extractor still fuses, so
+   this stays a conversation-lane repair rather than quietly becoming the
+   document rule.
+
+   DELIBERATELY NARROW. Only first-person and `it` forms are stripped. `My`
+   and `Our` are left alone: "My Chemical Romance" is a real name and the
+   greeting case that motivates this does not use them.
+   ────────────────────────────────────────────────────────────────────────── */
+const FUSED_PREFIX =
+  /^(?:(?:hi|hey|hello|yo|ok(?:ay)?|so|and|but)[,\s]+)*(?:i'?m|i'?ve|i|we'?re|we'?ve|we|it'?s|its)\s+/i;
+
+/**
+ * Drop a leading pronoun the shared extractor fused into a name.
+ * Returns the value unchanged when nothing is fused, or when stripping would
+ * leave nothing usable — a repair that empties the name is worse than the bug.
+ */
+function unfusePronoun(value) {
+  const v = String(value ?? '').trim();
+  if (!FUSED_PREFIX.test(v)) return v;
+  const stripped = v.replace(FUSED_PREFIX, '').trim();
+  if (stripped.length < 2) return v;
+  if (BLOCK.has(stripped.toLowerCase())) return v;
+  return stripped;
+}
+
 /** Trailing filler that commonly rides along after a cue capture. */
 const TRAILING_NOISE = /\s+(?:and|but|who|which|that|because|since|while|so|then|too|also)\b.*$/i;
+
+/* ──────────────────────────────────────────────────────────────────────────
+   PASS A2 — SOLO PROPER NOUNS
+   ──────────────────────────────────────────────────────────────────────────
+   The capitalisation work fixed the case where the user types in lowercase.
+   It did not fix the case where they type NORMALLY, and that turned out to be
+   the larger hole. `files/extractors.js` keeps a bare proper noun only when:
+
+       if (count >= 2 || v.includes(' '))
+
+   i.e. a single-word name must be said TWICE, or be two words, to survive.
+   That is a sound dedup heuristic for a 40-page document, where a one-off
+   capitalised word is usually a heading artefact. A chat message is one
+   sentence. Measured against the shared extractor, every one of these
+   returned zero entities:
+
+       "Razorpay is our main competitor"
+       "Dev handles engineering at Nummo"
+       "Nummo is based in Bangalore"
+       "I moved to the Bangalore office last month"
+
+   So the world model stayed empty even for a user typing in perfect sentence
+   case. The extractor is still NOT loosened — every uploaded document would
+   pay for it, and a test pins that it must not be. This pass runs only here.
+
+   TWO TIERS, BECAUSE POSITION IS THE WHOLE SIGNAL
+   ----------------------------------------------
+   Mid-sentence, a capital letter in chat is deliberate: nobody capitalises
+   "office" in the middle of a line by accident. That tier is accepted on the
+   blocklist alone.
+
+   Sentence-initially, the capital is grammar, not evidence — "Payments are
+   our biggest cost" starts with a capital for the same reason "Razorpay is
+   our main competitor" does. Tier 2 therefore demands a naming predicate
+   (`X is/was/are/were/has/have/had …`) AND that the word is not an ordinary
+   subject noun. That list is finite and this is its honest failure mode: an
+   unusual domain noun opening a sentence with `is` can mint an entity. Both
+   directions are pinned by tests so the tradeoff stays visible rather than
+   becoming folklore.
+   ────────────────────────────────────────────────────────────────────────── */
+
+/** A capitalised word: ≥3 chars, may carry internal caps/digits (GitHub, K8s). */
+const SOLO_RE = /[\p{Lu}][\p{L}\p{N}'’-]{2,}/gu;
+
+/** Contractions that are not possessives — "I'm", "we've", "don't". */
+const CONTRACTION_TAIL = /['’](?:t|m|re|ve|ll|d)$/i;
+
+/** Calendar words. Capitalised by convention, never an entity worth a node. */
+const CALENDAR = new Set((
+  'monday,tuesday,wednesday,thursday,friday,saturday,sunday,' +
+  'january,february,march,april,may,june,july,august,september,october,november,december,' +
+  'jan,feb,mar,apr,jun,jul,aug,sep,sept,oct,nov,dec,mon,tue,tues,wed,thu,thur,thurs,fri,sat,sun'
+).split(','));
+
+/**
+ * Ordinary subjects — words that routinely open a sentence with a naming
+ * predicate and are NOT names. Only consulted for tier 2, where sentence-
+ * initial capitalisation carries no information.
+ */
+const COMMON_SUBJECT = new Set((
+  // pronouns, determiners, discourse openers
+  'the,this,that,these,those,there,here,everything,everyone,someone,nobody,nothing,anything,' +
+  'yes,yeah,yep,nope,sure,also,but,and,however,anyway,actually,honestly,basically,maybe,' +
+  'today,tomorrow,yesterday,tonight,now,then,next,last,first,second,third,' +
+  // generic work / product nouns
+  'work,working,team,teams,product,products,project,projects,company,startup,business,' +
+  'pricing,price,prices,payment,payments,billing,revenue,cost,costs,budget,margin,' +
+  'growth,churn,retention,onboarding,activation,conversion,engagement,usage,' +
+  'user,users,customer,customers,client,clients,merchant,merchants,people,staff,' +
+  'engineering,design,marketing,sales,support,ops,finance,legal,hiring,recruiting,' +
+  'data,code,tests,testing,docs,documentation,api,apis,backend,frontend,database,' +
+  'performance,latency,security,privacy,quality,reliability,scale,scaling,infra,' +
+  'meeting,meetings,standup,sprint,roadmap,backlog,ticket,tickets,bug,bugs,issue,issues,' +
+  'deadline,launch,release,version,feature,features,plan,plans,goal,goals,problem,problems,' +
+  'question,questions,answer,answers,idea,ideas,thing,things,stuff,part,point,reason,' +
+  'everybody,most,some,many,few,both,either,neither,each,every,another,other,others'
+).split(','));
+
+/** True when the character before `index` ends a sentence (or starts the text). */
+function isSentenceInitial(text, index) {
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const ch = text[i];
+    if (ch === ' ' || ch === '\t') continue;
+    if (ch === '\n' || ch === '\r') return true;
+    return ch === '.' || ch === '!' || ch === '?' || ch === '•' || ch === '-' || ch === '"' || ch === '“';
+  }
+  return true;
+}
+
+/** The sentence-initial naming predicate: "Razorpay is …", "Nummo's team was …". */
+const NAMING_PREDICATE = /^(?:['’]s\s+\w+\s+|['’]s\s+)?\s*(?:is|was|are|were|has|have|had)\b/i;
+
+/**
+ * Solo capitalised proper nouns the shared extractor discarded.
+ *
+ * @param {string} text
+ * @param {Set<string>} covered  lowercased values already found by other passes,
+ *                               plus the individual words of any multi-word
+ *                               name — so "Nummo Technologies" does not also
+ *                               emit a competing "Nummo" node.
+ * @returns {Array<{type:string, value:string}>}
+ */
+function soloProperNouns(text, covered) {
+  const out = [];
+  const seen = new Set();
+  SOLO_RE.lastIndex = 0;
+  for (const m of text.matchAll(SOLO_RE)) {
+    const raw = m[0];
+    if (CONTRACTION_TAIL.test(raw)) continue;
+
+    const value = raw.replace(/['’]s$/i, '');           // possessive → bare name
+    const lower = value.toLowerCase();
+    if (value.length < 3) continue;
+    if (seen.has(lower) || covered.has(lower)) continue;
+    if (BLOCK.has(lower) || CALENDAR.has(lower)) continue;
+
+    if (isSentenceInitial(text, m.index)) {
+      // Tier 2 — capitalisation proves nothing here.
+      if (COMMON_SUBJECT.has(lower)) continue;
+      const rest = text.slice(m.index + raw.length);
+      if (!NAMING_PREDICATE.test(rest)) continue;
+    }
+
+    seen.add(lower);
+    out.push({ type: 'name', value });
+  }
+  return out;
+}
 
 /**
  * Clean one cue capture into an entity value, or null if it fails the bar.
@@ -163,25 +337,62 @@ export function extractConversationEntities(text, { knownEntities = [], limit = 
   if (!text || typeof text !== 'string') return [];
 
   const found = new Map();          // `${type}:${lowercased}` → entity
+  // Keyed on the VALUE, not `type:value`. Keying on both meant one company
+  // could arrive twice under two labels — "I work at Intercom" produced
+  // `Intercom:name` from the solo pass AND `Intercom:org` from the declaration
+  // cue, which is two graph nodes for one employer with its facts split
+  // between them. Same defect class as the fused pronoun above: one thing,
+  // two nodes, never merging.
+  //
+  // When a later pass carries a MORE SPECIFIC type, it wins and the count
+  // carries over — `name` is the extractor's fallback when it recognised a
+  // proper noun but nothing about it, so anything else is better information.
+  const SPECIFICITY = { name: 0 };
   const add = (type, value, source) => {
     const v = String(value).trim();
     if (!v) return;
-    const k = `${type}:${v.toLowerCase()}`;
+    const k = v.toLowerCase();
     const existing = found.get(k);
-    if (existing) { existing.count += 1; return; }
+    if (existing) {
+      existing.count += 1;
+      if ((SPECIFICITY[type] ?? 1) > (SPECIFICITY[existing.type] ?? 1)) {
+        existing.type = type;
+        existing.source = source;
+      }
+      return;
+    }
     found.set(k, { type, value: v, count: 1, source });
   };
 
   // ── Pass A — the shared document extractor, untouched ────────────────────
   for (const e of extractEntities(text, { limit })) {
-    add(e.type, e.value, 'shared');
+    add(e.type, unfusePronoun(e.value), 'shared');
   }
+
+  // ── Pass A2 — solo proper nouns the document dedup rule discarded ────────
+  // Runs on what Pass A already found so a multi-word name suppresses its own
+  // parts: "Nummo Technologies" must not also produce a rival "Nummo".
+  const covered = new Set();
+  for (const e of found.values()) {
+    const v = String(e.value).toLowerCase();
+    covered.add(v);
+    for (const w of v.split(/\s+/)) if (w) covered.add(w);
+  }
+  for (const e of soloProperNouns(text, covered)) add(e.type, e.value, 'solo');
 
   // ── Pass B — recognise what this owner already knows, ignoring case ──────
   const lower = text.toLowerCase();
   for (const known of knownEntities) {
     const name = String(known?.value ?? '').trim();
     if (name.length < 3) continue;
+    // THE INVARIANT, enforced where it can actually be relied on. The self
+    // entity is matched by GRAMMAR (pass D) and never by surface form — its
+    // label is the literal word "You", so a surface match turns "thank you"
+    // into a resolved entity and a stored fact. `knownEntitiesFor` also
+    // declines to offer it, but that is a convenience reader and any caller
+    // can supply its own list; this is the line that makes the contract hold
+    // regardless of who is calling.
+    if ((known?.type ?? 'name') === SELF_KIND) continue;
     const key = `${known.type ?? 'name'}:${name.toLowerCase()}`;
     if (found.has(key)) continue;
     // Word-boundary match so "ai" does not fire inside "aircraft".
@@ -199,8 +410,13 @@ export function extractConversationEntities(text, { knownEntities = [], limit = 
     for (const m of text.matchAll(re)) {
       const value = refineCapture(m[1]);
       if (!value) continue;
-      // If a known entity already covers this, Pass B's canonical form wins.
-      if (found.has(`${type}:${value.toLowerCase()}`)) continue;
+      // No skip. `add()` is keyed on the value and keeps the FIRST casing it
+      // saw — so Pass B's canonical form still wins, which is what the skip
+      // was protecting — while still letting a declaration cue upgrade the
+      // TYPE. Skipping here meant "I work at Intercom" stayed `name` because
+      // the solo pass got there first, and `org` is the better information:
+      // `name` is only what the extractor says when it recognised a proper
+      // noun and nothing about it.
       add(type, value, 'declared');
     }
   }
@@ -209,8 +425,12 @@ export function extractConversationEntities(text, { knownEntities = [], limit = 
   // Emitted LAST so it can never displace a named entity out of the cap, and
   // marked `isSelf` so the caller routes it to the owner's existing self node
   // rather than resolving a new entity called "You".
-  if (selfText && hasSelfDeclaration(selfText)) {
-    found.set(`${SELF_KIND}:${SELF_LABEL.toLowerCase()}`, {
+  // The WIDER predicate: the speaker must become a subject on plural turns
+  // too, or the fact builder has nothing to attach "our biggest problem is
+  // churn" to and the sentence is discarded before it is ever considered.
+  // Still deixis, never a name — the never-fuse invariant is untouched.
+  if (selfText && hasSpeakersWorld(selfText)) {
+    found.set(SELF_LABEL.toLowerCase(), {
       type: SELF_KIND, value: SELF_LABEL, count: 1, source: 'self', isSelf: true,
     });
   }
@@ -231,6 +451,25 @@ export function knownEntitiesFor(G, ownerId, { limit = 500 } = {}) {
     for (const node of G.nodesByType(ownerId, 'entity')) {
       const label = String(node.label ?? '').trim();
       const type = node.data?.entityType ?? 'name';
+      // THE SELF NODE IS NEVER A KNOWN ENTITY FOR PASS B.
+      //
+      // Its label is the literal word "You", and pass B is a case-insensitive
+      // surface match — so once `AQUA_SELF_ENTITY` created the node, every
+      // message containing "you" resolved it as a NAMED entity with
+      // `isSelf: false`. Three consequences, all measured:
+      //
+      //   • it entered `surfaceFormIndex` (which only skips `isSelf` entities),
+      //     substring-matched "you", and wrote a fact for any sentence with the
+      //     word in it — "thank you" became a stored fact about the user
+      //   • it forked a SECOND `You` node in the graph beside the real one
+      //   • it bypassed the contract this module documents: the self entity is
+      //     matched by GRAMMAR (pass D), never by surface form, precisely
+      //     because a token like "you" fires inside almost every sentence
+      //
+      // Same root as the retrieval-noise finding: the label "You" is a
+      // stopword wearing an entity's clothes. Excluded here, at the one place
+      // that hands surface forms to a matcher.
+      if (node.data?.entityType === SELF_KIND) continue;
       if (label.length >= 3) out.push({ value: label, type });
       for (const alias of node.data?.aliases ?? []) {
         const a = String(alias ?? '').trim();

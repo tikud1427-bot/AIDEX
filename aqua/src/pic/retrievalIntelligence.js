@@ -31,6 +31,49 @@ import { reasoningBoost } from './reasoningFeedback.js';
 
 const TEMPORAL_CUE = /\b(when|before|after|timeline|first|then|earlier|later|history|sequence|order of|chronolog)\b/i;
 
+/**
+ * A question the asker is asking ABOUT THEMSELVES.
+ *
+ * Deliberately local, and deliberately NOT `selfDeclaration.js`. That module
+ * answers "did the speaker STATE something about themselves" — a declaration.
+ * This answers "is the speaker ASKING about themselves" — a question. Related
+ * grammar, genuinely different predicates, and merging them would mean one of
+ * the two callers silently getting the other's rule.
+ *
+ * First-person SINGULAR only, matching the U1 precedent: `we`/`our` is a group
+ * claim, and anchoring it to the individual is the quiet inference that puts a
+ * wrong line in front of the model. Bare `me` is excluded too — "tell me about
+ * Nummo" is a request, not a question about the asker, and including it would
+ * anchor nearly every message.
+ */
+const SELF_QUERY_RE = /(?:^|[^\p{L}])(?:i|i'?m|i'?ve|my|mine|myself)(?:[^\p{L}]|$)/iu;
+
+/**
+ * …and asking it as a QUESTION.
+ *
+ * Without this, the anchor fired on every first-person message, so "I need to
+ * fix this bug in my code" pulled three sentences about the user's job into a
+ * debugging turn. Measured: that was the only turn in a five-message noise
+ * probe whose output changed, and narrowing to interrogatives removed it while
+ * keeping all eight retrieval wins. A question mark OR an interrogative opener
+ * — chat drops the mark constantly, and "where do I work again" is still a
+ * question.
+ *
+ * The same predicate exists in `core/declarativeIntent.js`, where it is used to
+ * REJECT questions rather than to select them. Kept local because this module
+ * documents itself as pure over injected deps and imports nothing outside its
+ * own directory; a shared regex is not worth being the first exception.
+ */
+const INTERROGATIVE = /^(?:so\s+|and\s+|but\s+|ok(?:ay)?[,\s]+|hey[,\s]+)*(?:what|when|where|which|who|whom|whose|why|how|is|are|was|were|do|does|did|can|could|should|would|will|have|has|had|am|remind|tell)\b/i;
+
+/** True when the asker is asking a question about themselves. */
+function isSelfQuestion(query) {
+  const q = String(query ?? '').trim();
+  if (!q) return false;
+  if (!SELF_QUERY_RE.test(q)) return false;
+  return q.endsWith('?') || INTERROGATIVE.test(q);
+}
+
 const W_TRUSTED  = 0.10;
 const W_DISPUTED = -0.20;
 const W_STALE    = -0.10;
@@ -77,11 +120,47 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
     entityMatches.splice(3);
   }
 
+  // ── Lane 2b: the asker themselves ──────────────────────────────────────────
+  //
+  // Lanes 1 and 2 are both LEXICAL: they need a word from the question to
+  // appear in a fact statement or an entity label. That works when the question
+  // names the thing ("Tell me about Nummo") and fails completely when it names
+  // a CATEGORY and the answer holds an INSTANCE:
+  //
+  //     "Where do I work now?"   vs  "I run product at Nummo, a fintech in Bangalore."
+  //     "Which city am I in?"    vs  "I moved to the Bangalore office last month."
+  //
+  // Measured: 6 of 8 on a populated store, and both misses were this shape.
+  // No amount of token matching bridges "work" → "Nummo" or "city" →
+  // "Bangalore" — the question and the answer share no vocabulary at all.
+  //
+  // The graph already holds the bridge. A first-person question is a question
+  // about the owner, the owner HAS a node, and `about` edges already run from
+  // it to every fact the user has stated about themselves. So a first-person
+  // question anchors on that node and lane 3 does the rest. This is not a
+  // synonym table and not a new store — it is the existing self entity being
+  // read for the first time on the retrieval side.
+  //
+  // Deliberately NOT added to `entityMatches`: that list is rendered to the
+  // model as "entities relevant to your question", and an item reading "You"
+  // is noise at best and a distraction at worst. The anchor exists to reach
+  // facts, so it is used for the hop only.
+  const selfAnchors = [];
+  if (isSelfQuestion(query)) {
+    try {
+      for (const n of G.nodesByType(ownerId, 'entity')) {
+        if (n?.data?.entityType !== 'self') continue;
+        selfAnchors.push({ entity: 'you', _nodeId: n.id });
+        break;
+      }
+    } catch { /* fail-open: no anchor is a smaller loss than a failed retrieval */ }
+  }
+
   // ── Lane 3: connected facts — one hop over `about` edges from matched
   //    entities; the graph surfacing what lexical matching missed ────────────
   const seenFactIds = new Set(factHits.map(h => h.fact.id));
   const connected = [];
-  for (const em of entityMatches) {
+  for (const em of [...entityMatches, ...selfAnchors]) {
     for (const { node } of G.neighbors(ownerId, em._nodeId, { type: 'fact', edgeType: 'about' })) {
       const factId = node.id.replace(/^fact:/, '');
       if (seenFactIds.has(factId)) continue;

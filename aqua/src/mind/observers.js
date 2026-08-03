@@ -139,8 +139,33 @@ const FACT_TO_BELIEF = {
   favorite_framework: (f) => ({ dimension: DIMENSIONS.PREFERENCES, key: 'frameworks',         value: f.value, strength: 0.8 }),
   favorite_editor:    (f) => ({ dimension: DIMENSIONS.PREFERENCES, key: 'editor',             value: f.value, strength: 0.85 }),
   favorite_os:        (f) => ({ dimension: DIMENSIONS.PREFERENCES, key: 'os',                 value: f.value, strength: 0.85 }),
+  // The single most basic thing AQUA can know, and it had no bridge either.
+  // `name` was extracted at 0.98 on "I'm Maya." and then went nowhere, so the
+  // card's "You" section rendered empty for a user who had introduced
+  // themselves in their first sentence. Same one-line gap as `project` below —
+  // found by rendering the card rather than by reading the map.
+  name:               (f) => ({ dimension: DIMENSIONS.IDENTITY,    key: 'name',               value: f.value, strength: 0.9 }),
   profession:         (f) => ({ dimension: DIMENSIONS.IDENTITY,    key: 'profession',         value: f.value, strength: 0.85 }),
   workplace:          (f) => ({ dimension: DIMENSIONS.IDENTITY,    key: 'organization',       value: f.value, strength: 0.85 }),
+  // What someone is BUILDING. This entry was missing, and its absence was the
+  // reason the card's "Working on" section was structurally empty for anyone
+  // who had not uploaded a document: the extractor caught the project
+  // perfectly (`project="…"`, schema match, 0.90) and then nothing consumed
+  // it, while `projectsFor()` read graph nodes typed project|product that the
+  // conversation extractor never produces.
+  //
+  // DECISION — projects live as a BELIEF, not as a guessed graph entity.
+  // Typing conversational proper nouns as projects would mean inferring which
+  // of "Nummo", "Bangalore" and "Razorpay" is the thing being built, and
+  // inference is what puts wrong lines on a trust screen. The user STATES
+  // this, so it belongs in the lane that holds stated things — where it is
+  // also correctable through the belief path that already exists, rather than
+  // an entity that can be dismissed but not renamed.
+  //
+  // The graph path is unchanged: documents still contribute project entities,
+  // and the read model unions the two. Strength matches profession/workplace
+  // — same kind of claim, same standing.
+  project:            (f) => ({ dimension: DIMENSIONS.IDENTITY,    key: 'project',            value: f.value, strength: 0.85 }),
   goal:               null, // handled by goalTracker, not beliefs
 };
 

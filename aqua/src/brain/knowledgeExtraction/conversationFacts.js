@@ -67,7 +67,7 @@
  * same validators.
  */
 import { createEvidence, createFact } from '../../files/evidence.js';
-import { isSelfDeclaration } from './selfDeclaration.js';
+import { isAboutSpeakersWorld } from './selfDeclaration.js';
 
 /** Conversational claims never reach document-grade confidence. */
 export const CONVERSATION_FACT_CONFIDENCE = 0.6;
@@ -125,7 +125,12 @@ function entitiesNamedIn(sentence, index, selfCanonical = null) {
   // also the honest mechanism — "I'm building X" names the speaker deictically,
   // not by any name, which is exactly why it never threatens the invariant that
   // no NAME may resolve to the self node.
-  if (selfCanonical && isSelfDeclaration(sentence)) named.add(selfCanonical);
+  // WIDER than `isSelfDeclaration` on purpose — see the long note in
+  // selfDeclaration.js. A fact stores the sentence verbatim with provenance
+  // and never reaches the belief writer, so "our biggest problem is churn"
+  // can be recorded here without becoming a claim about the individual. The
+  // card's singular-only rule is unchanged; this is a different question.
+  if (selfCanonical && isAboutSpeakersWorld(sentence)) named.add(selfCanonical);
   return [...named];
 }
 

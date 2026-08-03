@@ -11,13 +11,95 @@ import { createGoal, GOAL_STATUS, CAPS, createTimelineEvent } from './mindSchema
 import { touchMind } from './mindStore.js';
 import { pushTimeline } from './timeline.js';
 
+/* ──────────────────────────────────────────────────────────────────────────
+   GOAL DETECTION
+   ──────────────────────────────────────────────────────────────────────────
+   The previous table detected 1 of 10 realistic goal statements. Measured:
+
+     ✗ "I want to hit 10,000 active merchants by December."
+     ✗ "My top priority this quarter is launching the beta."
+     ✗ "we're aiming to close the seed round by March"
+     ✗ "the goal is to cut churn in half"
+     ✗ "I need to ship the pricing page this week"
+     ✓ "Long term I want to build AI that truly understands people."
+     ✗ "planning to hire two engineers"
+     ✗ "I'd like to get to profitability next year"
+     ✗ "trying to reduce onboarding time"
+     ✗ "our objective is 10k merchants"
+
+   Three separate causes, all the same shape — a coding-era heuristic applied
+   to how people actually talk:
+
+     1. A CLOSED VERB ALLOWLIST (ship|launch|build|finish|…). "hit", "get to",
+        "cut", "reduce" and every other outcome verb were invisible. A goal is
+        not a deploy.
+     2. `my goal is` required that exact possessive — "the goal is", "our
+        objective is", "my top priority is" all missed.
+     3. `i'm (trying|aiming|planning) to` required an explicit I'm/I am, so
+        bare "planning to …" and any `we`-subject aiming missed entirely.
+
+   WHY THE ALLOWLIST IS NOT SIMPLY WIDENED
+   ---------------------------------------
+   Opening the verb up is what makes "I want to know how OAuth works" a goal,
+   and a wrong goal is materially worse than a missing one: goals are the
+   heaviest single term in the understanding score (`goals:none` carries
+   weight 1.2, the largest gap in the whole model) and they render on the card
+   under "Aiming at". So the allowlist is replaced by a cue-led match plus an
+   EXCLUSION guard on the head verb: asking, checking and understanding are
+   requests, not intentions. That inverts the failure mode — an unusual
+   outcome verb now gets in, and a conversational one is turned away by name.
+   ────────────────────────────────────────────────────────────────────────── */
+
 // Detection: explicit goal statements + working-toward phrasing.
 const GOAL_PATTERNS = [
-  /\bmy goal is (?:to )?(.{4,90}?)(?:[.,;!]|$)/i,
-  /\bi(?:'m| am) (?:trying|working|aiming|planning) to (.{4,90}?)(?:[.,;!]|$)/i,
-  /\bi want to (?:finally |eventually )?((?:ship|launch|build|finish|complete|release|migrate|raise|hire|reach|grow|refactor|rewrite|land)\b.{0,80}?)(?:[.,;!]|$)/i,
-  /\bwe (?:need|want|plan) to ((?:ship|launch|build|finish|complete|release|migrate|raise|close)\b.{0,80}?)(?:[.,;!]|$)/i,
+  // "my/our goal is …", "the goal here is …", "my objective is …"
+  /\b(?:my|our|the)\s+(?:main\s+|primary\s+|current\s+)?(?:goal|objective|aim|mission|target)\b[^.!?;]{0,20}?\s+is\s+(?:to\s+)?(.{4,90}?)(?:[.,;!](?!\d)|$)/i,
+  // "my top priority this quarter is …"
+  /\b(?:my|our)\s+(?:top\s+|main\s+|biggest\s+|number one\s+)?priority\b[^.!?;]{0,24}?\s+is\s+(?:to\s+)?(.{4,90}?)(?:[.,;!](?!\d)|$)/i,
+  // "I'm trying to …", "we're aiming to …", and the bare participle form
+  /\b(?:(?:i|we)(?:'m|'re| am| are)\s+)?(?:trying|aiming|planning|hoping|looking|pushing|working)\s+(?:to|toward|towards)\s+(.{4,90}?)(?:[.,;!](?!\d)|$)/i,
+  // "I want to …", "I'd like to …", "I need to …" — and the we/plural forms
+  /\b(?:i|we)(?:'d)?\s+(?:want|need|plan|intend|would like|just want)\s+to\s+(?:finally\s+|eventually\s+)?(.{4,90}?)(?:[.,;!](?!\d)|$)/i,
+  /\b(?:i|we)'d\s+like\s+to\s+(.{4,90}?)(?:[.,;!](?!\d)|$)/i,
 ];
+
+/**
+ * Head verbs that make a capture a REQUEST rather than an intention.
+ *
+ * "I want to know how this works" and "I need to check the logs" are things
+ * the user wants from this turn, not things they are working toward. They must
+ * never reach the card, so they are named explicitly rather than excluded by
+ * an allowlist that would also drop every outcome verb nobody thought of.
+ */
+const NOT_A_GOAL_HEAD = new Set([
+  'know', 'understand', 'see', 'ask', 'hear', 'check', 'find', 'look',
+  'read', 'say', 'tell', 'talk', 'discuss', 'confirm', 'clarify', 'explain',
+  'remember', 'show', 'compare', 'review', 'double-check', 'verify', 'figure',
+]);
+
+/** Tokens that carry no goal. A capture made ENTIRELY of these is noise —
+ *  "do it", "get more", "be better". Checked per-token rather than against the
+ *  whole string, because the contentless case is usually two words, not one. */
+const CONTENTLESS = new Set((
+  'it,this,that,them,thing,things,stuff,something,anything,more,less,better,' +
+  'faster,best,out,up,down,go,going,be,do,doing,get,getting,make,making,work,on'
+).split(','));
+
+/**
+ * A capture is a goal unless it reads as a request or is empty of content.
+ * Kept strict on purpose: goals are the heaviest term in the understanding
+ * score and the most visible line on the card.
+ */
+function isGoalLike(capture) {
+  const v = String(capture ?? '').trim();
+  if (v.length < 4 || v.length > 90) return false;
+  if (v.endsWith('?')) return false;                 // a question is not a plan
+  const tokens = v.toLowerCase().split(/\s+/).map(t => t.replace(/[^\p{L}\p{N}-]/gu, '')).filter(Boolean);
+  if (!tokens.length) return false;
+  if (NOT_A_GOAL_HEAD.has(tokens[0])) return false;
+  if (tokens.every(t => CONTENTLESS.has(t))) return false;
+  return true;
+}
 
 const DONE_RE    = /\b(finished|completed|shipped|launched|released|done with|we shipped|it'?s live|merged)\b/i;
 const BLOCKED_RE = /\b(blocked (on|by)|stuck on|can'?t proceed|waiting (on|for))\b/i;
@@ -56,7 +138,10 @@ export function detectGoalTitles(text) {
   const titles = [];
   for (const p of GOAL_PATTERNS) {
     const m = text.match(p);
-    if (m?.[1]) titles.push(m[1].trim().replace(/\s+/g, ' '));
+    if (!m?.[1]) continue;
+    const title = m[1].trim().replace(/\s+/g, ' ');
+    if (!isGoalLike(title)) continue;
+    titles.push(title);
   }
   return [...new Set(titles)];
 }

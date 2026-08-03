@@ -97,6 +97,9 @@ function detectKeyIntent(query) {
 // key-index hit without steamrolling an exact category match. When
 // semanticScores is null/absent (embeddings disabled or failed) this block is
 // inert and scoring is byte-identical to pre-Phase-2.
+/** An explicit per-key hint outranks the coarse category filter (500). */
+const HINT_WEIGHT = 600;
+
 const SEM_FLOOR  = 0.55;   // cosine below this = no semantic signal
 const SEM_WEIGHT = 700;    // (cosine - floor) * weight → boost
 
@@ -144,12 +147,21 @@ function scoreRelevance(fact, query, ctx) {
   }
   
   // 7. Retrieval Hints Match
+  //
+  // WEIGHTED ABOVE THE CATEGORY FILTER (500), deliberately. A category filter
+  // is a COARSE signal — "this whole category might be relevant". A retrieval
+  // hint is a SPECIFIC one — the schema author listed this exact word as
+  // meaning this exact key. The specific signal losing to the coarse one is
+  // backwards, and it was measurable: "What is my company called?" returned
+  // `cofounder` because `company` maps to the WORK category (+500, and
+  // cofounder lives in `work`) while `project` — whose retrievalHints name
+  // `company` outright — could only earn +100 and lost by 400 points.
   const schema = getSchema(fact.key);
   if (schema?.retrievalHints) {
     for (const hint of schema.retrievalHints) {
       if (qLower.includes(hint.toLowerCase())) {
-        score += 100;
-        intentScore += 100;
+        score += HINT_WEIGHT;
+        intentScore += HINT_WEIGHT;
         break;
       }
     }

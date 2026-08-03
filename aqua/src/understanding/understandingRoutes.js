@@ -78,17 +78,66 @@ function publicGoal(g) {
   };
 }
 
+/** The belief key that holds what the user said they are building. Excluded
+ *  from the "You" section so a project never renders twice on one card — the
+ *  same technique `isDismissalKey` already uses for bookkeeping rows. It still
+ *  counts toward coverage, because it IS something AQUA knows. */
+export const PROJECT_BELIEF_KEY = 'project';
+
+/** One or more project labels off a single belief. `project` is a
+ *  MERGE_COLLECTION field, so its value can arrive as an array or as a
+ *  comma-joined string; both mean the same thing to a reader. */
+function projectLabels(belief) {
+  const raw = belief?.value;
+  const parts = Array.isArray(raw) ? raw : String(raw ?? '').split(',');
+  return parts.map(s => String(s).trim()).filter(s => s.length >= 2).slice(0, 4);
+}
+
 /** Projects the graph knows about, newest first. Fail-open — a card without
- *  projects is fine; a 500 on the trust screen is not. */
+ *  projects is fine; a 500 on the trust screen is not.
+ *
+ *  UNION, not replacement. A document that names a project still produces a
+ *  graph entity; a person who SAYS what they are building now produces a
+ *  belief. Before this, only the first existed, so the section was empty for
+ *  every conversation-only account — which is everyone on day one. Stated
+ *  projects lead because the person saying it outranks a file mentioning it,
+ *  the same ordering U3 established for every other kind of evidence. */
 function projectsFor(ownerId, mind = null) {
   const dismissed = mind ? dismissedEntityIds(mind) : new Set();
+  const out = [];
+  const seen = new Set();
+
   try {
-    return (nodesByType(ownerId, 'entity') ?? [])
-      .filter(n => n?.data?.entityType === 'project' || n?.data?.entityType === 'product')
-      .filter(n => !dismissed.has(n.id))
-      .sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0))
-      .map(n => ({ id: n.id, label: n.label }));
-  } catch { return []; }
+    for (const b of getBeliefs(mind, { dimension: 'identity' })) {
+      if (b?.key !== PROJECT_BELIEF_KEY || isDismissalKey(b.key)) continue;
+      for (const label of projectLabels(b)) {
+        const k = label.toLowerCase();
+        if (seen.has(k)) continue;
+        seen.add(k);
+        out.push({
+          id: `belief:identity:${PROJECT_BELIEF_KEY}`,
+          label,
+          ref: `belief:identity:${PROJECT_BELIEF_KEY}`,
+          confidence: Number(b.confidence ?? 0.8),
+          source: b.source ?? null,
+        });
+      }
+    }
+  } catch { /* fail-open */ }
+
+  try {
+    for (const n of nodesByType(ownerId, 'entity') ?? []) {
+      const t = n?.data?.entityType;
+      if (t !== 'project' && t !== 'product') continue;
+      if (dismissed.has(n.id)) continue;
+      const k = String(n.label ?? '').toLowerCase();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      out.push({ id: n.id, label: n.label, ref: `entity:${n.id}`, confidence: 0.8, updatedAt: n.updatedAt ?? 0 });
+    }
+  } catch { /* fail-open */ }
+
+  return out;
 }
 
 /** Everything the card needs, assembled from what already exists. */
@@ -102,9 +151,17 @@ function cardFor(ownerId, mind) {
   let gaps = {};
   try { gaps = findGaps(ownerId) ?? {}; } catch { /* fail-open */ }
 
+  // Coverage sees EVERYTHING, including the project belief — it is knowledge
+  // and the score must say so. The card sees the same set minus that one key,
+  // because it renders in its own "Working on" section and a line appearing
+  // twice under two headings reads as padding, not as understanding.
   const coverage = buildCoverage({ beliefsByDimension, goals, gaps });
+  const cardBeliefs = {
+    ...beliefsByDimension,
+    identity: (beliefsByDimension.identity ?? []).filter(b => b?.key !== PROJECT_BELIEF_KEY),
+  };
   const card = buildCard({
-    beliefsByDimension, goals,
+    beliefsByDimension: cardBeliefs, goals,
     projects: projectsFor(ownerId, mind),
     sources: [{ kind: 'conversation', count: mind.turnCount ?? 0 }],
     // The ONE score. Not recomputed here — the card and the dashboard read the
@@ -333,9 +390,10 @@ router.get('/', (req, res) => {
     confidence: coverage.confidence,
     dimensions: coverage.dimensions,
     sections,
-    // Projects live in the graph, not the Mind, so they were absent from the
-    // dashboard entirely — the read model rendered beliefs and goals only.
-    projects: projectsFor(ownerId, mind).map(p => ({ ...p, ref: `entity:${p.id}` })),
+    // Projects come from two lanes now — the graph (a document named it) and
+    // the Mind (the user said it) — so each carries the ref that actually
+    // corrects it rather than being stamped as an entity it may not be.
+    projects: projectsFor(ownerId, mind).map(p => ({ ...p, ref: p.ref ?? `entity:${p.id}` })),
     goals: goals
       .sort((a, b) => (b.lastMentionedAt ?? 0) - (a.lastMentionedAt ?? 0))
       .map(publicGoal),

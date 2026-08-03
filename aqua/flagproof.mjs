@@ -224,10 +224,16 @@ const passthrough = gtky.every(m =>
 delete process.env.AQUA_UUS;
 const gated = IM.classifyForMode('understanding', gtky[0], CL.classifyTask).task === CL.classifyTask(gtky[0]).task;
 
+// This check used to require `bare > 0` — i.e. it asserted that intro turns
+// were BROKEN without the mode, which is what made the mode worth having.
+// P1 (declarativeIntent.js at the classifier fallback seam) fixed the cause for
+// every turn in the product, so `bare` is now 0 and the old form could only
+// pass by the defect coming back. Inverted: what still has to hold is that
+// intro turns clear the threshold, whichever layer gets them there.
 check('AQUA_UUS',
-  'interview mode lifts every intro turn above the verification threshold',
-  bare > 0 && inMode === 0,
-  `unclassified → ${bare}/${gtky.length} below 0.5 (verification + debate); in mode → ${inMode}/${gtky.length}`);
+  'intro turns never trip verification — with or without the mode',
+  bare === 0 && inMode === 0,
+  `unclassified → ${bare}/${gtky.length} below 0.5; in mode → ${inMode}/${gtky.length}`);
 
 check('AQUA_UUS',
   'no mode means byte-identical classification, and the flag still gates it',

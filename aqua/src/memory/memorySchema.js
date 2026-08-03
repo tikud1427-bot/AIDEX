@@ -311,7 +311,14 @@ export const MEMORY_SCHEMA = [
       { regex: /i(?:'m| am) (?:building|working on|developing|creating|making|shipping) ([A-Za-zÀ-ÿ0-9][\w .'-]{1,40}?)(?:\s*[,.!?]|$|\s+(?:with|using|for|in|and|that|which|to)\b)/i, group: 1, reason: 'building', confidence: 0.9,
         transform: (m) => m[1].replace(/^(?:a|an|the|my|our|this|that|some)\s+/i, '').trim() || null },
       { regex: /my (?:startup|project|company|product|app|platform|saas) is (?:called |named )?([A-Za-zÀ-ÿ0-9][\w .'-]{1,40}?)(?:\s*[,.!?]|$|\s+(?:and|which|that)\b)/i, group: 1, reason: 'my_project', confidence: 0.92 },
-      { regex: /i (?:founded|co-?founded|started|launched|run) ([A-Za-zÀ-ÿ0-9][\w .'-]{1,40}?)(?:\s*[,.!?]|$|\s+(?:with|in|and|last|back)\b)/i, group: 1, reason: 'founded', confidence: 0.92 },
+      // `at`/`for` added to the boundary set. Without them, "I run product at
+      // Nummo" captured the whole phrase "product at Nummo" as a project name,
+      // which then rendered on the understanding card as something the user was
+      // building. It is a role and a workplace, not a project. With the
+      // boundary in place the capture is "product", which validateProject
+      // already rejects as a bare generic noun — so the sentence correctly
+      // yields no project at all rather than a wrong one.
+      { regex: /i (?:founded|co-?founded|started|launched|run) ([A-Za-zÀ-ÿ0-9][\w .'-]{1,40}?)(?:\s*[,.!?]|$|\s+(?:with|in|and|last|back|at|for)\b)/i, group: 1, reason: 'founded', confidence: 0.92 },
     ], normalizer: normalizeTrim, validator: validateProject, multiValue: true, conflictPolicy: CONFLICT_POLICIES.MERGE_COLLECTION, importance: 8, baseConfidence: 0.9, retrievalHints: ['project', 'startup', 'building', 'working on', 'company'] },
   { category: CATEGORIES.WORK, key: 'cofounder', aliases: ['co_founder', 'business_partner'], patterns: [
       { regex: /my (?:co-?founder|business partner) (?:is |'s )?([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ'-]{1,30})/i, group: 1, reason: 'cofounder_name' },

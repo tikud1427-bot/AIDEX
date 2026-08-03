@@ -41,6 +41,8 @@
  *      (prevents "I love TypeScript" → personal_info instead of coding)
  */
 
+import { resolveDeclarativeIntent } from './declarativeIntent.js';
+
 // ── Pattern definitions ────────────────────────────────────────────────────────
 
 // Named so the v4 research/coding guard (see computeScores) can test against
@@ -422,6 +424,14 @@ export function classifyTask(userMessage, history = []) {
     const totalScore       = Object.values(scores).reduce((a, b) => a + b, 0);
     const looksFactual     = (scores.simple_qa ?? 0) > 0 || totalScore === 0;
     if (substantiveScore < 1.0 && !looksFactual) {
+      // P1 — a short first-person statement is not small talk. "I moved to the
+      // Bangalore office" and "who is on my team again?" both land here today
+      // and are labelled `conversation`, which reaches the same minimal profile
+      // as chit-chat and tells the memory lane nothing about what kind of turn
+      // this is. Consulted only on the way to a fallback, so a scored message
+      // is never affected. See declarativeIntent.js.
+      const declared = resolveDeclarativeIntent(msg);
+      if (declared) return { task: declared.task, confidence: declared.confidence, labels: declared.labels };
       return { task: 'conversation', confidence: 0.85, labels: ['conversation'] };
     }
   }
@@ -431,6 +441,14 @@ export function classifyTask(userMessage, history = []) {
   const [secondTask, secondScore] = sorted[1] ?? [null, 0];
 
   if (topScore === 0) {
+    // P1 — THE zero-score fallback, and the widest-blast-radius line in the
+    // engine. Measured at 10/20 on realistic first-session traffic, every one
+    // of them returning 0.45: below LOW_CONFIDENCE_THRESHOLD, so verification
+    // and debate ran on half of all turns and the streamed answer was replaced
+    // mid-read. A first-person statement is the one thing we can identify here
+    // structurally rather than by guessing at message length.
+    const declared = resolveDeclarativeIntent(msg);
+    if (declared) return { task: declared.task, confidence: declared.confidence, labels: declared.labels };
     const fallback = msg.length < 120 ? 'simple_qa' : 'research';
     return { task: fallback, confidence: 0.45, labels: [fallback] };
   }
