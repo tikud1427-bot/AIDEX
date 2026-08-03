@@ -14,6 +14,8 @@ const app      = express();
 const mongoose       = require("mongoose");
 const bcrypt         = require("bcrypt");
 const session        = require("express-session");
+const helmet         = require("helmet");
+const { rateLimit }  = require("express-rate-limit");
 const multer         = require("multer");
 const fs             = require("fs");
 const path           = require("path");
@@ -88,6 +90,58 @@ app.post(
     }
   }
 );
+
+// ── Security headers ──────────────────────────────────────────────────────────
+//
+// The audit found NO helmet and NO rate limiting on a service that fronts an
+// LLM and hands out free daily credits with no email verification. Both are
+// added here.
+//
+// Placed AFTER the Razorpay webhook (which needs its raw body untouched) and
+// BEFORE the body parsers, so every route below is covered.
+//
+// `trust proxy` is already set at line 52 — VERIFIED, not assumed. It matters
+// more than it looks: behind Render every request arrives from the proxy, so
+// without it a rate limiter keys the whole internet to one bucket and a single
+// abuser locks out every user.
+//
+// CSP IS DELIBERATELY OFF. This app serves EJS views AND a Vite-built SPA with
+// content-hashed assets; a policy written without auditing both breaks the site
+// silently and in ways that only show up in a browser. It needs its own pass
+// with someone watching the console. Everything helmet does that CANNOT break a
+// working page — nosniff, frameguard, HSTS, referrer policy, DNS prefetch
+// control — is on.
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginEmbedderPolicy: false,   // would block the SPA's cross-origin assets
+}));
+
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+//
+// Two limiters, not one. A single global limiter would have to be loose enough
+// for a page load that fetches a dozen content-hashed assets, which makes it
+// useless for the two things actually worth protecting.
+//
+// KNOWN LIMITATION, stated rather than discovered later: the default store is
+// in-memory, so limits are PER INSTANCE. Scale to two Render instances and the
+// effective limit doubles. That is a degradation, not a hole — and it is the
+// same instance-count question already open from the Mongo multiple-writers
+// alarm. A shared store is the fix when that is resolved.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,                          // per IP per 15 min — brute force + signup abuse
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Please try again in a few minutes." },
+});
+
+const engineLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,                          // per IP per minute — generous for a human, ruinous for a script
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "You're sending requests faster than we can answer. Give it a moment." },
+});
 
 // ── Body parsers & static ─────────────────────────────────────────────────────
 app.use(express.json({ limit: "50mb" })); // AQUA project uploads (base64 archives) need a large body limit
@@ -188,6 +242,11 @@ passport.use(
         let user = await User.findOne({ email });
         if (!user) {
           user = await new User({ email, password: "google-oauth" }).save();
+          // FIRST RUN. `$locals` is mongoose's per-document scratch space — never
+          // persisted, so this marks the request without touching the schema.
+          // The callback reads it to send a brand-new account into the product
+          // instead of the workspace dashboard. See the redirect note below.
+          user.$locals.justCreated = true;
         }
         return done(null, user);
       } catch (err) {
@@ -391,6 +450,7 @@ aquaEngine.use((req, res, next) => {
 
 app.use(
   "/api/aqua",
+  engineLimiter,          // before requireLogin: an unauthenticated flood still costs us sockets
   requireLogin,
   (req, res, next) => {
     req.aquaUserId = String(req.session.userId);
@@ -1048,7 +1108,7 @@ app.get("/resume/:id", requireLogin, async (req, res) => {
 app.get("/login",  redirectIfLoggedIn, (req, res) => res.render("login"));
 app.get("/signup", redirectIfLoggedIn, (req, res) => res.render("signup"));
 
-app.post("/login", async (req, res) => {
+app.post("/login", authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).send("All fields are required");
@@ -1068,7 +1128,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-app.get("/auth/google", passport.authenticate("google", { scope: ["profile", "email"] }));
+app.get("/auth/google", authLimiter, passport.authenticate("google", { scope: ["profile", "email"] }));
 
 app.get(
   "/auth/google/callback",
@@ -1076,7 +1136,12 @@ app.get(
   (req, res) => {
     req.session.user   = { _id: req.user._id, email: req.user.email, username: req.user.email.split("@")[0] };
     req.session.userId = req.user._id;
-    req.session.save(() => res.redirect("/home"));
+    // Same first-run rule as /signup — a Google account created during THIS
+    // round trip is a new user and belongs in the product. A returning one
+    // keeps the workspace. Optional chaining because `$locals` is only set on
+    // the creation path.
+    const firstRun = req.user?.$locals?.justCreated === true;
+    req.session.save(() => res.redirect(firstRun ? "/aqua" : "/home"));
   },
 );
 
@@ -1120,7 +1185,7 @@ app.get(
   },
 );
 
-app.post("/signup", async (req, res) => {
+app.post("/signup", authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).send("All fields are required");
@@ -1138,7 +1203,18 @@ app.post("/signup", async (req, res) => {
 
     req.session.user   = { _id: newUser._id, email: newUser.email, username: newUser.email.split("@")[0] };
     req.session.userId = newUser._id;
-    req.session.save(() => res.redirect("/home"));
+    // ── THE FUNNEL ────────────────────────────────────────────────────────────
+    // A new account goes to the PRODUCT, not to the workspace dashboard.
+    //
+    // The landing page promises "The AI that already understands your work."
+    // Signup then dropped the user on /home — <title>Workspace — Aquiplex</title>,
+    // nineteen links, bundles and usage — and they had to find "Open Aqua" among
+    // them before ever meeting the thing they signed up for. The intro, the
+    // interviewer persona and the understanding card all sit behind that click.
+    //
+    // /home is NOT removed: for a returning user it is a legitimate workspace,
+    // and /login still goes there. Only the first run changes.
+    req.session.save(() => res.redirect("/aqua"));
   } catch (err) {
     console.error(err);
     res.status(500).send("Signup error");
