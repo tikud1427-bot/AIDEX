@@ -32,6 +32,7 @@ import intelligenceRoute  from "./src/routes/intelligence.js";
 import brainRoute         from "./src/routes/brain.js";
 import {
   brainEnabled, ingestEnabled, factIngestEnabled, contextV2Enabled, reflectV2Enabled, twinV2Enabled,
+  revisionVoiceEnabled,
 } from "./src/brain/index.js";
 import { selfEntityEnabled } from "./src/brain/identity/selfEntity.js";
 import { picEnabled, consolidateEnabled, CONSOLIDATE_EVERY_TURNS } from "./src/pic/core.js";
@@ -75,7 +76,8 @@ try {
     `[BRAIN] flags brain=${state(brainEnabled())} ingest=${state(ingestEnabled())} ` +
     `ingestFacts=${state(factIngestEnabled())} ` +
     `contextV2=${state(contextV2Enabled())} reflectV2=${state(reflectV2Enabled())} ` +
-    `twinV2=${state(twinV2Enabled())} selfEntity=${state(selfEntityEnabled())}`,
+    `twinV2=${state(twinV2Enabled())} selfEntity=${state(selfEntityEnabled())} ` +
+    `revisionVoice=${state(revisionVoiceEnabled())}`,
   );
 } catch (err) {
   console.warn(`[BRAIN] flag report unavailable: ${err?.message ?? err}`);

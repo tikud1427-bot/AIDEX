@@ -75,6 +75,39 @@ export async function correctItem(
   });
 }
 
+/* ────────────────────────────────────────────────────────────────────────────
+   WHAT CHANGED — the revisions AQUA made to its own understanding.
+   ────────────────────────────────────────────────────────────────────────────
+   The other two screens answer "what does AQUA know about me". This answers
+   "what did it change its mind about", which is the half a bigger context
+   window cannot do: a transcript gives an assistant recall, not a position
+   that can be revised.
+
+   Read-only. There is deliberately no "not quite" here — a revision is a
+   record of something that happened, not a claim to be corrected. The
+   underlying belief IS correctable, on the sections above.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+export interface UnderstandingChange {
+  at: number;
+  summary: string | null;
+  entities: number;
+  relationships: number;
+  obsoleted: number;
+  revised: number;
+  /** Whether AQUA acted on the revision or merely noticed it. With
+   *  AQUA_REFLECT_V2 off the delta is still computed as a dry-run, so an
+   *  unapplied entry is real history rather than a failure. */
+  applied: boolean;
+}
+
+export async function fetchChanges(limit = 8): Promise<UnderstandingChange[]> {
+  const { data } = await apiClient.get<{ success: boolean; changes?: UnderstandingChange[] }>(
+    '/brain/changes', { params: { limit } },
+  );
+  return data.changes ?? [];
+}
+
 export interface IntroState {
   ownerId: string | null;
   hasIntro: boolean;

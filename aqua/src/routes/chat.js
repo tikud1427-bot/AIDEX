@@ -659,7 +659,17 @@ async function prepareTurn({ userMessage, workspaceId, conversationId, userId = 
   // CIE directive rides the SAME channel the Phase-4 reasoning directive
   // already owns — appended after it, never replacing it. Empty when CIE is
   // off or the style is 'fast', keeping casual traffic byte-identical.
-  const reasoningDirective = [reasoning.directive, cognition.directive, interviewDirective].filter(Boolean).join('\n');
+  // The revision voice rides the SAME directive channel, appended last so it
+  // never displaces reasoning or the interviewer. Empty on almost every turn:
+  // the flag is off by default, the turn must be a conversational one, and a
+  // revision is raised at most once ever. Fail-open — AQUA noticing something
+  // is never worth failing a turn over. See brain/reflectionV2/revisionVoice.js.
+  let revisionDirective = '';
+  try {
+    revisionDirective = Brain.revisionDirectiveFor(memoryOwner, { taskType, mode });
+  } catch { revisionDirective = ''; }
+
+  const reasoningDirective = [reasoning.directive, cognition.directive, interviewDirective, revisionDirective].filter(Boolean).join('\n');
   const { prompt: systemPrompt, modules: promptModules } = buildSystemPrompt(taskType, memoryBlock, reasoningDirective, combinedContext, intelligence.synthesis.text, identityIntent, searchContext);
 
   // ── 7. Build context window (short-term message history) ─────────────────────

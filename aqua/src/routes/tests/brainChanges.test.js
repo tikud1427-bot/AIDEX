@@ -141,3 +141,42 @@ test('an unapplied revision is still real history', async () => {
   assert.equal(r.body.changes.length, 1);
   assert.equal(r.body.changes[0].applied, false);
 });
+
+// ── The cross-boundary contract ──────────────────────────────────────────────
+//
+// Precedent: "U4: the server score matches the client formula exactly". Same
+// reasoning here. This endpoint has one consumer — the "What changed" section
+// of the understanding dashboard — and if a key is renamed server-side the UI
+// does not error, it renders an EMPTY SECTION. A silent blank on the screen
+// whose whole job is showing AQUA admitting it was wrong is the worst possible
+// failure mode, and nothing else in either battery would catch it.
+//
+// Skipped rather than failed when the frontend is absent, so the engine stays
+// independently testable when it is shipped on its own.
+import { existsSync, readFileSync } from 'node:fs';
+import { fileURLToPath as _f } from 'node:url';
+import _path from 'node:path';
+
+const CLIENT = _path.resolve(
+  _path.dirname(_f(import.meta.url)), '..', '..', '..', '..',
+  'aqua-frontend', 'src', 'api', 'understanding.ts',
+);
+
+test('every field the UI reads is a field the endpoint sends', async (t) => {
+  if (!existsSync(CLIENT)) return t.skip('aqua-frontend not present in this checkout');
+
+  const src = readFileSync(CLIENT, 'utf8');
+  const iface = src.slice(src.indexOf('export interface UnderstandingChange'));
+  const declared = [...iface.slice(0, iface.indexOf('}')).matchAll(/^\s{2}(\w+)\??:/gm)].map(m => m[1]);
+  assert.ok(declared.length >= 5, `could not parse the client interface: ${declared.join(',')}`);
+
+  _resetPicStoreForTests();
+  ledger('user:contract', 'reflection', {
+    summary: 'x', entities: 1, relationships: 1, obsoleted: 1, revised: 1, applied: true,
+  });
+  const r = await get('/brain/changes', 'contract');
+  const served = Object.keys(r.body.changes[0] ?? {});
+
+  const missing = declared.filter(k => !served.includes(k));
+  assert.deepEqual(missing, [], `the UI reads fields the endpoint does not send: ${missing.join(', ')}`);
+});

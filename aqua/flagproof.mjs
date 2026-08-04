@@ -138,6 +138,40 @@ check('AQUA_REFLECT_V2',
   reflectOn.delta !== null && typeof reflectOn.delta === 'object' && !Array.isArray(reflectOn.delta),
   `on → applied=${reflectOn.applied} deltaKeys=[${Object.keys(reflectOn.delta ?? {}).join(', ')}]`);
 
+// ── AQUA_REVISION_VOICE ──────────────────────────────────────────────────────
+// Claim: with the flag on, a recorded revision becomes ONE directive on ONE
+// suitable turn — named, never counted, never repeated, never on a working
+// turn. Every other flag here changes what AQUA KNOWS; this one changes what it
+// SAYS unprompted, which is the one worth being able to prove.
+delete process.env.AQUA_REVISION_VOICE;
+const voiceOff = Brain.revisionDirectiveFor(O, { taskType: 'conversation' });
+
+process.env.AQUA_REVISION_VOICE = 'on';
+const voiceOn    = Brain.revisionDirectiveFor(O, { taskType: 'conversation' });
+const voiceAgain = Brain.revisionDirectiveFor(O, { taskType: 'conversation' });
+const voiceCoding = Brain.revisionDirectiveFor(O, { taskType: 'coding' });
+delete process.env.AQUA_REVISION_VOICE;
+
+check('AQUA_REVISION_VOICE',
+  'off says nothing, whatever AQUA noticed',
+  voiceOff === '',
+  `off → ${voiceOff === '' ? 'silent' : `LEAKED ${voiceOff.length} chars`}`);
+
+check('AQUA_REVISION_VOICE',
+  'on raises a revision by NAME, never as a count of anything',
+  voiceOn.length > 0 && !/\d+ entit/.test(voiceOn),
+  voiceOn ? `raised: "${voiceOn.split('\n')[1] ?? ''}"` : 'nothing was raised');
+
+check('AQUA_REVISION_VOICE',
+  'raised ONCE — a second turn says nothing about the same revision',
+  voiceAgain === '',
+  `second turn → ${voiceAgain === '' ? 'silent' : 'REPEATED'}`);
+
+check('AQUA_REVISION_VOICE',
+  'never interrupts a working turn',
+  voiceCoding === '',
+  `coding turn → ${voiceCoding === '' ? 'silent' : 'INTERRUPTED'}`);
+
 // ── AQUA_UUS (User Understanding System) ─────────────────────────────────────
 // Claim: a fact the user STATED outright earns explicit standing, instead of
 // arriving at the confidence appropriate to something merely inferred.

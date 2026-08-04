@@ -35,6 +35,9 @@ import * as P from './worldModel/projection.js';
 import { ingestConversationTurn, ingestMetrics, ingestEnabled, factIngestEnabled } from './knowledgeExtraction/conversationIngest.js';
 import { assembleTurnContext, contextEngineMetrics, contextV2Enabled } from './contextEngine/index.js';
 import { reflectWorldModel, reflectionV2Metrics, reflectV2Enabled, forgetOwner as forgetReflectionOwner } from './reflectionV2/index.js';
+import { loadSurfacedAt, markSurfaced } from './reflectionV2/reflectionStore.js';
+import { buildRevisionDirective, isSuitableTurn } from './reflectionV2/revisionVoice.js';
+import { getLedger } from '../pic/picStore.js';
 import { observeTwinTurn, twinView, twinMetrics, twinV2Enabled } from './digitalTwin/index.js';
 import { buildUnifiedTimeline } from './timelineV2/timelineView.js';
 import { buildChains, LIFECYCLE_STAGES } from './timelineV2/chainBuilder.js';
@@ -251,6 +254,81 @@ export function reflectTurn(ownerId, opts = {}) {
 }
 
 export function reflectV2Active() { return reflectV2Enabled(); }
+
+/**
+ * Is AQUA allowed to RAISE a revision in conversation?
+ *
+ * Its own flag, subordinate to the master switch and independent of
+ * `AQUA_REFLECT_V2`. Deliberately not folded into that one: REFLECT_V2 controls
+ * whether AQUA ACTS on a delta (archiving, annotating), which is invisible.
+ * This controls whether AQUA SPEAKS about one, which every user sees. Those
+ * should not share a switch — you may well want the first without the second,
+ * and nobody should get the second by accident.
+ */
+export function revisionVoiceEnabled() {
+  return brainEnabled() && String(process.env.AQUA_REVISION_VOICE ?? '').toLowerCase() === 'on';
+}
+
+/**
+ * The one revision worth raising on THIS turn, as a prompt directive.
+ *
+ * Returns '' for almost every turn, which is the point. Empty when: the flag is
+ * off, the turn is not a suitable moment, no revision has been recorded since
+ * the last one raised, or the newest one is too small to be news.
+ *
+ * SIDE EFFECT, and it is the important one: a non-empty return ADVANCES the
+ * surfaced watermark. Reading this twice for one turn would burn the revision.
+ * Called exactly once per turn, from the prompt assembly seam.
+ */
+export function revisionDirectiveFor(ownerId, { taskType = null, mode = null } = {}) {
+  if (!ownerId || !revisionVoiceEnabled()) return '';
+  if (!isSuitableTurn({ taskType, mode })) return '';
+  return guard('revisionDirectiveFor', '', () => {
+    const since = loadSurfacedAt(ownerId);
+    // Insertion order IS chronology — `getLedger` returns the ring in the order
+    // entries were appended. Deliberately NOT sorted by `at`: two reflections
+    // can land in the same millisecond (the codebase already has one
+    // millisecond-resolution note, on obsolescence), and a stable sort on tied
+    // keys then INVERTS the real order. Walking the array backwards is exact.
+    const pending = getLedger(ownerId, { limit: 50 })
+      .filter(e => e?.op === 'reflection' && Number(e.at) > since);
+    if (!pending.length) return '';
+
+    // NEWEST FIRST, BUT KEEP LOOKING.
+    //
+    // The first version took `[0]` after sorting and gave up if it was not
+    // worth raising. That is a real product bug, not a near miss: reflection
+    // runs on a cadence and most deltas are small, so a trivial one-entity
+    // revision arriving after an interesting one would MASK it permanently —
+    // the interesting revision stays pending forever behind a revision that
+    // will never be raised, and the feature is silent in practice. Caught by
+    // flagproof failing on Ananya's machine (and, once looked at properly,
+    // 2 runs in 5 on mine).
+    //
+    // Preference for recency is kept — it is still the current picture — but
+    // "prefer the newest" was never meant to mean "give up if the newest is
+    // boring".
+    let chosen = null;
+    for (let i = pending.length - 1; i >= 0; i -= 1) {
+      const directive = buildRevisionDirective(pending[i]);
+      if (directive) { chosen = { entry: pending[i], directive }; break; }
+    }
+
+    // The watermark advances past EVERYTHING considered, not just what was
+    // raised. Entries examined and judged not worth raising are decided, not
+    // deferred; leaving them pending means rescanning them on every subsequent
+    // turn forever, and — worse — a future interesting revision would sit
+    // behind them in exactly the way this fix exists to prevent.
+    const highest = pending.reduce((m, e) => Math.max(m, Number(e.at) || 0), 0);
+    if (!chosen) {
+      markSurfaced(ownerId, highest || Date.now());
+      return '';
+    }
+    markSurfaced(ownerId, highest || Date.now());
+    console.log(`[BRAIN] Revision raised owner=${ownerId} at=${chosen.entry.at} summary="${chosen.entry.summary}"`);
+    return chosen.directive;
+  });
+}
 
 // ── Context Engine V2 (B4) ───────────────────────────────────────────────────
 

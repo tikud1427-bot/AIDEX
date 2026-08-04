@@ -134,6 +134,10 @@ function flagState() {
     // the deps-forwarding fix, so nothing reported it. Now that it can take
     // effect, it has to be visible here too.
     AQUA_SELF_ENTITY: selfEntityEnabled(),
+    // The eighth switch. Every other flag here changes what AQUA KNOWS or does
+    // silently; this one changes what it SAYS, unprompted. That is the one most
+    // worth being able to read off a running instance.
+    AQUA_REVISION_VOICE: Brain.revisionVoiceEnabled(),
   };
 }
 

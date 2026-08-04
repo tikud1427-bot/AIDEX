@@ -33,7 +33,8 @@
     "test:list": "node scripts/run-tests.mjs --list",
     "doctor:mirror": "node scripts/mirror-doctor.mjs",
     "doctor": "npm run doctor:mirror",
-    "clean:test-artifacts": "node scripts/clean-test-artifacts.mjs"
+    "clean:test-artifacts": "node scripts/clean-test-artifacts.mjs",
+    "rollout": "node rollout.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.9.0",

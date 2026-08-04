@@ -74,6 +74,44 @@ function isSelfQuestion(query) {
   return q.endsWith('?') || INTERROGATIVE.test(q);
 }
 
+/**
+ * Did this lexical hit earn its place by anything other than the self label?
+ *
+ * `retrieveGroundedFacts` does not report WHICH term matched, so the test is
+ * re-derived: if no query term of substance appears in the statement, and none
+ * appears in any non-self entity, then the only thing left in the haystack that
+ * could have matched is the self entity's label.
+ *
+ * Terms are ≥3 characters — matching the shape of the haystack tokeniser
+ * closely enough for this purpose, and short enough that a two-letter word
+ * cannot rescue a hit on its own.
+ *
+ * FAIL-OPEN: anything malformed keeps the hit. A retrieval that returns one
+ * extra line is a smaller failure than one that silently drops a real answer,
+ * and this predicate exists to trim noise, not to gatekeep.
+ */
+const HAYSTACK_STOPWORDS = new Set([
+  'the', 'and', 'for', 'with', 'that', 'this', 'you', 'your', 'yours', 'are',
+  'was', 'were', 'can', 'could', 'would', 'should', 'what', 'when', 'where',
+  'which', 'who', 'how', 'why', 'about', 'from', 'into', 'out', 'get', 'got',
+  'has', 'have', 'had', 'not', 'but', 'all', 'any', 'some', 'just', 'like',
+]);
+
+function earnedBeyondSelf(query, fact, selfLabel) {
+  if (!fact) return true;
+  const terms = (String(query ?? '').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? [])
+    .filter(t => !HAYSTACK_STOPWORDS.has(t));
+  if (!terms.length) return true;
+
+  const statement = String(fact.statement ?? '').toLowerCase();
+  if (terms.some(t => statement.includes(t))) return true;
+
+  const others = (fact.entities ?? [])
+    .map(e => String(e).toLowerCase())
+    .filter(e => e && e !== selfLabel);
+  return others.some(e => terms.some(t => e.includes(t)));
+}
+
 const W_TRUSTED  = 0.10;
 const W_DISPUTED = -0.20;
 const W_STALE    = -0.10;
@@ -94,8 +132,50 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
   const empty = { items: [], block: '', stats: { facts: 0, entities: 0, connectedFacts: 0, timelineEvents: 0, reusedSignals: 0, durationMs: 0 } };
   if (!ownerId || !query) return empty;
 
+  // The owner's own node, found ONCE and used by two lanes below. Lane 1 needs
+  // its label to recognise a hit that was earned by nothing else; lane 2b needs
+  // the node itself to anchor on. Read from the graph rather than hardcoded, so
+  // the label stays a fact about the data and not a duplicated constant.
+  const selfNode = (() => {
+    try {
+      for (const n of G.nodesByType(ownerId, 'entity')) {
+        if (n?.data?.entityType === 'self') return n;
+      }
+    } catch { /* fail-open */ }
+    return null;
+  })();
+  const selfLabel = String(selfNode?.label ?? '').toLowerCase();
+
   // ── Lane 1: grounded facts (lexical + provenance) ──────────────────────────
-  const factHits = ER.retrieveGroundedFacts(ES, ownerId, query, { limit: limit * 2 });
+  //
+  // Filtered for hits earned SOLELY by the self entity's label.
+  //
+  // `evidenceRetrieval` builds its haystack as `statement + entities.join(' ')`,
+  // and the self entity is labelled with the literal word "You". So once facts
+  // carry it, every message containing "you" lexically matches every fact about
+  // the owner. Measured on the rollout harness: turning AQUA_SELF_ENTITY on took
+  // retrieval from 2/6 to 5/6 and noise from 0 to 9 lines — and 7 of those 9
+  // came from one query, "can you write me a python script". Checked hit by
+  // hit, ALL SIX of its matches shared nothing with the fact statement and
+  // nothing with any real entity. Every one was the word "you".
+  //
+  // The haystack is built in `src/files/`, which stays frozen — every uploaded
+  // document would otherwise pay for a chat problem. Relabelling the self node
+  // was the other option and is worse: `about` edges are keyed off
+  // `fact.entities`, so the label is load-bearing for the lane-3 hop this
+  // module depends on, and changing it would touch identity, display and
+  // stored data to fix a ranking artefact.
+  //
+  // So the test is re-derived here instead: a hit whose query terms match
+  // NEITHER the statement NOR any non-self entity was earned by the self label
+  // alone. Nothing else can have produced it.
+  //
+  // This CANNOT suppress the self-anchored results — those arrive via lane 3's
+  // `about` hop, which never consults the haystack. Pinned by a test.
+  const rawHits = ER.retrieveGroundedFacts(ES, ownerId, query, { limit: limit * 2 });
+  const factHits = selfLabel
+    ? rawHits.filter(h => earnedBeyondSelf(query, h?.fact, selfLabel))
+    : rawHits;
 
   // ── Lane 2: entities matching the query (canonical, alias-aware) ───────────
   // Token-based: a whole user message never substring-matches an entity
@@ -104,6 +184,19 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
   const entityMatches = [];
   if (qTokens.length) {
     for (const n of G.nodesByType(ownerId, 'entity')) {
+      // THE SELF NODE IS NEVER MATCHED BY SURFACE FORM.
+      //
+      // Its label is the literal word "You", so a query token "you" matched it
+      // here — and lane 3 then hopped `about` from it and returned every fact
+      // about the owner. That is where most of the measured noise came from:
+      // filtering lane 1 alone changed nothing, because these arrived through
+      // lane 2 → lane 3 instead.
+      //
+      // Lane 2b below is the ONLY route by which the owner becomes an anchor,
+      // and it requires a first-person QUESTION. That contract is the same one
+      // `conversationEntities` pass B enforces on the write side, for the same
+      // reason: a token like "you" fires inside almost every sentence.
+      if (n?.data?.entityType === 'self') continue;
       const names = [n.label, ...(n.data?.aliases ?? [])].map(v => String(v).toLowerCase());
       const hit = names.some(name => qTokens.some(t => name.includes(t)));
       if (!hit) continue;
@@ -146,15 +239,7 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
   // is noise at best and a distraction at worst. The anchor exists to reach
   // facts, so it is used for the hop only.
   const selfAnchors = [];
-  if (isSelfQuestion(query)) {
-    try {
-      for (const n of G.nodesByType(ownerId, 'entity')) {
-        if (n?.data?.entityType !== 'self') continue;
-        selfAnchors.push({ entity: 'you', _nodeId: n.id });
-        break;
-      }
-    } catch { /* fail-open: no anchor is a smaller loss than a failed retrieval */ }
-  }
+  if (selfNode && isSelfQuestion(query)) selfAnchors.push({ entity: 'you', _nodeId: selfNode.id });
 
   // ── Lane 3: connected facts — one hop over `about` edges from matched
   //    entities; the graph surfacing what lexical matching missed ────────────

@@ -48,7 +48,7 @@ const SCHEMA     = 1;
 /** Same cap the in-memory Map used, kept so behaviour under pressure is unchanged. */
 export const MAX_OWNERS = 1000;
 
-/** ownerId → { nodes: Map, edges: Map, takenAt, lastReflectionAt } */
+/** ownerId → { snapshot, lastReflectionAt, lastSurfacedAt } */
 const store = new Map();
 
 function evictIfNeeded() {
@@ -72,6 +72,37 @@ export function loadWatermark(ownerId) {
   return store.get(ownerId)?.lastReflectionAt ?? 0;
 }
 
+/**
+ * Timestamp of the last revision AQUA actually RAISED with this person.
+ *
+ * A separate watermark from `lastReflectionAt` on purpose: reflection happens
+ * on a cadence whether or not anyone is told, and conflating "I noticed" with
+ * "I mentioned it" is how a feature ends up either silent or repeating itself.
+ */
+export function loadSurfacedAt(ownerId) {
+  if (!ownerId) return 0;
+  return store.get(ownerId)?.lastSurfacedAt ?? 0;
+}
+
+/**
+ * Record that a revision was raised, so it is never raised twice.
+ *
+ * ADVANCED AT INJECTION, not after the model demonstrably said it — there is no
+ * observable point where "the model actually mentioned it" is known. The
+ * tradeoff is deliberate and one-directional: a revision the model chose to
+ * skip is lost, rather than repeated on every subsequent turn until someone
+ * responds to it. A missed observation is a small loss; a nagging assistant is
+ * the reason people switch a feature off.
+ */
+export function markSurfaced(ownerId, at) {
+  if (!ownerId) return;
+  const rec = store.get(ownerId);
+  if (rec) rec.lastSurfacedAt = Number(at) || Date.now();
+  else store.set(ownerId, { snapshot: null, lastReflectionAt: 0, lastSurfacedAt: Number(at) || Date.now() });
+  evictIfNeeded();
+  scheduleReflectionSave();
+}
+
 /** Roll the baseline forward. Snapshot Maps are stored as-is; save serialises. */
 export function saveReflectionState(ownerId, snapshot, lastReflectionAt) {
   if (!ownerId) return;
@@ -92,16 +123,19 @@ function loadFromDisk() {
   if (!data || typeof data !== 'object') return;
   for (const [owner, rec] of Object.entries(data)) {
     const snap = rec?.snapshot;
-    if (!snap) continue;
+    // A record can legitimately have no snapshot: `markSurfaced` may run for an
+    // owner whose reflection has not yet produced one. Dropping it here would
+    // lose the "already told them" watermark and re-raise a revision.
     store.set(owner, {
       // Maps do not survive JSON. Rehydrating here rather than at the call site
       // keeps the caller's shape contract identical to the in-memory version.
-      snapshot: {
+      snapshot: snap ? {
         nodes:   new Map(Object.entries(snap.nodes ?? {})),
         edges:   new Map(Object.entries(snap.edges ?? {})),
         takenAt: Number(snap.takenAt) || 0,
-      },
+      } : null,
       lastReflectionAt: Number(rec.lastReflectionAt) || 0,
+      lastSurfacedAt:   Number(rec.lastSurfacedAt) || 0,
     });
   }
   if (store.size) {
@@ -115,12 +149,13 @@ export function scheduleReflectionSave() {
     const data = {};
     for (const [owner, rec] of store.entries()) {
       data[owner] = {
-        snapshot: {
-          nodes:   Object.fromEntries(rec.snapshot?.nodes ?? new Map()),
-          edges:   Object.fromEntries(rec.snapshot?.edges ?? new Map()),
-          takenAt: rec.snapshot?.takenAt ?? 0,
-        },
+        snapshot: rec.snapshot ? {
+          nodes:   Object.fromEntries(rec.snapshot.nodes ?? new Map()),
+          edges:   Object.fromEntries(rec.snapshot.edges ?? new Map()),
+          takenAt: rec.snapshot.takenAt ?? 0,
+        } : null,
         lastReflectionAt: rec.lastReflectionAt ?? 0,
+        lastSurfacedAt:   rec.lastSurfacedAt ?? 0,
       };
     }
     return JSON.stringify(wrapStore(SCHEMA, data));

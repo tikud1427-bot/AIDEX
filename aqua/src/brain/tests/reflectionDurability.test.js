@@ -140,7 +140,15 @@ test('a real delta is recorded to the ledger; a no-change reflection is not', ()
 
 test('the ledger write cannot break reflection', () => {
   // Bookkeeping is the least important thing in this function.
+  //
+  // The window is measured from the try to the catch rather than a fixed byte
+  // count: an earlier version used `slice(i - 200, i + 500)` and broke the
+  // moment the ledger entry grew to carry named subjects. A test that fails
+  // because the code it guards got longer is testing the wrong thing.
   const i = IDX.indexOf("ledger(ownerId, 'reflection'");
-  assert.ok(i > -1);
-  assert.match(IDX.slice(i - 200, i + 500), /try \{[\s\S]*catch/);
+  assert.ok(i > -1, 'the ledger write is gone');
+  const openTry = IDX.lastIndexOf('try {', i);
+  const nextCatch = IDX.indexOf('catch', i);
+  assert.ok(openTry > -1 && nextCatch > i, 'the ledger write is not inside a try/catch');
+  assert.ok(nextCatch - openTry < 3000, 'the guarding try/catch is suspiciously far away');
 });

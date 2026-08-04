@@ -142,7 +142,7 @@ test('METRICS: needs no owner and reports live flag state', async () => {
   // uninformative exactly when someone is testing a rollout.
   const FLAG_KEYS = [
     'AQUA_BRAIN', 'AQUA_BRAIN_INGEST', 'AQUA_BRAIN_INGEST_FACTS', 'AQUA_CONTEXT_V2',
-    'AQUA_REFLECT_V2', 'AQUA_SELF_ENTITY', 'AQUA_TWIN_V2',
+    'AQUA_REFLECT_V2', 'AQUA_REVISION_VOICE', 'AQUA_SELF_ENTITY', 'AQUA_TWIN_V2',
   ];
   const saved = Object.fromEntries(FLAG_KEYS.map(k => [k, process.env[k]]));
   const restore = () => {
@@ -166,6 +166,10 @@ test('METRICS: needs no owner and reports live flag state', async () => {
     assert.equal(body.flags.AQUA_BRAIN_INGEST, false, 'subordinate flags are off by default');
     assert.equal(body.flags.AQUA_SELF_ENTITY, false, 'self entity is off by default too');
     assert.equal(body.flags.AQUA_BRAIN_INGEST_FACTS, false, 'and so is conversational fact ingest');
+    // The eighth switch. Every other flag here changes what AQUA KNOWS or does
+    // silently; this one changes what it SAYS, unprompted — so it is the one
+    // most worth being off until deliberately turned on.
+    assert.equal(body.flags.AQUA_REVISION_VOICE, false, 'the revision voice is off by default');
     assert.ok('ingest' in body.metrics, 'ingest counters exposed for the rollout');
     assert.ok('contextEngine' in body.metrics);
     assert.ok('twin' in body.metrics);

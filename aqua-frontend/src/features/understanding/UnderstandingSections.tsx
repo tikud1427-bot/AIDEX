@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { SectionHeader } from '@/components/ui/section-header';
 import {
-  fetchUnderstanding, correctItem,
-  type UnderstandingModel,
+  fetchUnderstanding, correctItem, fetchChanges,
+  type UnderstandingModel, type UnderstandingChange,
 } from '@/api/understanding';
 
 /* ────────────────────────────────────────────────────────────────────────────
@@ -20,10 +20,17 @@ import {
 
 export function UnderstandingSections() {
   const [model, setModel] = useState<UnderstandingModel | null>(null);
+  const [changes, setChanges] = useState<UnderstandingChange[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = () => { fetchUnderstanding().then(setModel).catch(() => setModel(null)); };
   useEffect(load, []);
+
+  // Loaded separately, and failing separately. The revision feed is the newest
+  // surface here and the only one reading a different endpoint; if it 404s on
+  // an older server, or the flags that produce revisions are off, the rest of
+  // the page must be unaffected. An empty list renders nothing at all.
+  useEffect(() => { fetchChanges().then(setChanges).catch(() => setChanges([])); }, []);
 
   if (!model) return null;
 
@@ -68,6 +75,43 @@ export function UnderstandingSections() {
         </section>
       )}
 
+      {changes.length > 0 && (
+        <section className="flex flex-col gap-3">
+          <SectionHeader eyebrow="Where I've been wrong" title="What changed" />
+          {/* The other sections say what AQUA knows. This one says what it
+              changed its mind about — which is the part a bigger context
+              window cannot do, and the part that makes the rest believable.
+
+              Read-only on purpose: a revision is a record of something that
+              happened, not a claim to correct. The belief it revised is
+              correctable in the sections above. */}
+          <ul className="flex flex-col gap-2">
+            {changes.map((c) => (
+              <li key={c.at} className="flex items-baseline justify-between gap-3">
+                <span className="text-[length:var(--text-body)] text-[var(--text)]">
+                  {c.summary ?? 'Something shifted'}
+                  {(c.obsoleted > 0 || c.revised > 0) && (
+                    /* Only shown when AQUA actually superseded something it
+                       previously held. "3 entities changed" is bookkeeping;
+                       "this replaced what I had" is the admission worth
+                       reading. */
+                    <span className="ml-2 text-[length:var(--text-micro)] text-[var(--text-secondary)]">
+                      replaced what I had before
+                    </span>
+                  )}
+                </span>
+                <time
+                  dateTime={new Date(c.at).toISOString()}
+                  className="shrink-0 text-[length:var(--text-micro)] tabular-nums text-[var(--text-secondary)]"
+                >
+                  {relativeDay(c.at)}
+                </time>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {model.unknowns.length > 0 && (
         <section className="flex flex-col gap-3">
           <SectionHeader eyebrow="Still learning" title="What I don't know yet" />
@@ -91,6 +135,16 @@ export function UnderstandingSections() {
       )}
     </>
   );
+}
+
+/** "today" / "yesterday" / "3 days ago". A wall-clock timestamp on a trust
+ *  screen reads like a log line; what matters is how recently AQUA moved. */
+function relativeDay(at: number): string {
+  const days = Math.floor((Date.now() - at) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days} days ago`;
+  return new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function NotQuite({ onClick, busy, label = 'Not quite' }: { onClick: () => void; busy: boolean; label?: string }) {
