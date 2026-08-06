@@ -19,6 +19,8 @@
     </div>
 
     <form method="POST" action="/write" class="px-card px-card-pad" style="display:flex; flex-direction:column; gap:16px;">
+      <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+
       <div>
         <label class="px-label" for="title">Title</label>
         <input class="px-input" id="title" type="text" name="title" placeholder="A clear, specific title" required>

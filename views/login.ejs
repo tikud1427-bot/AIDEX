@@ -28,6 +28,8 @@
     <% } %>
 
     <form action="/login" method="POST" class="px-auth-form">
+      <input type="hidden" name="_csrf" value="<%= typeof csrfToken !== 'undefined' ? csrfToken : '' %>">
+
       <div>
         <label class="px-label" for="email">Email</label>
         <input class="px-input" id="email" type="email" name="email" autocomplete="email" required>

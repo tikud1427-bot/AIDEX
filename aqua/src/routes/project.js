@@ -21,7 +21,7 @@
  */
 import express from 'express';
 import { createWorkspace, getWorkspace, updateWorkspace, deleteWorkspace, listWorkspaces } from '../project/workspaceManager.js';
-import { extractZip }                                                                      from '../project/fileIngester.js';
+import { extractZipBounded }                                                               from '../upload/boundedParse.js';
 import { runWorkspaceIngestion }                                                           from '../project/ingestionPipeline.js';
 import { getIndex, getIndexStats, queryIndex }                                             from '../project/projectIndex.js';
 import { serializeGraph, detectCycles }                                                    from '../project/dependencyGraph.js';
@@ -106,7 +106,7 @@ router.post('/workspace/:id/files', async (req, res) => {
 
   if (zip) {
     try {
-      rawFiles = await extractZip(zip);
+      rawFiles = await extractZipBounded(zip);
     } catch (err) {
       return res.status(400).json({ success: false, error: err.message });
     }

@@ -10,7 +10,7 @@
 import { test, describe } from 'node:test';
 import assert              from 'node:assert/strict';
 import AdmZip               from 'adm-zip';
-import * as XLSX             from 'xlsx';
+import * as XLSX             from '@e965/xlsx';
 
 import { parseDocument, isDocumentExt, DOCUMENT_EXTS } from '../documentParser.js';
 

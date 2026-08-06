@@ -1173,7 +1173,12 @@ async function handleBuildWebsite() {
 
     const res = await fetch(`/bundle/${STATE.bundle._id}/execute`, {
       method:      "POST",
-      headers:     { "Content-Type": "application/json" },
+      headers:     {
+        "Content-Type": "application/json",
+        // E1/PR-6: non-/api POST, so the CSRF token guard applies. The token
+        // comes from the meta tag the nav partial renders.
+        "x-csrf-token": document.querySelector('meta[name="csrf-token"]')?.content || "",
+      },
       credentials: "include",   // ✅ CRITICAL: sends session cookie
     });
 

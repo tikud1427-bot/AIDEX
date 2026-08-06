@@ -16,8 +16,9 @@
  * code-language lang value, all fall back gracefully. No changes needed
  * in any of them.
  *
- * Supported: PDF (pdf-parse v2), DOCX (mammoth), XLSX (xlsx / SheetJS).
- * PPTX is hand-rolled rather than a new dependency: adm-zip is already in
+ * Supported: PDF (pdf-parse v2), DOCX (mammoth), XLSX (@e965/xlsx — see
+ * AQUA_DEPENDENCY_SAFETY.md for why this is the fork and not `xlsx`).
+ * PPTX is hand-rolled rather than a new dependency: the ZIP reader is already in
  * package.json, and PPTX is itself a zip of XML — a full OOXML
  * relationship-graph reader is unnecessary when every real PowerPoint
  * file places slides at ppt/slides/slideN.xml, so this just globs that
@@ -29,10 +30,10 @@
  * call rather than a local library — and was scoped out as a separate
  * phase in the original architecture audit, not attempted here.
  */
-import AdmZip           from 'adm-zip';
 import { PDFParse }     from 'pdf-parse';
+import { openDocumentZip } from '../upload/zipGuard.js';
 import mammoth          from 'mammoth';
-import * as XLSX        from 'xlsx';
+import * as XLSX        from '@e965/xlsx';
 
 // Raw byte ceiling BEFORE extraction. Intentionally more generous than
 // fileIngester.js's MAX_FILE_SIZE (100KB), which caps EXTRACTED TEXT
@@ -93,14 +94,16 @@ function decodeXmlEntities(s) {
 }
 
 function parsePptx(buffer) {
-  const zip = new AdmZip(buffer);
+  // E1/PR-3: a .pptx is a ZIP, and this path had no entry, size or expansion
+  // ceiling at all. openDocumentZip applies all four before inflating.
+  const zip = openDocumentZip(buffer, 'Presentation');
 
-  const slides = zip.getEntries()
+  const slides = zip.entries
     .map(entry => ({ match: entry.entryName.match(SLIDE_PATH_RE), entry }))
     .filter(x => x.match)
     .map(({ match, entry }) => ({
       num: parseInt(match[1], 10),           // numeric, not lexicographic — slide10 must sort after slide2
-      xml: entry.getData().toString('utf8'),
+      xml: zip.readEntry(entry).toString('utf8'),
     }))
     .sort((a, b) => a.num - b.num)
     .map(({ num, xml }) => {

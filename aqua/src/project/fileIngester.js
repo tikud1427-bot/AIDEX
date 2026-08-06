@@ -278,34 +278,18 @@ const ZIP_MAX_TOTAL_BYTES    = 300_000_000;   // 300 MB total uncompressed budge
 
 export async function extractZip(base64) {
   try {
-    const { default: AdmZip } = await import('adm-zip');
+    // E1/PR-3: entry-count, per-entry, total and EXPANSION-RATIO ceilings all
+    // live in zipGuard now, enforced against the central directory before any
+    // inflation. The first three are the same numbers this function used; the
+    // ratio ceiling is new and is what stops a zip bomb.
+    const { openZip } = await import('../upload/zipGuard.js');
     const buffer = Buffer.from(base64, 'base64');
-    const zip    = new AdmZip(buffer);
+    const zip    = openZip(buffer, 'archive', { label: 'Archive' });
     const files  = [];
 
-    const entries = zip.getEntries();
-    if (entries.length > ZIP_MAX_ENTRIES) {
-      throw new Error(`Archive has ${entries.length} entries (limit ${ZIP_MAX_ENTRIES}). Remove build artifacts (node_modules, dist) before zipping.`);
-    }
+    const skippedOversize = zip.skippedOversize;
 
-    let totalBytes = 0;
-    let skippedOversize = 0;
-
-    for (const entry of entries) {
-      if (entry.isDirectory) continue;
-
-      // Check the DECLARED uncompressed size BEFORE decompressing — never
-      // pay the memory cost for an entry we'd drop anyway.
-      const declaredSize = entry.header?.size ?? 0;
-      if (declaredSize > ZIP_MAX_ENTRY_BYTES) {
-        skippedOversize++;
-        continue;
-      }
-      totalBytes += declaredSize;
-      if (totalBytes > ZIP_MAX_TOTAL_BYTES) {
-        throw new Error('Archive expands beyond the 300 MB extraction budget — likely includes dependencies or binaries. Trim it and retry.');
-      }
-
+    for (const entry of zip.entries) {
       const ext = path.extname(entry.entryName).toLowerCase();
       // Cheap pre-filter: never decompress entries the ingester would
       // discard anyway (node_modules, images, lockfiles, ...). Documents
@@ -315,14 +299,15 @@ export async function extractZip(base64) {
         // Binary format — carry raw bytes through as base64. toString('utf8')
         // below would corrupt them, and ingestFiles()'s isBinary() check
         // would then silently drop the corrupted result anyway.
-        files.push({ path: entry.entryName, content: entry.getData().toString('base64'), encoding: 'base64' });
+        files.push({ path: entry.entryName, content: zip.readEntry(entry).toString('base64'), encoding: 'base64' });
         continue;
       }
 
       try {
-        const content = entry.getData().toString('utf8');
+        const content = zip.readEntry(entry).toString('utf8');
         files.push({ path: entry.entryName, content });
-      } catch {
+      } catch (err) {
+        if (err?.name === 'ZipGuardError') throw err; // budget exceeded — stop, don't swallow
         // Binary or encoding error — skip silently
       }
     }

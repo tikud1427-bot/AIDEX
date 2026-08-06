@@ -34,6 +34,7 @@ const Bundle = require("./models/Bundle");
 // AQUA (mounted at /api/aqua) is the only AI product.
 const ai            = require("./services/ai.client");
 const { usageGuard } = require("./middleware/usage/usageGuard");
+const { attachCsrfToken, verifyCsrf, enforceSameOrigin, safeEqual } = require("./middleware/csrf");
 
 // ── Static data ───────────────────────────────────────────────────────────────
 const blogs = require("./blogs");
@@ -219,6 +220,13 @@ app.use(
       maxAge:   7 * 24 * 60 * 60 * 1000,
       httpOnly: true,
       secure:   process.env.NODE_ENV === "production",
+      // SECURITY (E1/PR-6): explicit rather than relying on the browser
+      // default. "lax" and not "strict" on purpose — "strict" withholds the
+      // cookie on top-level navigations arriving from another site, which
+      // breaks the Google OAuth callback: the user returns from
+      // accounts.google.com and lands logged out. "lax" still blocks the
+      // cross-site POST that CSRF depends on, which is the attack.
+      sameSite: "lax",
     },
   })
 );
@@ -226,6 +234,16 @@ app.use(
 // ── Passport ──────────────────────────────────────────────────────────────────
 app.use(passport.initialize());
 app.use(passport.session());
+
+// ── CSRF + same-origin (E1/PR-6) ─────────────────────────────────────────────
+// Mounted after the session (both read it) and before every route, so a new
+// route is protected by default rather than by remembering to opt in.
+// Two mechanisms, one per surface: a synchroniser token for the server-rendered
+// EJS forms, Origin enforcement for the JSON APIs the SPA and page scripts
+// call. See middleware/csrf.js for why the API surface is not token-based.
+app.use(attachCsrfToken);
+app.use(enforceSameOrigin());
+app.use(verifyCsrf());
 
 // Configure Google OAuth strategy
 passport.use(
@@ -825,7 +843,10 @@ function requireAdmin(req, res, next) {
   const auth = req.headers.authorization || "";
   if (auth.startsWith("Basic ")) {
     const [, user, pass] = Buffer.from(auth.slice(6), "base64").toString().match(/^([^:]*):(.*)$/) || [];
-    if (pass === adminPassword) return next();
+    // SECURITY (E1/PR-6): constant-time. `===` on a secret returns early at
+    // the first differing byte, leaking the prefix to anyone who can measure
+    // response time across enough attempts.
+    if (safeEqual(pass, adminPassword)) return next();
   }
 
   res.set("WWW-Authenticate", "Basic realm=\"Aquiplex Admin\"");
@@ -833,7 +854,7 @@ function requireAdmin(req, res, next) {
 }
 
 // GET /admin — review queue dashboard
-app.get("/admin", requireAdmin, async (req, res) => {
+app.get("/admin", authLimiter, requireAdmin, async (req, res) => {
   try {
     const pending  = await Tool.find({ status: "pending"  }).sort({ createdAt: -1 }).lean();
     const approved = await Tool.find({ status: "approved" }).sort({ createdAt: -1 }).limit(20).lean();

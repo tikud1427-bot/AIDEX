@@ -1,14 +1,16 @@
 /**
  * AQUA Artifact Engine — XLSX Exporter (P2)
  * ─────────────────────────────────────────────────────────────────────────────
- * Real .xlsx workbooks via the xlsx package ALREADY in aqua's dependency
- * tree (documentPipeline.js reads spreadsheets with it — this adds the write
- * direction, zero new deps).
+ * Real .xlsx workbooks via the SheetJS package ALREADY in aqua's dependency
+ * tree (documentParser.js reads spreadsheets with it — this adds the write
+ * direction, zero new deps). E1/PR-2 moved that package from the abandoned
+ * npm `xlsx@0.18.5` to the maintained `@e965/xlsx` mirror; the write path
+ * changed import only. See AQUA_DEPENDENCY_SAFETY.md.
  *
  * Content model ('sheet'):
  *   { "sheets": [ { "name": "Budget", "headers": ["Item","Cost"], "rows": [["Rent", 12000]] } ] }
  */
-import XLSX from 'xlsx';
+import XLSX from '@e965/xlsx';
 import { registerExporter } from './registry.js';
 import { ensureExtension }  from './common.js';
 

@@ -16,13 +16,14 @@
  *     truncated: boolean,
  *   }
  *
- * ODT and EPUB reuse adm-zip (already a dependency) — both are ZIP
+ * ODT and EPUB reuse the guarded ZIP reader (E1/PR-3) — both are ZIP
  * containers of XML/XHTML. No new dependencies.
  */
 import path from 'path';
 import crypto from 'crypto';
-import AdmZip from 'adm-zip';
-import { parseDocument, isDocumentExt as isCoreDocumentExt } from '../project/documentParser.js';
+import { openDocumentZip } from './zipGuard.js';
+import { isDocumentExt as isCoreDocumentExt } from '../project/documentParser.js';
+import { parseDocumentBounded } from './boundedParse.js';
 import { analyzeMediaWithGemini } from '../providers/gemini.js';
 
 const MAX_CONTENT_CHARS = 200_000; // richer than code files (100 KB) — documents ARE the content
@@ -122,15 +123,15 @@ function stripXml(xml) {
 // ── ODT ───────────────────────────────────────────────────────────────────────
 
 function parseOdt(buffer) {
-  const zip = new AdmZip(buffer);
+  const zip = openDocumentZip(buffer, 'Document');
   const contentEntry = zip.getEntry('content.xml');
   if (!contentEntry) throw new Error('Invalid ODT: content.xml missing');
-  const text = stripXml(contentEntry.getData().toString('utf8'));
+  const text = stripXml(zip.readEntry(contentEntry).toString('utf8'));
 
   let title = null;
   const metaEntry = zip.getEntry('meta.xml');
   if (metaEntry) {
-    const m = metaEntry.getData().toString('utf8').match(/<dc:title>([^<]*)<\/dc:title>/);
+    const m = zip.readEntry(metaEntry).toString('utf8').match(/<dc:title>([^<]*)<\/dc:title>/);
     if (m) title = m[1].trim() || null;
   }
   return { text, meta: { title } };
@@ -139,19 +140,19 @@ function parseOdt(buffer) {
 // ── EPUB ──────────────────────────────────────────────────────────────────────
 
 function parseEpub(buffer) {
-  const zip = new AdmZip(buffer);
+  const zip = openDocumentZip(buffer, 'Book');
 
   // Locate the OPF via META-INF/container.xml (per spec); fall back to globbing.
   let opfPath = null;
   const container = zip.getEntry('META-INF/container.xml');
   if (container) {
-    const m = container.getData().toString('utf8').match(/full-path="([^"]+)"/);
+    const m = zip.readEntry(container).toString('utf8').match(/full-path="([^"]+)"/);
     if (m) opfPath = m[1];
   }
-  const opfEntry = opfPath ? zip.getEntry(opfPath) : zip.getEntries().find(e => e.entryName.endsWith('.opf'));
+  const opfEntry = opfPath ? zip.getEntry(opfPath) : zip.entries.find(e => e.entryName.endsWith('.opf'));
   if (!opfEntry) throw new Error('Invalid EPUB: package (.opf) file missing');
 
-  const opfXml = opfEntry.getData().toString('utf8');
+  const opfXml = zip.readEntry(opfEntry).toString('utf8');
   const opfDir = path.posix.dirname(opfEntry.entryName);
 
   const titleMatch = opfXml.match(/<dc:title[^>]*>([^<]*)<\/dc:title>/);
@@ -175,7 +176,7 @@ function parseEpub(buffer) {
     const entryName = opfDir === '.' ? href : path.posix.join(opfDir, href);
     const entry = zip.getEntry(entryName) ?? zip.getEntry(decodeURIComponent(entryName));
     if (!entry) continue;
-    const chapterText = stripXml(entry.getData().toString('utf8'));
+    const chapterText = stripXml(zip.readEntry(entry).toString('utf8'));
     if (chapterText) chapters.push(chapterText);
   }
 
@@ -257,8 +258,11 @@ export async function processDocument(filename, buffer, { ocr = analyzeMediaWith
   let text, meta = {};
 
   if (isCoreDocumentExt(ext)) {
-    // PDF / DOCX / PPTX / XLSX — reuse the existing extractor verbatim
-    const extracted = await parseDocument(ext, buffer);
+    // PDF / DOCX / PPTX / XLSX — reuse the existing extractor verbatim, now
+    // inside a heap-capped worker (E1/PR-4). pdf-parse, mammoth and SheetJS
+    // allocate on shapes we cannot bound from outside; ODT/EPUB below stay
+    // inline because zipGuard already bounds them.
+    const extracted = await parseDocumentBounded(ext, buffer);
     text = extracted?.text ?? '';
     meta = extracted?.meta ?? {};
 

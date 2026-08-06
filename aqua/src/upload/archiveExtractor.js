@@ -165,29 +165,19 @@ function entriesToRawFiles(entries) {
 export async function extractArchive(buffer, format) {
   switch (format) {
     case 'zip': {
-      const { default: AdmZip } = await import('adm-zip');
-      let zip;
-      try {
-        zip = new AdmZip(buffer);
-      } catch (err) {
-        throw new Error(`Corrupted or unreadable ZIP archive: ${err.message}`);
-      }
-      const zipEntries = zip.getEntries();
-      if (zipEntries.length > MAX_ENTRIES) {
-        throw new Error(`Archive has ${zipEntries.length} entries (limit ${MAX_ENTRIES}). Remove build artifacts (node_modules, dist) before zipping.`);
-      }
+      // Every ceiling — entry count, per-entry size, total size, expansion
+      // ratio — now lives in zipGuard and is enforced against the central
+      // directory BEFORE anything inflates. The ratio ceiling is new in
+      // E1/PR-3; the other three are the same numbers this function used.
+      const { openZip } = await import('./zipGuard.js');
+      const zip = openZip(buffer, 'archive', { label: 'Archive' });
       const entries = [];
-      for (const e of zipEntries) {
-        if (e.isDirectory) continue;
-        // Password-protected ZIPs: adm-zip's getData() throws or returns empty
-        // on encrypted entries — surface a clear error instead of silence.
-        if (e.header?.flags & 0x1) {
-          throw new Error('Archive is password-protected. Remove the password and re-upload.');
-        }
-        const declared = e.header?.size ?? 0;
-        if (declared > MAX_ENTRY_BYTES) continue; // pre-filter before decompressing
+      for (const e of zip.entries) {
         let data;
-        try { data = e.getData(); } catch { continue; }
+        try { data = zip.readEntry(e); } catch (err) {
+          if (err?.name === 'ZipGuardError') throw err; // budget exceeded — not a per-entry problem
+          continue;                                     // unreadable single entry — skip, as before
+        }
         entries.push({ name: e.entryName, data });
       }
       return entriesToRawFiles(entries);

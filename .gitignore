@@ -31,3 +31,11 @@ Thumbs.db
 .aqua-index.json
 .aqua-index.json.migrated-to-datadir
 .aqua-index*
+
+# Applied PR archives and build residue (E1/PR-7)
+# These are transient artifacts of the apply workflow, not source.
+*.tar.gz
+*.patch
+*.diff
+.fuse_hidden*
+*.migrated-to-datadir

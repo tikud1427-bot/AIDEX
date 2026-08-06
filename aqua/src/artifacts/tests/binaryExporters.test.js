@@ -11,7 +11,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import AdmZip from 'adm-zip';
-import XLSX from 'xlsx';
+import XLSX from '@e965/xlsx';
 import { PDFDocument } from 'pdf-lib';
 
 const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'aqua-artifact-binary-'));

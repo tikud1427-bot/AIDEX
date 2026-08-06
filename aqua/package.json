@@ -30,6 +30,9 @@
     "test:providers": "node scripts/run-tests.mjs src/providers src/core/tests/backoff.test.js src/core/tests/health.test.js",
     "soak:providers": "node src/providers/tests/providerResilience.soak.js",
     "test:understanding": "node scripts/run-tests.mjs src/understanding",
+    "test:parsers": "node scripts/run-tests.mjs src/upload/tests/parserBaseline.test.js src/project/tests/documentParserBaseline.test.js",
+    "fixtures:parsers": "node scripts/build-parser-fixtures.mjs",
+    "fixtures:parsers:check": "node scripts/build-parser-fixtures.mjs --check",
     "test:list": "node scripts/run-tests.mjs --list",
     "doctor:mirror": "node scripts/mirror-doctor.mjs",
     "doctor": "npm run doctor:mirror",
@@ -37,9 +40,10 @@
     "rollout": "node rollout.mjs"
   },
   "dependencies": {
+    "@e965/xlsx": "^0.20.3",
     "@google/genai": "^2.9.0",
     "@pdf-lib/fontkit": "^1.1.1",
-    "adm-zip": "^0.5.17",
+    "adm-zip": "^0.6.0",
     "cors": "^2.8.6",
     "dejavu-fonts-ttf": "^2.37.3",
     "docx": "^9.7.1",
@@ -51,7 +55,6 @@
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
     "pptxgenjs": "^4.0.1",
-    "uuid": "^14.0.1",
-    "xlsx": "^0.18.5"
+    "uuid": "^14.0.1"
   }
 }

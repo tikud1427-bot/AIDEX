@@ -26,7 +26,7 @@
  */
 import { processDocument }   from '../upload/documentPipeline.js';
 import { processMedia }      from '../upload/mediaPipeline.js';
-import { extractArchive }    from '../upload/archiveExtractor.js';
+import { extractArchiveBounded } from '../upload/boundedParse.js';
 import { createWorkspace }   from '../project/workspaceManager.js';
 import { runWorkspaceIngestion } from '../project/ingestionPipeline.js';
 import { detectLanguage as detectSourceLanguage } from '../project/fileIngester.js';
@@ -150,7 +150,7 @@ export const repositoryParser = {
    */
   async parseBatch(ctx) {
     const deps = {
-      extractArchive:       ctx.deps?.extractArchive       ?? extractArchive,
+      extractArchive:       ctx.deps?.extractArchive       ?? extractArchiveBounded,
       createWorkspace:      ctx.deps?.createWorkspace      ?? createWorkspace,
       runWorkspaceIngestion: ctx.deps?.runWorkspaceIngestion ?? runWorkspaceIngestion,
     };

@@ -12,6 +12,7 @@ import fs   from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildIdentityInjection } from '../identity/index.js';
+import { fenceUntrusted, makeFenceNonce, INSTRUCTION_HIERARCHY } from './untrustedContent.js';
 
 const __dir     = path.dirname(fileURLToPath(import.meta.url));
 const promptDir = path.join(__dir, '..', 'prompts');
@@ -90,6 +91,15 @@ export function buildSystemPrompt(taskType, memoryBlock = '', reasoningDirective
   const parts       = [M.system];
   const moduleNames = ['system'];
 
+  // E1/PR-5 — the instruction hierarchy sits immediately after the base
+  // system prompt, before ANY ingested content, so the rule is established
+  // before the material it governs appears. One nonce per prompt: every
+  // untrusted block in this prompt shares it, so the model sees one boundary
+  // vocabulary rather than several.
+  const fenceNonce = makeFenceNonce();
+  parts.push(INSTRUCTION_HIERARCHY);
+  moduleNames.push('instruction_hierarchy');
+
   // Identity & Self-Knowledge Layer — injected on EVERY request (compact),
   // expanded to the full profile + confidence directive when the Smart Router
   // flags a question about AQUA/Aquiplex. This is what makes AQUA always know
@@ -122,7 +132,12 @@ export function buildSystemPrompt(taskType, memoryBlock = '', reasoningDirective
 
   // Phase 5: project context — injected after reasoning directive
   if (projectContext && projectContext.trim()) {
-    parts.push(projectContext.trim());
+    // Carries attachment bodies, repository files and retrieved knowledge —
+    // all ingested, all attacker-influenceable. Fenced as one block because
+    // chat.js has already joined them by this point; per-source fencing
+    // would need the producers to fence, which is more churn than this
+    // buys today.
+    parts.push(fenceUntrusted(projectContext, { source: 'your files, repositories and stored knowledge', nonce: fenceNonce }));
     moduleNames.push('project_context');
   }
 
@@ -130,7 +145,8 @@ export function buildSystemPrompt(taskType, memoryBlock = '', reasoningDirective
   // truth remains foundational and web results are clearly supplementary,
   // before task modules so task instructions can reference "the sources".
   if (searchContext && searchContext.trim()) {
-    parts.push(searchContext.trim());
+    // The least trusted source in the system: arbitrary third-party pages.
+    parts.push(fenceUntrusted(searchContext, { source: 'live web search results', nonce: fenceNonce }));
     moduleNames.push('web_search');
   }
 
