@@ -60,7 +60,12 @@ function collect(dir, out = []) {
 const args = process.argv.slice(2);
 const list = args.includes('--list');
 const targets = args.filter(a => !a.startsWith('--'));
-const roots = (targets.length ? targets : ['src']).map(t => path.resolve(ROOT, t));
+// E2/PR-1: `eval/` joins `src/` as a default root. The eval harness has real
+// behavioural tests, and a test the battery never discovers is worse than no
+// test — it reads as coverage while proving nothing. Filtered by existence so
+// reverting E2 cannot break `npm test`.
+const DEFAULT_ROOTS = ['src', 'eval'].filter(d => existsSync(path.resolve(ROOT, d)));
+const roots = (targets.length ? targets : DEFAULT_ROOTS).map(t => path.resolve(ROOT, t));
 
 for (const r of roots) {
   if (!existsSync(r)) {

@@ -66,7 +66,13 @@ report_state() {
       "PR-4  src/upload/boundedParse.js" \
       "PR-5  src/core/untrustedContent.js" \
       "PR-6  ../middleware/csrf.js" \
-      "PR-7  ../tests/platform/repoHygiene.test.js"; do
+      "PR-7  ../tests/platform/repoHygiene.test.js" \
+      "E2/1  eval/core/runner.mjs" \
+      "E2/2  eval/datasets/extraction-core.v1.json" \
+      "E2/3  eval/baselines/extraction-core.v1.json" \
+      "E2/4  eval/datasets/retrieval-core.v1.json" \
+      "E2/5  eval/baselines/retrieval-core.v1.json" \
+      "E2/6  eval/core/gate.mjs"; do
     local pr file; pr=${marker%%  *}; file=${marker##*  }
     # A leading ../ means the marker lives in the PLATFORM tree, not the engine.
     if [ -e "$PKG/$file" ]; then ok "$pr applied   ($file)"; else warn "$pr NOT applied ($file missing)"; fi

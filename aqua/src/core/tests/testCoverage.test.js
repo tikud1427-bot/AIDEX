@@ -63,6 +63,11 @@ import { fileURLToPath } from 'node:url';
 // src/core/tests/ → repo root
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 const SRC  = path.join(ROOT, 'src');
+// E2/PR-1: `eval/` became a second default discovery root. This guard exists to
+// catch a widened or narrowed root — so it is TAUGHT the new one rather than
+// relaxed. Filtered by existence so the guard still works on a tree without it.
+const EVAL = path.join(ROOT, 'eval');
+const DISCOVERY_ROOTS = [SRC, EVAL].filter(d => fs.existsSync(d));
 
 /** Every test file under src/, as repo-relative POSIX paths. */
 function findTestFiles(dir, out = []) {
@@ -108,9 +113,10 @@ function testScripts() {
 }
 
 describe('the test battery reaches every suite', () => {
-  test('the runner discovers every test file under src/', () => {
-    const walked = findTestFiles(SRC).sort();
+  test('the runner discovers every test file under every default root', () => {
+    const walked = DISCOVERY_ROOTS.flatMap(r => findTestFiles(r)).sort();
     assert.ok(walked.length > 100, `expected the full suite set, found ${walked.length}`);
+    assert.ok(DISCOVERY_ROOTS.length >= 2, 'eval/ is not a discovery root — its tests would never run');
 
     const { files } = runnerDiscovers();
     const missed = walked.filter(f => !files.includes(f));
