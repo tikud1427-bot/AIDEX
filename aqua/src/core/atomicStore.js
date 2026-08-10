@@ -36,6 +36,11 @@
 import fs   from 'fs';
 import path from 'path';
 import { mirrorWrite, drainMirror } from './mongoMirror.js';
+// E3/PR-3 — every byte that leaves or enters a store now passes through an
+// adapter. The JSON adapter is the same filesystem code that was inline here,
+// moved; nothing about the public API or the semantics changed. See
+// src/core/storage/index.js for why the seam is keyed by path.
+import { getAdapter, flushStorage } from './storage/index.js';
 
 // ── P0 durability additions ──────────────────────────────────────────────────
 // loadJsonFile()  — corrupt-safe load: NEVER lets a bad parse wipe a store.
@@ -82,7 +87,13 @@ function hookShutdownOnce() {
       // Mongo upserts (mirrorWrite); give them ≤5s to land so the session's
       // last messages survive the container swap. Never blocks longer.
       const code = sig === 'SIGINT' ? 130 : 143; // conventional codes; re-raising would loop
-      drainMirror(5_000).finally(() => process.exit(code));
+      // E3/PR-5 — the storage adapter may write BEHIND a cache (the Postgres
+      // adapter reports syncDurable:false, so its writeSync has only reached
+      // memory when it returns). The sync flush above therefore does not mean
+      // the bytes are safe; flushStorage awaits the deferred writes. Run
+      // alongside the Mongo drain, not after it — a deploy will not wait twice.
+      Promise.allSettled([drainMirror(5_000), flushStorage(5_000)])
+        .finally(() => process.exit(code));
     });
   }
 }
@@ -97,7 +108,8 @@ export function backupOnce(file) {
   if (_bootBackupDone.has(file)) return;
   _bootBackupDone.add(file);
   try {
-    if (fs.existsSync(file)) fs.copyFileSync(file, `${file}.bak`);
+    const S = getAdapter();
+    if (S.existsSync(file)) S.copySync(file, `${file}.bak`);
   } catch (err) {
     console.warn(`[STORE] boot backup failed for ${path.basename(file)}: ${err.message}`);
   }
@@ -114,7 +126,8 @@ export function backupOnce(file) {
 export function loadJsonFile(file, { label = path.basename(file) } = {}) {
   let raw;
   try {
-    raw = fs.readFileSync(file, 'utf8');
+    raw = getAdapter().readSync(file);
+    if (raw === null) throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' });
   } catch (err) {
     if (err.code !== 'ENOENT') console.warn(`[STORE] ${label}: read failed (${err.message})`);
     return null;
@@ -123,10 +136,10 @@ export function loadJsonFile(file, { label = path.basename(file) } = {}) {
     return JSON.parse(raw);
   } catch {
     const aside = `${file}.corrupt-${Date.now()}`;
-    try { fs.renameSync(file, aside); } catch { try { fs.copyFileSync(file, aside); } catch { /* keep going */ } }
+    try { fs.renameSync(file, aside); } catch { try { getAdapter().copySync(file, aside); } catch { /* keep going */ } }
     console.error(`[STORE] ${label}: file is corrupt — preserved as ${path.basename(aside)}, attempting .bak recovery`);
     try {
-      const bak = JSON.parse(fs.readFileSync(`${file}.bak`, 'utf8'));
+      const bak = JSON.parse(getAdapter().readSync(`${file}.bak`) ?? '');
       console.warn(`[STORE] ${label}: RECOVERED from ${path.basename(file)}.bak`);
       return bak;
     } catch {
@@ -155,17 +168,11 @@ export function unwrapStore(parsed, { expected, file, label } = {}) {
   if (expected != null && schema > expected && file) {
     const aside = `${file}.v${schema}.bak`;
     try {
-      if (!fs.existsSync(aside)) fs.copyFileSync(file, aside);
+      if (!getAdapter().existsSync(aside)) getAdapter().copySync(file, aside);
       console.warn(`[STORE] ${label ?? path.basename(file)}: file schema v${schema} > expected v${expected} (rollback?) — snapshot kept at ${path.basename(aside)}, loading best-effort.`);
     } catch { /* snapshot is best-effort */ }
   }
   return { schema, data };
-}
-
-let tmpCounter = 0;
-function tmpPathFor(file) {
-  // Same directory as the target → guaranteed same filesystem → atomic rename.
-  return path.join(path.dirname(file), `.${path.basename(file)}.tmp.${process.pid}.${tmpCounter++}`);
 }
 
 /**
@@ -178,14 +185,7 @@ function tmpPathFor(file) {
  * @returns {Promise<void>}
  */
 export async function atomicWriteFile(file, data) {
-  const tmp = tmpPathFor(file);
-  try {
-    await fs.promises.writeFile(tmp, data, 'utf8');
-    await fs.promises.rename(tmp, file);
-  } catch (err) {
-    try { await fs.promises.unlink(tmp); } catch { /* temp may not exist */ }
-    throw err;
-  }
+  await getAdapter().write(file, data);
 }
 
 /**
@@ -195,14 +195,7 @@ export async function atomicWriteFile(file, data) {
  * @param {string} data
  */
 export function atomicWriteFileSync(file, data) {
-  const tmp = tmpPathFor(file);
-  try {
-    fs.writeFileSync(tmp, data, 'utf8');
-    fs.renameSync(tmp, file);
-  } catch (err) {
-    try { fs.unlinkSync(tmp); } catch { /* temp may not exist */ }
-    throw err;
-  }
+  getAdapter().writeSync(file, data);
 }
 
 /**

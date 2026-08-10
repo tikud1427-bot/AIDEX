@@ -4,7 +4,7 @@
   "node": "v20.20.2",
   "suiteFingerprint": "4e309d66891fbcf4",
   "caseCount": 200,
-  "note": "Baseline for extraction-core. Regenerate with: npm run eval:gate -- --update",
+  "note": "Baseline of the CURRENT regex extraction lane, all understanding flags ON. The number E6 must beat. Regenerate with: npm run eval:gate -- extraction-core --update",
   "coverage": {
     "total": 200,
     "executed": 200,

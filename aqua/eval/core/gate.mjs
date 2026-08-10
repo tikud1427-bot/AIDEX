@@ -40,6 +40,21 @@ export const STRUCTURAL = new Set([
   'answerable_queries', 'silence_queries',
 ]);
 
+/**
+ * Suites that must NEVER be gated, whatever baseline files exist on disk.
+ *
+ * `selftest` grades the harness itself and is DELIBERATELY incomplete — it
+ * carries a skip and a throw so every runner path is exercised. E2/PR-6
+ * excluded it by relying on the ABSENCE of a baseline file, which held right
+ * up until someone ran `--update`: that regenerated a baseline for every
+ * suite, and the gate then blocked forever on a suite designed to be
+ * incomplete.
+ *
+ * Excluding it by NAME rather than by the absence of a file is the fix. An
+ * invariant that depends on a file not existing is not an invariant.
+ */
+export const NOT_GATED = new Set(['selftest']);
+
 export const VERDICT = Object.freeze({
   PASS: 'pass', IMPROVED: 'improved', REGRESSED: 'regressed',
   MISSING: 'missing', NEW: 'new', STRUCTURAL_CHANGE: 'structural-change',

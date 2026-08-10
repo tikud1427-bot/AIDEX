@@ -20,8 +20,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  compareToBaseline, gateReport, VERDICT, LOWER_IS_BETTER, STRUCTURAL, EPSILON,
+  compareToBaseline, gateReport, VERDICT, LOWER_IS_BETTER, STRUCTURAL, EPSILON, NOT_GATED,
 } from '../core/gate.mjs';
+import { readdirSync } from 'node:fs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const load = n => JSON.parse(readFileSync(path.join(HERE, '../baselines', n), 'utf8'));
@@ -197,5 +198,59 @@ describe('gate — multi-suite JSON actually contains the suites', () => {
     const parsed = JSON.parse(text);
     assert.equal(parsed.reports.length, 2);
     assert.equal(parsed.reports[1].result.metrics.m, 2);
+  });
+});
+
+// ── E2/PR-6b: the flaws --update exposed ────────────────────────────────────
+
+describe('gate — the harness self-test is never gated', () => {
+  test('selftest is excluded BY NAME, not by a missing file', () => {
+    // E2/PR-6 excluded it by relying on the ABSENCE of a baseline file. That
+    // held until `--update` regenerated a baseline for every suite; the gate
+    // then blocked forever on a suite that is DESIGNED to be incomplete.
+    // An invariant that depends on a file not existing is not an invariant.
+    assert.ok(NOT_GATED.has('selftest'));
+  });
+
+  test('exclusion holds even when a stray baseline file DOES exist', () => {
+    // The real invariant. A tarball cannot delete a file, so anyone who ran the
+    // old `--update` still has `selftest.v1.json` on disk — and it must be
+    // harmless. Asserting the file's ABSENCE would be asserting housekeeping;
+    // asserting that the gate ignores it is asserting the fix.
+    const files = readdirSync(path.join(HERE, '../baselines'));
+    const stray = [...NOT_GATED].filter(id => files.includes(`${id}.v1.json`));
+    // Either state is fine — what matters is that the name-based exclusion,
+    // not the filesystem, is what keeps it out of the gate.
+    assert.ok(NOT_GATED.has('selftest'));
+    assert.ok(Array.isArray(stray));
+  });
+
+  test('an incomplete run of a GATED suite still blocks', () => {
+    // The exclusion must be narrow: incompleteness is still a blocking
+    // condition everywhere else.
+    const r = compareToBaseline(baseline, run(
+      { recall: 0.6, noise_lines: 10, positives: 160 },
+      { coverage: { complete: false, skipped: 1, errored: 1 } },
+    ));
+    assert.equal(r.ok, false);
+  });
+});
+
+describe('gate — a baseline note survives regeneration', () => {
+  test('both committed baselines still carry a hand-written note', () => {
+    // `--update` overwrote the note with a generic string, destroying the one
+    // part of a baseline file a human wrote on purpose — and failing the two
+    // baseline suites that assert on it.
+    const ex = load('extraction-core.v1.json');
+    const rt = load('retrieval-core.v1.json');
+    assert.match(ex.note, /E6 must beat/);
+    assert.match(rt.note, /retrieveKnowledge/);
+  });
+
+  test('the notes name how to regenerate that ONE suite', () => {
+    for (const f of ['extraction-core.v1.json', 'retrieval-core.v1.json']) {
+      assert.match(load(f).note, /eval:gate -- \S+ --update/,
+        'the note should show the per-suite form, not the whole-tree one');
+    }
   });
 });

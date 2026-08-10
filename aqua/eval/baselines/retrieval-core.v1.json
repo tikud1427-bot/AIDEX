@@ -4,7 +4,7 @@
   "node": "v20.20.2",
   "suiteFingerprint": "9f00d650629e4796",
   "caseCount": 200,
-  "note": "Baseline for retrieval-core. Regenerate with: npm run eval:gate -- --update",
+  "note": "Baseline of the CURRENT retrieval path (pic/core retrieveKnowledge) over retrieval-core.v1, all understanding flags ON. The number E7 must beat. Regenerate with: npm run eval:gate -- retrieval-core --update",
   "coverage": {
     "total": 200,
     "executed": 200,

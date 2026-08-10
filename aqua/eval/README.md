@@ -187,3 +187,33 @@ reproduced on. It is inert until the repository has Actions enabled; the
 The gate never regenerates a baseline on failure. Moving a number is a
 deliberate act that belongs in a PR whose description says **why** it moved.
 A gate that fixed its own baseline would be a rubber stamp.
+
+### E2/PR-6b — three flaws `--update` exposed
+
+The gate went red on the first real tree it met, and all three causes were
+mine.
+
+**1. It gated the harness self-test.** PR-6 excluded `selftest` by relying on
+the **absence** of a baseline file. That held right up until `--update`
+regenerated a baseline for every suite — after which the gate blocked forever
+on a suite that is *designed* to be incomplete. Exclusion is now by **name**
+(`NOT_GATED`). An invariant that depends on a file not existing is not an
+invariant.
+
+**2. `--update` destroyed the hand-written note.** It overwrote `note` with a
+generic string — the one part of a baseline file a human wrote on purpose, and
+the part two suites assert on. It is now **preserved** across regeneration.
+
+**3. `--update` rewrote everything at once.** One command replaced three
+baselines. It now **requires a suite id**:
+
+```bash
+npm run eval:gate -- extraction-core --update
+```
+
+Rewriting every baseline from one command is how a baseline gets replaced by
+accident, and a baseline replaced by accident is worse than no baseline —
+it looks authoritative.
+
+**Bite:** stop excluding the self-test → 1 fail · let `--update` flatten the
+note → 2.

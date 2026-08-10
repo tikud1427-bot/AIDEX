@@ -1,0 +1,102 @@
+/**
+ * AQUA Storage — dual write
+ * Blueprint E3/PR-5
+ *
+ * Writes to two adapters. Reads from exactly one.
+ *
+ * THE ASYMMETRY IS THE WHOLE DESIGN
+ * ---------------------------------
+ *   primary   JSON files. Authoritative. Every read comes from here, every
+ *             write must succeed here, and a failure propagates.
+ *   shadow    Postgres. Write-only. Failures are counted and logged and NEVER
+ *             propagate.
+ *
+ * Nothing reads from the shadow in this mode — not once. That is what makes
+ * shadow mode safe to switch on in production: the worst case for a completely
+ * broken Postgres is a log line per write and a non-zero drift counter. The
+ * data users depend on is untouched, because the code path that serves them
+ * never consults the new store.
+ *
+ * E3/PR-6 adds the drift job that reads both and compares. E3/PR-7 onward flip
+ * the read path one store at a time, and only after drift has been zero for a
+ * week. This PR does none of that.
+ *
+ * WHY A FAILING SHADOW MUST NOT THROW
+ * -----------------------------------
+ * If a shadow failure propagated, enabling shadow mode would make the engine
+ * LESS reliable than leaving it off — a migration step that increases risk
+ * before it delivers any benefit is a migration step nobody will turn on. The
+ * counter and the log are how it stays visible instead.
+ */
+
+export function createDualWriteAdapter(primary, shadow, { onShadowError } = {}) {
+  let shadowFailures = 0;
+  let shadowWrites = 0;
+
+  const shadowSafely = (label, fn) => {
+    try {
+      const out = fn();
+      if (out && typeof out.then === 'function') {
+        return out.then(
+          () => { shadowWrites++; },
+          err => { record(label, err); },
+        );
+      }
+      shadowWrites++;
+      return undefined;
+    } catch (err) {
+      record(label, err);
+      return undefined;
+    }
+  };
+
+  const record = (label, err) => {
+    shadowFailures++;
+    const msg = `[STORE] shadow write failed (${label}): ${err?.message ?? err}`;
+    if (onShadowError) onShadowError(err, label); else console.error(msg);
+  };
+
+  return {
+    id: `dual(${primary.id}→${shadow.id})`,
+
+    // The authoritative store decides. A dual-write is exactly as durable on
+    // return as its primary, and claiming otherwise would misinform the
+    // shutdown drain about whether it still has work to do.
+    syncDurable: primary.syncDurable,
+
+    // ── reads: primary only, always ─────────────────────────────────────────
+    existsSync(key) { return primary.existsSync(key); },
+    readSync(key) { return primary.readSync(key); },
+
+    // ── writes: primary must succeed, shadow is best effort ────────────────
+    async write(key, data) {
+      await primary.write(key, data);           // throws → caller sees it
+      await shadowSafely('write', () => shadow.write(key, data));
+    },
+
+    writeSync(key, data) {
+      primary.writeSync(key, data);             // throws → caller sees it
+      shadowSafely('writeSync', () => shadow.writeSync(key, data));
+    },
+
+    copySync(from, to) {
+      primary.copySync(from, to);
+      shadowSafely('copySync', () => shadow.copySync(from, to));
+    },
+
+    /** Awaited by the SIGTERM drain — the shadow writes behind a cache. */
+    async flush() {
+      if (typeof shadow.flush !== 'function') return 0;
+      try {
+        return await shadow.flush();
+      } catch (err) {
+        record('flush', err);
+        return 0;
+      }
+    },
+
+    stats() { return { shadowWrites, shadowFailures }; },
+    _primary: primary,
+    _shadow: shadow,
+  };
+}

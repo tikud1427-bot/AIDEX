@@ -102,6 +102,20 @@ try {
 // word-sense guard and the compound-role pattern are bug fixes and always run.
 try {
   console.log(`[UUS] flags uus=${uusEnabled() ? "on" : "off"}`);
+
+  // E3/PR-1 — a configured database must never be a surprise (L13: no dark
+  // stages). Printed on every boot, configured or not. Nothing reads through
+  // the pool yet; this line is how that stops being true silently.
+  try {
+    const { bootLine } = await import('./src/core/db/pool.js');
+    console.log(bootLine());
+    // E3/PR-5 — install the storage backend the environment asks for, then say
+    // which one is live. Fails open to JSON with the reason printed.
+    const { configureStorageFromEnv, storageBootLine } = await import('./src/core/storage/index.js');
+    console.log(storageBootLine(await configureStorageFromEnv()));
+  } catch (err) {
+    console.log(`[DB] boot line unavailable: ${err.message}`);
+  }
 } catch (err) {
   console.warn(`[UUS] flag report unavailable: ${err?.message ?? err}`);
 }

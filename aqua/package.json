@@ -30,6 +30,8 @@
     "test:providers": "node scripts/run-tests.mjs src/providers src/core/tests/backoff.test.js src/core/tests/health.test.js",
     "soak:providers": "node src/providers/tests/providerResilience.soak.js",
     "test:understanding": "node scripts/run-tests.mjs src/understanding",
+    "db:migrate": "node src/core/db/cli.mjs",
+    "db:status": "node src/core/db/cli.mjs --status",
     "eval:gate": "node eval/gate.mjs",
     "eval": "node eval/run.mjs",
     "eval:selftest": "node eval/run.mjs selftest",
@@ -57,6 +59,7 @@
     "openai": "^6.44.0",
     "pdf-lib": "^1.17.1",
     "pdf-parse": "^2.4.5",
+    "pg": "^8.23.0",
     "pptxgenjs": "^4.0.1",
     "uuid": "^14.0.1"
   }
