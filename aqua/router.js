@@ -112,7 +112,17 @@ try {
     // E3/PR-5 — install the storage backend the environment asks for, then say
     // which one is live. Fails open to JSON with the reason printed.
     const { configureStorageFromEnv, storageBootLine } = await import('./src/core/storage/index.js');
-    console.log(storageBootLine(await configureStorageFromEnv()));
+    const storeResult = await configureStorageFromEnv();
+    console.log(storageBootLine(storeResult));
+
+    // E3/PR-6 — in shadow mode, report drift once at boot. Deliberately NOT
+    // awaited: a comparison that delayed startup would be the first thing
+    // switched off, and it is diagnostic, not load-bearing. Fail-open.
+    if (storeResult.mode === 'shadow') {
+      import('./src/core/db/drift.js')
+        .then(async ({ checkDrift, driftLine }) => console.log(driftLine(await checkDrift())))
+        .catch(err => console.log(`[DRIFT] check unavailable: ${err.message}`));
+    }
   } catch (err) {
     console.log(`[DB] boot line unavailable: ${err.message}`);
   }

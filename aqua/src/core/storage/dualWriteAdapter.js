@@ -29,9 +29,23 @@
  * counter and the log are how it stays visible instead.
  */
 
-export function createDualWriteAdapter(primary, shadow, { onShadowError } = {}) {
+/** Store paths are compared by basename — the same key the blob table uses. */
+const storeName = key => String(key).split(/[\\/]/).pop();
+
+export function createDualWriteAdapter(primary, shadow, { onShadowError, readFrom = [] } = {}) {
   let shadowFailures = 0;
   let shadowWrites = 0;
+  let shadowReads = 0;
+  let readFallbacks = 0;
+
+  /**
+   * E3/PR-7 — the store keys whose READS come from the shadow.
+   *
+   * Empty by default, which is PR-5's behaviour exactly. A store only appears
+   * here after its drift has been clean, and it is checked per store rather
+   * than globally: one store being trustworthy says nothing about another.
+   */
+  const readShadow = new Set(readFrom);
 
   const shadowSafely = (label, fn) => {
     try {
@@ -64,9 +78,37 @@ export function createDualWriteAdapter(primary, shadow, { onShadowError } = {}) 
     // shutdown drain about whether it still has work to do.
     syncDurable: primary.syncDurable,
 
-    // ── reads: primary only, always ─────────────────────────────────────────
-    existsSync(key) { return primary.existsSync(key); },
-    readSync(key) { return primary.readSync(key); },
+    // ── reads: primary, unless this store has been explicitly flipped ──────
+    //
+    // The fallback is the load-bearing part. A shadow that returns null for a
+    // store the primary HAS would otherwise present as an empty store — which
+    // to a user is indistinguishable from total data loss, delivered silently.
+    // So a null from the shadow is never trusted: the primary answers, the
+    // fallback is counted, and the drift job will show why.
+    existsSync(key) {
+      if (!readShadow.has(storeName(key))) return primary.existsSync(key);
+      return shadow.existsSync(key) || primary.existsSync(key);
+    },
+
+    readSync(key) {
+      const name = storeName(key);
+      if (!readShadow.has(name)) return primary.readSync(key);
+
+      let value = null;
+      try {
+        value = shadow.readSync(key);
+      } catch (err) {
+        record('readSync', err);
+      }
+      if (value !== null && value !== undefined) { shadowReads++; return value; }
+
+      const fromPrimary = primary.readSync(key);
+      if (fromPrimary !== null) {
+        readFallbacks++;
+        console.error(`[STORE] ${name}: shadow read was empty, served from JSON — check drift`);
+      }
+      return fromPrimary;
+    },
 
     // ── writes: primary must succeed, shadow is best effort ────────────────
     async write(key, data) {
@@ -95,7 +137,8 @@ export function createDualWriteAdapter(primary, shadow, { onShadowError } = {}) 
       }
     },
 
-    stats() { return { shadowWrites, shadowFailures }; },
+    stats() { return { shadowWrites, shadowFailures, shadowReads, readFallbacks }; },
+    readsFromShadow() { return [...readShadow]; },
     _primary: primary,
     _shadow: shadow,
   };

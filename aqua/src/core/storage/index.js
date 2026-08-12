@@ -91,6 +91,22 @@ export const ADAPTER_FLAGS = Object.freeze([...REQUIRED_FLAGS]);
 export const storeModeFromEnv = () =>
   String(process.env.AQUA_STORE_PG ?? 'off').toLowerCase() === 'shadow' ? 'shadow' : 'off';
 
+/**
+ * E3/PR-7 — which stores READ from Postgres.
+ *
+ * `AQUA_STORE_PG_READ=artifacts,attachments` — bare names, normalised to the
+ * store filename. A list rather than a boolean because the epic flips one
+ * store per PR: one store being trustworthy says nothing about another, and a
+ * single global switch would make the careful ordering meaningless.
+ */
+export const readStoresFromEnv = () =>
+  String(process.env.AQUA_STORE_PG_READ ?? '')
+    .split(',')
+    .map(s => s.trim())
+    .filter(Boolean)
+    .map(s => (s.startsWith('.aqua-') ? s : `.aqua-${s}`))
+    .map(s => (s.endsWith('.json') ? s : `${s}.json`));
+
 let mode = 'off';
 
 /**
@@ -110,8 +126,36 @@ export async function configureStorageFromEnv() {
       return { mode: 'off', adapter: getAdapter().id, reason: 'AQUA_STORE_PG=shadow but DATABASE_URL is not set' };
     }
     const { createPgBlobAdapter } = await import('./pgBlobAdapter.js');
-    setAdapter(createDualWriteAdapter(createJsonFileAdapter(), createPgBlobAdapter()));
-    return { mode: 'shadow', adapter: getAdapter().id };
+    const shadow = createPgBlobAdapter();
+    const requested = readStoresFromEnv();
+    const notes = [];
+    let readFrom = [];
+
+    if (requested.length) {
+      // 1 — HYDRATE FIRST. The Postgres adapter serves reads from a cache. An
+      //     unhydrated cache answers null for everything, which the fallback
+      //     would paper over on every single read — working, but with the new
+      //     substrate contributing nothing and nobody noticing.
+      await shadow.hydrate();
+
+      // 2 — CHECK DRIFT PER STORE. A store whose two sides disagree does not
+      //     flip, however loudly the env asked. This is the gate that makes
+      //     the flip safe to attempt at all: the evidence is checked at the
+      //     moment of the decision, not remembered from a report last week.
+      const { primaryManifest, shadowManifest, diffManifests } = await import('../db/drift.js');
+      const diff = diffManifests(primaryManifest(), await shadowManifest());
+      const dirty = new Set([
+        ...diff.mismatched.map(m => m.key),
+        ...diff.missingShadow,
+      ]);
+      for (const store of requested) {
+        if (dirty.has(store)) notes.push(`${store} still drifts — reads stay on JSON`);
+        else readFrom.push(store);
+      }
+    }
+
+    setAdapter(createDualWriteAdapter(createJsonFileAdapter(), shadow, { readFrom }));
+    return { mode: 'shadow', adapter: getAdapter().id, readFrom, requested, notes };
   } catch (err) {
     mode = 'off';
     resetAdapter();
@@ -141,5 +185,10 @@ export function storageBootLine(result) {
   if (r.mode !== 'shadow') {
     return `[STORE] backend=json-file shadow=off${r.reason ? ` (${r.reason})` : ''}`;
   }
-  return `[STORE] backend=json-file shadow=postgres (JSON remains authoritative; no read comes from Postgres)`;
+  if (!r.readFrom?.length) {
+    const why = r.notes?.length ? ` — ${r.notes.join('; ')}` : '';
+    return `[STORE] backend=json-file shadow=postgres (JSON remains authoritative; no read comes from Postgres)${why}`;
+  }
+  const why = r.notes?.length ? ` · ${r.notes.join('; ')}` : '';
+  return `[STORE] backend=json-file shadow=postgres reads=[${r.readFrom.join(', ')}] (all writes still go to both)${why}`;
 }

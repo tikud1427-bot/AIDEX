@@ -212,11 +212,19 @@ describe('shadow mode — wiring', () => {
     assert.match(src, /storageBootLine/);
   });
 
-  test('nothing reads from Postgres in this PR', () => {
-    // The claim that makes shadow mode safe to enable. PR-7 onward flips read
-    // paths one store at a time, and only after drift has been zero.
+  test('a store reads from the primary UNLESS it has been explicitly flipped', () => {
+    // E3/PR-5 asserted that NOTHING reads from Postgres, syntactically. E3/PR-7
+    // is the PR whose entire purpose is to change that, one store at a time —
+    // so this assertion was superseded, deliberately, rather than deleted.
+    //
+    // What survives is the property that still matters: the default path is
+    // the primary, and the shadow is reached only through an explicit opt-in
+    // list. readFlip.test.js covers the flipped behaviour.
     const src = stripComments(fs.readFileSync(path.join(ROOT, 'src/core/storage/dualWriteAdapter.js'), 'utf8'));
-    assert.match(src, /readSync\(key\)\s*\{\s*return primary\.readSync\(key\);/);
-    assert.match(src, /existsSync\(key\)\s*\{\s*return primary\.existsSync\(key\);/);
+    assert.match(src, /if \(!readShadow\.has\(name\)\) return primary\.readSync\(key\);/);
+    assert.match(src, /if \(!readShadow\.has\(storeName\(key\)\)\) return primary\.existsSync\(key\);/);
+
+    const dual = createDualWriteAdapter(createJsonFileAdapter(), spyShadow());
+    assert.deepEqual(dual.readsFromShadow(), [], 'a default dual adapter reads from the shadow');
   });
 });

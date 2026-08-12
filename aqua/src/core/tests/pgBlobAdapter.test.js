@@ -161,7 +161,11 @@ describe('pg blob adapter — reachable only through shadow mode', () => {
     // seam must — and this test went red, which is what it was for. The
     // adapter is still unreachable except through AQUA_STORE_PG=shadow, and
     // even then nothing READS from it (see dualWrite.test.js).
-    const ALLOWED = ['src/core/storage/index.js'];
+    // E3/PR-5 added the seam (it constructs the adapter); E3/PR-6 added the
+    // drift job, which imports only the TABLE constant — a far weaker coupling
+    // than using the adapter, but still worth being on the list rather than
+    // waved through. Each entry cost a red battery first.
+    const ALLOWED = ['src/core/storage/index.js', 'src/core/db/drift.js'];
     const offenders = [];
     const walk = (dir) => {
       for (const name of readdirSync(dir)) {

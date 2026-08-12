@@ -21,6 +21,7 @@ import { isConfigured, closePool, bootLine } from './pool.js';
 
 const args = process.argv.slice(2);
 const wantStatus = args.includes('--status');
+const wantDrift = args.includes('--drift');
 const dryRun = args.includes('--dry-run');
 
 console.log(bootLine());
@@ -40,6 +41,18 @@ if (!isConfigured()) {
 }
 
 try {
+  if (wantDrift) {
+    const { checkDrift, driftLine, cleanSince } = await import('./drift.js');
+    const r = await checkDrift();
+    console.log(`\n${driftLine(r)}`);
+    for (const m of r.mismatched ?? []) console.log(`   ✗ ${m.key}  primary ${m.primary}  postgres ${m.shadow}`);
+    for (const k of r.missingShadow ?? []) console.log(`   ✗ ${k} — never reached postgres`);
+    for (const k of r.missingPrimary ?? []) console.log(`   ! ${k} — row with no store file`);
+    const history = await cleanSince();
+    if (history?.cleanSince) console.log(`\n   clean since ${new Date(history.cleanSince).toISOString()} over ${history.runs} recorded run(s)`);
+    process.exit(r.clean ? 0 : 1);
+  }
+
   if (wantStatus) {
     const s = await status();
     console.log(`\n   status     ${s.status}`);

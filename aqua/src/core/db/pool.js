@@ -178,6 +178,20 @@ export function bootLine() {
   return `[DB] postgres=configured host=${d.host} port=${d.port} db=${d.database} ssl=${d.ssl} max=${d.max}`;
 }
 
+/**
+ * Tests only — substitute the pool.
+ *
+ * An INJECTION SEAM rather than tests reaching into module internals: ESM
+ * exports are read-only, so the alternative is patching `node_modules`, which
+ * is what the E3/PR-8 diagnostic had to do before this existed. Returns a
+ * restore function.
+ */
+export function _setPoolForTests(replacement) {
+  const previous = pool;
+  pool = replacement;
+  return () => { pool = previous; };
+}
+
 /** Tests only — clears the memoised config so env changes take effect. */
 export function _resetForTests() {
   cachedConfig = null;

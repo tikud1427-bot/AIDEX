@@ -527,3 +527,303 @@ eval:gate   exit 0 · default boot still json-file, shadow off
 
 **PR-6** — the drift comparison job: read both sides, compare checksums, report
 at boot. Read paths do not flip until drift has been zero for a week.
+
+---
+
+## PR-6 — the drift job
+
+Reads both sides, reports where they disagree. Read paths do not flip until
+this has reported clean for a week, and PR-7 will point at `aqua_drift_runs`
+for the evidence rather than at somebody's recollection.
+
+```bash
+npm run db:drift
+```
+
+```
+[DRIFT] clean — 12/12 stores match (7ms)
+[DRIFT] ⚠ 1 mismatched, 2 missing in postgres of 12 stores — read paths must NOT flip
+```
+
+### It never writes to a store
+
+A drift job that *repairs* what it finds is a second write path, with no
+review, running unattended, against the exact data whose correctness is in
+question. This one reports; a human decides.
+
+The only thing it writes is its own history row — and a test asserts it:
+no `writeSync`, no `atomicWrite`, no adapter access, no `UPDATE`, no `DELETE`,
+and no `INSERT` into anything but `aqua_drift_runs`.
+
+### It compares checksums, not blobs
+
+`aqua_store_blobs.checksum` exists for this. The shadow side is one query
+returning `(store_key, checksum)`; selecting `data` would drag every store
+across the wire on a timer. A test fails if the query ever grows a `data`
+column.
+
+### Four outcomes, and two of them are different problems
+
+| | meaning |
+|---|---|
+| matched | same checksum both sides |
+| mismatched | present both sides, contents differ — **both values reported**, so nobody has to diff two files by hand |
+| missing in postgres | a write never landed |
+| stale row | a row outlived its store file |
+
+Collapsing the last two into "different" would lose *which side to go and look
+at*. They are counted and reported separately.
+
+### An empty shadow is drift, not cleanliness
+
+The state immediately after shadow mode is switched on: nothing written yet. If
+that read as clean, the week-of-zero criterion could be satisfied by a database
+nobody ever wrote to. Asserted directly, and reverting it fails two tests.
+
+### Only `.aqua-*.json` is compared
+
+The data directory also holds `.bak` files, temp files and migration stubs.
+Hashing those would report drift for files the shadow was never asked to hold.
+
+### The boot report is not awaited
+
+In shadow mode only, and fire-and-forget:
+
+```js
+if (storeResult.mode === 'shadow') {
+  import('./src/core/db/drift.js')
+    .then(async ({ checkDrift, driftLine }) => console.log(driftLine(await checkDrift())))
+    .catch(err => console.log(`[DRIFT] check unavailable: ${err.message}`));
+}
+```
+
+A comparison that delayed startup would be the first thing switched off. It is
+diagnostic, not load-bearing, and a test fails if it ever becomes `await`ed.
+
+### The pure part is separated, again
+
+`diffManifests()` holds all the judgement and needs neither a database nor a
+filesystem — so the logic that decides whether the substrate is safe to switch
+to is fully tested without a server. Same split as the migration runner.
+
+### Bite, measured
+
+| mutation | failures |
+|---|---|
+| call an empty shadow "clean" | 2 |
+| conflate the two missing categories | 2 |
+| pull every blob instead of checksums | 1 |
+| hash backups and temp files too | 1 |
+| await the drift check at boot | 1 |
+| *(reverted)* | **0 — 19/19** |
+
+### The inertness guard fired a fifth time
+
+`drift.js` imports the `TABLE` constant from the adapter — a far weaker
+coupling than using it, but still added to the `ALLOWED` list deliberately
+rather than waved through. Every entry on those lists cost a red battery first.
+
+### Results
+
+```
+npm test    2121 / 166 suites / 0 fail    (from 2102 / 159)
+eval:gate   exit 0 · default boot: json-file, shadow off, no drift check
+```
+
+### Next
+
+**PR-7** — flip the first read path, artifacts, behind its own flag. Only after
+drift has been clean for a week, with `aqua_drift_runs` as the evidence.
+
+---
+
+## PR-7 — flipping the first read path
+
+The first PR in this epic where a user's read can actually come from Postgres.
+
+```bash
+AQUA_STORE_PG=shadow AQUA_STORE_PG_READ=artifacts
+```
+
+```
+[STORE] backend=json-file shadow=postgres reads=[.aqua-artifacts.json] (all writes still go to both)
+[STORE] backend=json-file shadow=postgres (JSON remains authoritative; no read comes from Postgres)
+        — .aqua-artifacts.json still drifts — reads stay on JSON
+```
+
+### A list, not a boolean
+
+The epic flips **one store per PR**. One store being trustworthy says nothing
+about another, and a single global switch would make that careful ordering
+meaningless. `AQUA_STORE_PG_READ` takes bare names and normalises them.
+
+### Three properties carry the safety
+
+**1 — Hydrate first.** The Postgres adapter serves reads from a cache. An
+unhydrated cache answers `null` for everything, so *every* read would take the
+fallback below: working, with the new substrate contributing nothing and nobody
+noticing. A test asserts `hydrate()` runs before the drift comparison.
+
+**2 — Drift gates the flip, per store, at the moment of the decision.** A store
+whose two sides disagree does not flip, however loudly the environment asked —
+and the refusal is printed. `missingShadow` counts as dirty, not just a
+checksum mismatch: a store the shadow has never received is precisely the case
+where reading from it would serve an empty store.
+
+The evidence is checked *now*, not remembered from a report last week.
+
+**3 — A null from the shadow is never trusted.** It falls back to JSON, counts
+it, and logs. An empty store is indistinguishable from total data loss to the
+person reading it — serving `null` would be the worst outcome available in this
+epic: silent, total, and looking exactly like success.
+
+A throwing shadow read falls back too. A genuinely absent store still reads
+`null` — the fallback invents nothing, so a first boot does not look like a
+failure.
+
+### What does not change
+
+Writes still go to **both**, flipped or not. `existsSync` answers yes if either
+side has it. An unflipped store reads from JSON even when the shadow holds it —
+tested, because a flip that leaked would silently move eight stores instead of
+one.
+
+### Bite, measured
+
+| mutation | failures |
+|---|---|
+| trust a null from the shadow | 2 |
+| let the flip leak to every store | 1 |
+| flip without hydrating first | 1 |
+| flip regardless of drift | 2 |
+| treat missing-in-shadow as clean | 1 |
+| *(reverted)* | **0 — 18/18** |
+
+### 🔴 A vacuous BITE MEASUREMENT, not a vacuous test
+
+The scoping mutation first reported **0 failures**, which looked like a useless
+test. It was not — my mutation targeted a line that did not exist, so nothing
+was mutated and the suite passed because the code was unchanged.
+
+The distinction matters: measuring bite only proves something if the mutation
+actually applied. The corrected mutation fails 1. Every earlier bite table in
+this project stands, but the lesson is to verify that a mutation landed before
+believing what it reports.
+
+### A PR-5 assertion superseded, deliberately
+
+PR-5 asserted *syntactically* that nothing reads from Postgres. PR-7 exists to
+change that, so the assertion was **rewritten rather than deleted**: what
+survives is that the default path is the primary and the shadow is reached only
+through an explicit opt-in list.
+
+Also reverted: a gratuitous rewording of the boot line ("JSON authoritative"
+for "JSON remains authoritative") that broke a PR-5 test for no benefit.
+
+### Results
+
+```
+npm test    2139 / 171 suites / 0 fail    (from 2121 / 166)
+eval:gate   exit 0 · default boot: json-file, shadow off, nothing flipped
+```
+
+### Before merging this one
+
+Unlike every previous PR in this epic, this one is gated on something other
+than my tests: **`npm run db:drift` reporting clean for a week**, with
+`aqua_drift_runs` as the evidence. The code refuses the flip if drift is dirty
+at boot, but that is a backstop, not a substitute for the week.
+
+### Next
+
+**PR-8** — attachments, the second most isolated store. Same shape, one store
+at a time, each gated on its own drift.
+
+---
+
+## PR-8 — executing the chain
+
+**Six E3 PRs shipped with every live-database test skipped.**
+
+The skips were honest — reported with a reason, never quietly passed. But the
+effect was that the migration runner, the blob adapter, the drift job and the
+read flip had **never been executed against anything**. Six PRs of unexercised
+code, each verified only by the tests that carefully avoided the part which
+talks to Postgres.
+
+So before flipping a second store, the chain gets run.
+
+### What running it found
+
+Everything worked, and three things were confirmed that no previous PR could
+check:
+
+**A write really reaches the table.** A *second* adapter, hydrating from
+scratch, is the only way to distinguish a real write from a cache agreeing with
+itself. It does.
+
+**The adapter and the drift job hash identically.** They are separate
+functions in separate files. If they had diverged, drift would have reported
+false positives forever and no read path could ever have flipped. Now asserted
+against a row the adapter actually wrote.
+
+**The drift gate refuses a dirty store for real.** Against a database holding
+one clean store and one dirty one, `configureStorageFromEnv` flips exactly one
+and reports the refusal.
+
+The migration idempotency claim — asserted in PR-2 against a hand-built plan —
+is now asserted against a database that recorded the first run.
+
+### ⚠ What this does NOT prove
+
+`pg-mem` is a simulator, and treating it as a substitute for the live check
+would be exactly the "green means safe" this project keeps catching.
+
+**Not proven here:**
+
+| | |
+|---|---|
+| `pg_advisory_lock` | **stubbed — always succeeds.** The two-instances-can't-both-migrate property is *not* tested. That needs two processes and a real server. |
+| `CREATE TABLE IF NOT EXISTS` | unimplemented for an existing table |
+| `ON CONFLICT DO NOTHING` | unimplemented for an existing row |
+| everything operational | concurrency, connection loss, isolation, SSL, performance |
+
+The last two SQL forms *are* the idempotency mechanism, so the harness
+tolerates exactly those two errors — a deliberate, narrow allowance, and the
+reason the live tests remain, still skipped-with-a-reason, as the real evidence.
+
+### An injection seam instead of patching node_modules
+
+The diagnostic that found all this had to overwrite `node_modules/pg` to
+redirect the driver, because ESM exports are read-only. That is not something
+to ship. `pool._setPoolForTests()` is the seam; the harness uses it and puts
+the pool back.
+
+### Bite, measured
+
+| mutation | failures |
+|---|---|
+| cache the write but never send it | **7** |
+| drift hashes differently from the adapter | 5 |
+| re-apply every migration each run | 2 |
+| flip a store that still drifts | 1 |
+| *(reverted)* | **0 — 14/14** |
+
+The first one is the point: silently caching a write and never sending it is
+precisely the failure none of the previous six PRs could detect.
+
+### Results
+
+```
+npm test    2153 / 175 suites / 0 fail    (from 2139 / 171)
+eval:gate   exit 0 · default boot unchanged · pg-mem is a devDependency
+```
+
+`npm audit` still reports the pre-existing `image-size` advisories via
+`pptxgenjs` — unchanged by this PR, and unrelated to `pg-mem`.
+
+### Next
+
+**PR-9** — flip attachments, the second store. The chain is now exercised on
+every run, so that flip lands on evidence rather than on argument. The live
+week-of-drift on a real server is still the gate for turning any of it on.

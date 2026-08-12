@@ -31,6 +31,7 @@
     "soak:providers": "node src/providers/tests/providerResilience.soak.js",
     "test:understanding": "node scripts/run-tests.mjs src/understanding",
     "db:migrate": "node src/core/db/cli.mjs",
+    "db:drift": "node src/core/db/cli.mjs --drift",
     "db:status": "node src/core/db/cli.mjs --status",
     "eval:gate": "node eval/gate.mjs",
     "eval": "node eval/run.mjs",
@@ -62,5 +63,8 @@
     "pg": "^8.23.0",
     "pptxgenjs": "^4.0.1",
     "uuid": "^14.0.1"
+  },
+  "devDependencies": {
+    "pg-mem": "^3.0.14"
   }
 }
