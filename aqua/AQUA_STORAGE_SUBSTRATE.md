@@ -827,3 +827,197 @@ eval:gate   exit 0 · default boot unchanged · pg-mem is a devDependency
 **PR-9** — flip attachments, the second store. The chain is now exercised on
 every run, so that flip lands on evidence rather than on argument. The live
 week-of-drift on a real server is still the gate for turning any of it on.
+
+---
+
+## PR-9 — two instances, zero data loss
+
+E3's exit criterion. Before this PR it was **false on the new substrate**, and
+PR-8's harness is what made that checkable.
+
+### The measurement
+
+Two adapters, each with its own cache — exactly the production shape:
+
+```
+instance A writes {"owner":"alice"}
+instance B writes {"owner":"bob"}
+
+final row      : {"owner2":"bob"}     ← alice is gone
+A still thinks : {"owner1":"alice"}
+B still thinks : {"owner2":"bob"}
+```
+
+That is the identical last-writer-wins loss the Mongo mirror already warns
+about, faithfully reproduced on Postgres. **Moving to Postgres without fixing
+it would have moved the bug, not fixed it** — and the epic would have
+"completed" with its headline promise untrue.
+
+### Optimistic versioning, not a lock
+
+`aqua_store_blobs` gains a `version` column. A write states the version it
+**read**; the `UPDATE` applies only if the row still carries it. A stale write
+affects zero rows and the caller is told.
+
+A per-store advisory lock would serialise every write to a store across all
+instances, turning a 500 ms debounce into a queue. Optimistic versioning costs
+nothing when there is no conflict, which is the normal case.
+
+```
+✓ B refused: StoreConflictError
+✓ alice survives
+✓ B recovers via refresh()
+✓ B writes successfully afterwards
+```
+
+### The loser is told
+
+`StoreConflictError` is its own type because it is **not** a database failure —
+it is the concurrency control working, and the correct response (re-read,
+merge, retry) differs from a connection error's.
+
+An **awaited** `write` throws: the caller is right there, and a caller who is
+not told their write lost believes it won — which is how two instances end up
+confidently holding different data. A **write-behind** `writeSync` has nobody
+to tell in the moment, so the conflict is recorded and re-reported by
+`flush()`, and `conflicts()` survives the flush so an operator asking *"did any
+write lose a race?"* still gets an answer.
+
+`refresh()` is deliberately **manual**. Silently adopting the other instance's
+value would discard this instance's write with nobody told — the same bug
+wearing a politer face.
+
+### 🔴 Two guards, and only one was tested
+
+Measuring bite found that dropping the `AND version = $5` clause failed **zero**
+tests. Not a vacuous test this time — a genuinely untested code path: every
+case was caught by the *first-write* branch, so the `UPDATE` guard was never
+reached.
+
+Two independent guards; my suite exercised one. The added case has both
+instances hydrate **after** the row exists, so both hold version 1 and the
+`UPDATE` clause is the only thing between them. Both mutations now bite.
+
+### 🔴 A pg-mem quirk that would have been invisible in production
+
+`ON CONFLICT DO NOTHING ... RETURNING` returns a row in pg-mem where real
+Postgres returns none. A first-write guard built on that row count would have
+been **correct in production and silently wrong in every test** — the worst
+combination available.
+
+The guard reads back the stored checksum instead, which is true on both. A test
+asserts the code does not depend on `RETURNING` after a `DO NOTHING`.
+
+### Two of my own mistakes, both caught by measuring rather than reading
+
+- A `conflicts.push` edit whose anchor did not match — it never applied, and I
+  printed success without asserting. Same class as PR-4's partial replace.
+- A timing-based test that waited one `setImmediate` when the guard performs
+  **two** awaited queries. Now synchronised on `flush()`, which is the real
+  synchronisation point, and run three consecutive times.
+
+### Also fixed
+
+PR-8's chain test asserted `applied.length === 3`. Adding a migration turned it
+red for no useful reason — "expected 3" says nothing about whether the runner
+is wrong or the set simply grew. It now derives the count from disk.
+
+### Bite, measured
+
+| mutation | failures |
+|---|---|
+| drop the version guard (last-writer-wins) | 1 |
+| swallow the conflict instead of raising | 1 |
+| hydrate without loading versions | 1 |
+| stop recording write-behind conflicts | 1 |
+| *(reverted)* | **0 — 11/11** |
+
+### What remains unproven
+
+`pg_advisory_lock` is still stubbed in the harness, so **migration** mutual
+exclusion between two instances is untested. Store writes are now safe under
+concurrency; the migration path's safety still rests on a real server and two
+real processes.
+
+### Results
+
+```
+npm test    2164 / 177 suites / 0 fail    (from 2153 / 175)
+eval:gate   exit 0 · default boot unchanged
+```
+
+### Next
+
+**PR-10** — flip the remaining stores. Each is now a config change rather than
+code, because PR-7 generalised the flip: `AQUA_STORE_PG_READ` takes a list and
+drift gates each store independently.
+
+---
+
+## PR-10 — the finding that replaced a config change
+
+PR-10 was going to be "flip the remaining stores". It is not a PR: PR-7
+generalised the flip, so all eight stores already work from one `.env` line.
+Writing that as a pull request would be theatre.
+
+So the same question PR-9 asked: **what does the epic actually still lack?**
+
+### The measurement
+
+```
+store size: 2.9 MB
+one whole-store write         :  91 ms
+ONE FACT changed, same store  :  69 ms   ← the entire 2.9 MB is rewritten
+```
+
+| owners | bytes per write | time |
+|---:|---:|---:|
+| 100 | 0.1 MB | 16 ms |
+| 1,000 | 1.2 MB | 52 ms |
+| 5,000 | 6.0 MB | **858 ms** |
+
+Superlinear, and every turn writes.
+
+**E3 moved where the blob lives. It did not change the shape.** The audit said
+the JSON substrate fails between 1k and 10k users; on this evidence the
+Postgres blob substrate fails in the same range for the same reason. More
+durable, more concurrent — **not more scalable**.
+
+Per-owner rows, measured rather than assumed: **28 ms at 5,000 owners versus
+858 ms**, and flat.
+
+### Why this is not a bug to fix here
+
+PR-4 recorded the reason and it holds: PR-3 keyed the seam by **path**, and a
+path carries no owner. Splitting by owner changes what the stores *hold* — that
+is E5's claim schema, where the blueprint already puts it (Part 3, `claims`
+partitioned by `owner_id`). Doing it inside E3 would be the "two risky things
+at once" the epic's ordering forbids, and it would be done twice.
+
+### Recorded as inverting tests
+
+`writeShape.test.js` asserts what is true **today** — one row per store, a
+one-owner change rewriting everything, a boot loading every owner. Those
+assertions are expected to **invert** when per-owner storage lands, the same
+mechanism E1/PR-1 used for the ratio ceiling that E1/PR-3 closed.
+
+One test in that file asserts E3's real win alongside the open problems, so the
+suite does not read as "the epic achieved nothing": the same write is safe
+under two instances, which was false before PR-9.
+
+Bite: write only a fragment → 3 · hydrate loads nothing → 1. Both mutations
+verified as *applied* before believing the number — the PR-7 lesson.
+
+### Where E3 stands
+
+**Complete against its stated exit criterion.** Two instances no longer lose
+each other's writes, and that was false six PRs ago. Durable, concurrent,
+observable, with a per-store rollout switch.
+
+**The scaling problem moves to E5**, labelled rather than assumed solved.
+
+### Still ungated by anything I can run
+
+`npm run db:drift` clean for a week on a real server, with `aqua_drift_runs` as
+the evidence, before any read flip is switched on. `pg_advisory_lock` is
+stubbed in the harness, so migration mutual exclusion has never actually run.

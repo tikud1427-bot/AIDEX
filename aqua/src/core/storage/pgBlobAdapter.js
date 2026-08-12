@@ -42,6 +42,19 @@ import { getPool, isConfigured } from '../db/pool.js';
 
 export const TABLE = 'aqua_store_blobs';
 
+/**
+ * A write lost the race. Its own error type because it is NOT a failure of the
+ * database — it is the concurrency control working, and the caller's correct
+ * response (re-read, merge, retry) is different from a connection error's.
+ */
+export class StoreConflictError extends Error {
+  constructor(storeKey, detail) {
+    super(`store "${storeKey}" changed underneath this instance — ${detail}`);
+    this.name = 'StoreConflictError';
+    this.storeKey = storeKey;
+  }
+}
+
 const checksum = data => crypto.createHash('sha256').update(data).digest('hex').slice(0, 16);
 
 /** A store path becomes its basename. See 0002_store_blobs.sql for why. */
@@ -50,6 +63,18 @@ export const storeKeyFor = key => path.basename(String(key));
 export function createPgBlobAdapter() {
   /** @type {Map<string, string>} storeKey → serialised store */
   const cache = new Map();
+  /**
+   * storeKey → the row version this instance last saw.
+   *
+   * E3/PR-9 — the guard for the epic's exit criterion. Two instances each hold
+   * their own cache; without a version, the second write overwrites the first
+   * wholesale and neither cache ever learns. Measured before this existed:
+   * instance A wrote, instance B wrote, A's data was gone and both caches
+   * still believed their own version.
+   */
+  const versions = new Map();
+  /** Writes rejected because another instance got there first. */
+  const conflicts = [];
   /** In-flight writes, so flush() can await them. */
   const pending = new Set();
   /** Write-behind failures, surfaced by flush(). */
@@ -71,6 +96,10 @@ export function createPgBlobAdapter() {
   const enqueue = (promise) => {
     const tracked = promise.catch(err => {
       failures.push(err);
+      // A conflict is kept separately AND survives flush(), because flush
+      // clears `failures` so it is not sticky. An operator asking "did any
+      // write lose a race?" must still get an answer after a flush.
+      if (err instanceof StoreConflictError) conflicts.push(err);
       console.error(`[DB] store write failed: ${err.message}`);
     });
     pending.add(tracked);
@@ -78,16 +107,54 @@ export function createPgBlobAdapter() {
     return tracked;
   };
 
+  /**
+   * Write a store blob, guarded by the version this instance last read.
+   *
+   * A new row inserts at version 1. An existing row updates ONLY if its
+   * version still matches what we saw — otherwise another instance wrote in
+   * between, the update affects zero rows, and we say so instead of silently
+   * winning.
+   */
   async function upsert(storeKey, data) {
     const pool = await getPool();
     if (!pool) throw new Error('pgBlobAdapter: DATABASE_URL is not configured');
-    await pool.query(
-      `INSERT INTO ${TABLE} (store_key, data, bytes, checksum, updated_at)
-       VALUES ($1, $2, $3, $4, now())
-       ON CONFLICT (store_key) DO UPDATE
-         SET data = EXCLUDED.data, bytes = EXCLUDED.bytes,
-             checksum = EXCLUDED.checksum, updated_at = now()`,
-      [storeKey, data, Buffer.byteLength(data, 'utf8'), checksum(data)]);
+    const bytes = Buffer.byteLength(data, 'utf8');
+    const sum = checksum(data);
+    const seen = versions.get(storeKey);
+
+    if (seen === undefined) {
+      // First write from this instance. If a row already exists, this is a
+      // conflict by definition — we are writing over something we never read.
+      // Checked by READING BACK rather than by trusting `RETURNING` on a
+      // DO NOTHING. pg-mem returns a row even when nothing was inserted (real
+      // Postgres returns none), so a guard built on the row count would be
+      // correct in production and silently wrong in every test — the worst
+      // combination available. Reading back the stored checksum is true on
+      // both, and it is one extra query on a path that runs once per store.
+      await pool.query(
+        `INSERT INTO ${TABLE} (store_key, data, bytes, checksum, version, updated_at)
+         VALUES ($1, $2, $3, $4, 1, now())
+         ON CONFLICT (store_key) DO NOTHING`,
+        [storeKey, data, bytes, sum]);
+      const { rows } = await pool.query(
+        `SELECT checksum, version FROM ${TABLE} WHERE store_key = $1`, [storeKey]);
+      if (rows[0]?.checksum === sum) { versions.set(storeKey, rows[0].version); return; }
+      throw new StoreConflictError(storeKey, 'a row already exists that this instance never read');
+    }
+
+    const { rows } = await pool.query(
+      `UPDATE ${TABLE}
+          SET data = $2, bytes = $3, checksum = $4,
+              version = version + 1, updated_at = now()
+        WHERE store_key = $1 AND version = $5
+        RETURNING version`,
+      [storeKey, data, bytes, sum, seen]);
+
+    if (!rows.length) {
+      throw new StoreConflictError(storeKey,
+        `expected version ${seen}; another instance wrote first`);
+    }
+    versions.set(storeKey, rows[0].version);
   }
 
   return {
@@ -100,12 +167,34 @@ export function createPgBlobAdapter() {
     async hydrate() {
       if (!isConfigured()) throw new Error('pgBlobAdapter: DATABASE_URL is not configured');
       const pool = await getPool();
-      const { rows } = await pool.query(`SELECT store_key, data FROM ${TABLE}`);
+      const { rows } = await pool.query(`SELECT store_key, data, version FROM ${TABLE}`);
       cache.clear();
-      for (const r of rows) cache.set(r.store_key, r.data);
+      versions.clear();
+      for (const r of rows) {
+        cache.set(r.store_key, r.data);
+        versions.set(r.store_key, r.version);
+      }
       hydrated = true;
       return cache.size;
     },
+
+    /**
+     * Re-read one store from the database — the recovery path after a conflict.
+     * Deliberately NOT automatic: silently adopting the other instance's value
+     * would discard this instance's write with nobody told. The caller decides.
+     */
+    async refresh(key) {
+      const storeKey = storeKeyFor(key);
+      const pool = await getPool();
+      const { rows } = await pool.query(
+        `SELECT data, version FROM ${TABLE} WHERE store_key = $1`, [storeKey]);
+      if (!rows.length) { cache.delete(storeKey); versions.delete(storeKey); return null; }
+      cache.set(storeKey, rows[0].data);
+      versions.set(storeKey, rows[0].version);
+      return rows[0].data;
+    },
+
+    conflicts() { return [...conflicts]; },
 
     isHydrated() { return hydrated; },
 
@@ -116,10 +205,21 @@ export function createPgBlobAdapter() {
       return v === undefined ? null : v;
     },
 
+    /**
+     * The caller is awaiting, so a conflict is REPORTED rather than recorded.
+     *
+     * `enqueue` swallows-and-records because a write-behind promise has nobody
+     * to tell. An awaited write does — and a caller who is not told their write
+     * lost believes it won, which is how two instances end up confidently
+     * holding different data. The tracked copy still feeds flush() and the
+     * conflict list.
+     */
     async write(key, data) {
       const storeKey = storeKeyFor(key);
       cache.set(storeKey, data);
-      await enqueue(upsert(storeKey, data));
+      const pending = upsert(storeKey, data);
+      enqueue(pending);
+      await pending;
     },
 
     /**

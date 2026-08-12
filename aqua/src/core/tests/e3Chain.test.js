@@ -55,9 +55,16 @@ const store = (name, contents) => {
 describe('E3 chain — migrations actually apply', () => {
   test('every migration on disk applies, in order', async () => {
     const { migrate } = await import('../db/migrate.js');
+    // Asserted against what is ON DISK rather than a hardcoded count, so
+    // adding a migration is not a false failure. E3/PR-9 added 0004 and this
+    // test went red — legitimate, but "expected 3" told me nothing about
+    // whether the runner was wrong or the set had simply grown.
+    const { discover } = await import('../db/migrate.js');
+    const onDisk = discover();
     const r = await migrate();
-    assert.equal(r.applied.length, 3, `applied ${r.applied.map(a => a.name).join(', ')}`);
-    assert.deepEqual(r.applied.map(a => a.version), [1, 2, 3]);
+    assert.equal(r.applied.length, onDisk.length,
+      `applied ${r.applied.map(a => a.name).join(', ')}`);
+    assert.deepEqual(r.applied.map(a => a.version), onDisk.map(m => m.version));
   });
 
   test('IDEMPOTENT: a second run applies nothing', async () => {

@@ -81,7 +81,9 @@ report_state() {
       "E3/5  src/core/storage/dualWriteAdapter.js" \
       "E3/6  src/core/db/drift.js" \
       "E3/7  src/core/tests/readFlip.test.js" \
-      "E3/8  src/core/tests/e3Chain.test.js"; do
+      "E3/8  src/core/tests/e3Chain.test.js" \
+      "E3/9  src/core/tests/storeConcurrency.test.js" \
+      "E3/10  E3_SCALING_FINDING.md"; do
     local pr file; pr=${marker%%  *}; file=${marker##*  }
     # A leading ../ means the marker lives in the PLATFORM tree, not the engine.
     if [ -e "$PKG/$file" ]; then ok "$pr applied   ($file)"; else warn "$pr NOT applied ($file missing)"; fi
