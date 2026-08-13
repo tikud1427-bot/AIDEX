@@ -92,6 +92,9 @@ describe('db pool — inert by default', () => {
       'src/core/storage/index.js',
       'src/core/db/migrate.js',
       'src/core/db/cli.mjs',
+      'src/core/claims/claimRepository.js',   // E5/PR-3 — claims live in Postgres
+      'src/core/claims/backfill.js',          // E5/PR-4 — projects legacy facts
+      'src/core/claims/projection.js',        // E5/PR-5 — the read path
     ];
     const offenders = [];
     const walk = (dir) => {
