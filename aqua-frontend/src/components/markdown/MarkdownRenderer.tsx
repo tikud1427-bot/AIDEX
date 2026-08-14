@@ -2,7 +2,9 @@ import { memo, useMemo, type ReactElement, type ReactNode } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { CodeBlock } from './CodeBlock';
+import { MarkdownTable, MarkdownTd, MarkdownTh, MarkdownTr } from './MarkdownTable';
 import { stripCitationMarkers } from '@/lib/citations';
+import { splitMarkdownBlocks } from '@/lib/markdown';
 
 interface CodeChildProps {
   className?: string;
@@ -53,22 +55,15 @@ const components: Components = {
     return <img {...props} alt={alt ?? ''} loading="lazy" className="my-2 max-w-full rounded-lg border border-border" />;
   },
 
-  table({ children }) {
-    return (
-      <div className="my-3 overflow-x-auto rounded-lg border border-border">
-        <table className="w-full border-collapse text-sm">{children}</table>
-      </div>
-    );
-  },
-  thead({ children }) {
-    return <thead className="bg-surface-secondary">{children}</thead>;
-  },
-  th({ children }) {
-    return <th className="border-b border-border px-3 py-2 text-left font-semibold text-foreground">{children}</th>;
-  },
-  td({ children }) {
-    return <td className="border-b border-border/60 px-3 py-2 align-top text-foreground-secondary last:border-b-0">{children}</td>;
-  },
+  // Tables are the one construct whose PRESENTATION has to change with the
+  // width it is given, so they own a module. `thead`/`tbody` are deliberately
+  // NOT overridden: leaving them as intrinsic elements is what lets
+  // analyzeTable tell a header row from a body row. Styling lives in
+  // `.md-table` in globals.css.
+  table: MarkdownTable,
+  tr: MarkdownTr,
+  th: MarkdownTh,
+  td: MarkdownTd,
 
   blockquote({ children }) {
     return <blockquote className="my-2 border-l-2 border-primary/40 pl-3 text-foreground-secondary italic">{children}</blockquote>;
@@ -88,60 +83,19 @@ const components: Components = {
     return <li className="leading-relaxed">{children}</li>;
   },
 
-  h1: ({ children }) => <h1 className="mb-3 mt-5 text-xl font-semibold text-foreground first:mt-0">{children}</h1>,
-  h2: ({ children }) => <h2 className="mb-2.5 mt-5 text-lg font-semibold text-foreground first:mt-0">{children}</h2>,
-  h3: ({ children }) => <h3 className="mb-2 mt-4 text-base font-semibold text-foreground first:mt-0">{children}</h3>,
-  h4: ({ children }) => <h4 className="mb-1.5 mt-3 text-sm font-semibold text-foreground first:mt-0">{children}</h4>,
+  // Levels are shifted down one. The page's <h1> is the conversation title in
+  // Header.tsx; a message that opens with `# Quick-Fix` is a section of that
+  // page, not a second document. Visual scale is unchanged — only the tag is.
+  h1: ({ children }) => <h2 className="mb-3 mt-5 text-xl font-semibold text-foreground first:mt-0">{children}</h2>,
+  h2: ({ children }) => <h3 className="mb-2.5 mt-5 text-lg font-semibold text-foreground first:mt-0">{children}</h3>,
+  h3: ({ children }) => <h4 className="mb-2 mt-4 text-base font-semibold text-foreground first:mt-0">{children}</h4>,
+  h4: ({ children }) => <h5 className="mb-1.5 mt-3 text-sm font-semibold text-foreground first:mt-0">{children}</h5>,
+  h5: ({ children }) => <h6 className="mb-1.5 mt-3 text-sm font-semibold text-foreground first:mt-0">{children}</h6>,
 
   p: ({ children }) => <p className="leading-relaxed [&:not(:first-child)]:mt-2.5">{children}</p>,
   hr: () => <hr className="my-4 border-border" />,
   strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
 };
-
-/**
- * Split markdown into stable top-level blocks (blank-line separated, fenced
- * code kept intact). During streaming, appended tokens only ever change the
- * LAST block — memoizing each block means everything above it skips
- * react-markdown's parse + render entirely on every frame. This is what
- * keeps long streaming answers smooth: parse cost stays O(tail block), not
- * O(entire message) per animation frame.
- */
-function splitMarkdownBlocks(content: string): string[] {
-  const lines = content.split('\n');
-  const blocks: string[] = [];
-  let current: string[] = [];
-  let inFence = false;
-  let fenceMarker = '';
-
-  const push = () => {
-    if (current.length) {
-      blocks.push(current.join('\n'));
-      current = [];
-    }
-  };
-
-  for (const line of lines) {
-    const fenceMatch = /^\s*(```+|~~~+)/.exec(line);
-    if (fenceMatch) {
-      if (!inFence) {
-        inFence = true;
-        fenceMarker = fenceMatch[1][0].repeat(3);
-      } else if (line.trimStart().startsWith(fenceMarker)) {
-        inFence = false;
-        current.push(line);
-        push(); // close the code block as its own unit
-        continue;
-      }
-    }
-    if (!inFence && line.trim() === '') {
-      push();
-      continue;
-    }
-    current.push(line);
-  }
-  push();
-  return blocks;
-}
 
 const MarkdownBlock = memo(function MarkdownBlock({ content }: { content: string }) {
   return (
@@ -171,7 +125,12 @@ export const MarkdownRenderer = memo(function MarkdownRenderer({
   const blocks = useMemo(() => splitMarkdownBlocks(prepared), [prepared]);
 
   return (
-    <div className="text-lead text-foreground [overflow-wrap:anywhere]">
+    // `.md-prose` wraps with `overflow-wrap: break-word`. It used to be
+    // `anywhere`, which shrinks min-content intrinsic size and therefore
+    // collapsed every table column to a single character — see the header
+    // comment in MarkdownTable.tsx. `anywhere` is now scoped to links and
+    // inline code, the only things that should break mid-token.
+    <div className="md-prose text-lead text-foreground">
       {blocks.map((block, i) => (
         // Index keys are correct here: blocks only ever append/extend at the
         // tail during streaming, so indices are stable for finished blocks.

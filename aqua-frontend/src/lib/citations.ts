@@ -24,14 +24,20 @@ import type { SearchSource } from '@/types';
 // Complete marker: [n] · [n†…] · [n, m, …] — but NOT `[n](url)` (markdown link,
 // guarded by the negative lookahead) and NOT `[x]` / `[ ]` (task lists — the
 // `\d+` requirement excludes them).
+//
+// FULLWIDTH VARIANT. Several providers emit CJK bracket markers — 【2】 —
+// rather than ASCII ones, and those were reaching the reader verbatim: they
+// were visible in the shipped mobile screenshots, sitting in an "Evidence"
+// column as the entire cell. There is no markdown construct that uses 【…】,
+// so no lookahead is needed on that branch.
 const CITATION_MARKER =
-  /\[\s*\d+(?:†[^\]]*)?(?:\s*,\s*\d+(?:†[^\]]*)?)*\s*\](?!\()/g;
+  /\[\s*\d+(?:†[^\]]*)?(?:\s*,\s*\d+(?:†[^\]]*)?)*\s*\](?!\()|【\s*\d+(?:†[^】]*)?(?:\s*,\s*\d+(?:†[^】]*)?)*\s*】/g;
 
 // A marker still being typed at the very end of a streaming buffer
 // (`…as of [1†L1-L` before the closing `]` arrives). Anchored to end + requires
-// `[` followed by a digit, so it can't eat a legitimate trailing bracket; the
-// leading \s* also removes the now-orphaned space before it.
-const TRAILING_PARTIAL = /\s*\[\s*\d+(?:†[^\]]*)?$/;
+// an opening bracket followed by a digit, so it can't eat a legitimate
+// trailing bracket; the leading \s* also removes the now-orphaned space.
+const TRAILING_PARTIAL = /\s*[[【]\s*\d+(?:†[^\]】]*)?$/;
 
 // Fenced ```…``` and inline `…` code — captured so String.split keeps them as
 // verbatim segments we never touch.
@@ -48,7 +54,20 @@ export function stripCitationMarkers(text: string, opts?: { streaming?: boolean 
   const segments = text.split(CODE_SEGMENT);
   const out = segments.map((seg, i) => {
     if (i % 2 === 1) return seg; // odd indices are captured code — leave exactly as-is
-    let s = seg.replace(CITATION_MARKER, '');
+
+    // Line by line, so the trailing-space cleanup can be surgical. A marker
+    // that ended a line ("…reduces inflammation 【2】") used to leave the space
+    // behind — cosmetically invisible in prose, but two trailing spaces are a
+    // markdown hard break, so stripping a marker could silently insert a <br>.
+    // Only lines that actually lost a marker are touched; deliberate hard
+    // breaks elsewhere survive.
+    let s = seg
+      .split('\n')
+      .map((line) => {
+        const stripped = line.replace(CITATION_MARKER, '');
+        return stripped === line ? line : stripped.replace(/[ \t]+$/, '');
+      })
+      .join('\n');
     if (opts?.streaming) s = s.replace(TRAILING_PARTIAL, '');
     // Tidy whitespace the removed markers leave behind: " word ." → " word.",
     // and collapse the double space left by a mid-sentence "word [1] more".

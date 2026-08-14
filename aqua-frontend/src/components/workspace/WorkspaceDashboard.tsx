@@ -328,7 +328,7 @@ export function WorkspaceDashboard({ overview }: { overview: WorkspaceOverview }
               <Empty />
             )}
             {overview.envVars?.length > 0 && (
-              <p className="mt-3 break-all font-mono text-micro text-foreground-secondary/80">
+              <p className="mt-3 font-mono text-micro text-foreground-secondary/80 [overflow-wrap:anywhere]">
                 {overview.envVars.slice(0, 24).join(' · ')}
               </p>
             )}

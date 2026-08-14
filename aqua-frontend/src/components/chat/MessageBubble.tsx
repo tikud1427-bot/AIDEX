@@ -1,5 +1,5 @@
 import { memo, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { AlertCircle, ArrowRightCircle, CircleSlash, FolderGit2, Paperclip, Pencil, RotateCcw, X, Check } from 'lucide-react';
 import { MarkdownRenderer } from '@/components/markdown/MarkdownRenderer';
 import { ThinkingIndicator } from './ThinkingIndicator';
@@ -48,8 +48,26 @@ function WorkspaceContextChip({ workspace }: { workspace: NonNullable<UiMessage[
   );
 }
 
-export const MessageBubble = memo(function MessageBubble({ message, isLast }: { message: UiMessage; isLast: boolean }) {
+export const MessageBubble = memo(function MessageBubble({
+  message,
+  isLast,
+  animateIn = true,
+}: {
+  message: UiMessage;
+  isLast: boolean;
+  /**
+   * False for every message that arrives with the history. Opening a
+   * 300-message thread otherwise starts 300 simultaneous spring animations in
+   * the same frame. `initial` is read once at mount, so this is decided then
+   * and never churns on re-render.
+   */
+  animateIn?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
+  // The global reduced-motion rule in globals.css only reaches CSS animations.
+  // framer-motion runs on the main thread and has to be told separately.
+  const reduce = useReducedMotion();
+  const enter = animateIn && !reduce ? { opacity: 0, y: 8 } : false;
   const [draft, setDraft] = useState(message.content);
   const contentRef = useRef<HTMLDivElement>(null);
   const regenerate = useChatStore((s) => s.regenerate);
@@ -64,7 +82,7 @@ export const MessageBubble = memo(function MessageBubble({ message, isLast }: { 
   if (isUser) {
     return (
       <motion.div
-        initial={{ opacity: 0, y: 8 }}
+        initial={enter}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2 }}
         className="message-row group flex justify-end px-4 py-2"
@@ -148,7 +166,7 @@ export const MessageBubble = memo(function MessageBubble({ message, isLast }: { 
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 8 }}
+      initial={enter}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2 }}
       className="message-row group flex gap-3 px-4 py-3"

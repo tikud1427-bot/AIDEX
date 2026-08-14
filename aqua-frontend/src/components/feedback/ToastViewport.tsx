@@ -43,7 +43,7 @@ function ToastRow({ id, variant, title, description, action, durationMs }: {
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, scale: 0.94, transition: { duration: 0.12 } }}
       transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-      className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border border-border bg-surface p-3.5 shadow-lg"
+      className="pointer-events-auto flex w-full items-start gap-3 rounded-lg border border-border bg-surface p-3.5 shadow-lg sm:max-w-sm"
       role="status"
     >
       <Icon className={cn('mt-0.5 h-4.5 w-4.5 shrink-0', ICON_COLOR[variant])} />
@@ -74,7 +74,10 @@ export function ToastViewport() {
   const toasts = useUiStore((s) => s.toasts);
 
   return (
-    <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex w-full max-w-sm flex-col gap-2 sm:bottom-6 sm:right-6">
+    // `right-4 w-full` gave the stack a left edge at -16px on any phone
+    // narrower than the max-width — the icon column was clipped off-screen.
+    // Pin both sides on small screens; the width cap takes over from `sm:`.
+    <div className="pointer-events-none fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[100] flex flex-col gap-2 sm:inset-x-auto sm:bottom-6 sm:right-6 sm:w-full sm:max-w-sm">
       <AnimatePresence mode="popLayout">
         {toasts.map((t) => (
           <ToastRow key={t.id} {...t} />

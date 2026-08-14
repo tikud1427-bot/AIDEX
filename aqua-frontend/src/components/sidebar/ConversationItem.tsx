@@ -99,7 +99,7 @@ export function ConversationItem({ conversation, onNavigate }: { conversation: U
     // replaces. Swapping the whole row for a bare input made the thread being
     // renamed lose its identity mid-edit.
     return (
-      <div className="row-touch flex items-center gap-2 rounded-lg bg-surface-secondary py-1 pl-2.5 pr-1.5">
+      <li className="row-touch flex items-center gap-2 rounded-lg bg-surface-secondary py-1 pl-2.5 pr-1.5">
         <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden="true" />
         <Input
           autoFocus
@@ -123,80 +123,83 @@ export function ConversationItem({ conversation, onNavigate }: { conversation: U
           }}
           className="h-8 flex-1 border-transparent bg-transparent px-1 shadow-none"
         />
-      </div>
+      </li>
     );
   }
 
   return (
-    <>
-      <div
-        className={cn(
-          'group/item row-touch relative flex items-center rounded-lg text-sm transition-colors',
-          isActive
-            ? 'bg-surface-secondary font-medium text-foreground'
-            : 'text-foreground-secondary hover:bg-surface-secondary/60 hover:text-foreground',
-        )}
+    /* The row IS the list item — not a wrapper around one. `display: contents`
+       on an <li> is still dropped from the accessibility tree in some engines,
+       which would cost the list semantics this change exists to add. The
+       ConfirmDialog below portals to <body>, so it costs the row no layout. */
+    <li
+      className={cn(
+        'group/item row-touch relative flex items-center rounded-lg text-sm transition-colors',
+        isActive
+          ? 'bg-surface-secondary font-medium text-foreground'
+          : 'text-foreground-secondary hover:bg-surface-secondary/60 hover:text-foreground',
+      )}
+    >
+      {isActive && (
+        <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-primary" aria-hidden="true" />
+      )}
+
+      {/* The link and the menu button are SIBLINGS. Nesting a <button>
+          inside this <a> was invalid markup, announced ambiguously to
+          screen readers, and needed a preventDefault() hack to stop the
+          row navigating whenever the menu was opened. */}
+      <Link
+        to={`/c/${conversation.id}`}
+        onClick={onNavigate}
+        aria-current={isActive ? 'page' : undefined}
+        className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-2.5 pr-1"
       >
-        {isActive && (
-          <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-full bg-primary" aria-hidden="true" />
+        <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate">{conversation.title}</span>
+        {conversation.pinned && (
+          <Pin className="h-3 w-3 shrink-0 fill-current text-primary/70" aria-hidden="true" />
         )}
+      </Link>
 
-        {/* The link and the menu button are SIBLINGS. Nesting a <button>
-            inside this <a> was invalid markup, announced ambiguously to
-            screen readers, and needed a preventDefault() hack to stop the
-            row navigating whenever the menu was opened. */}
-        <Link
-          to={`/c/${conversation.id}`}
-          onClick={onNavigate}
-          className="flex min-w-0 flex-1 items-center gap-2 py-2 pl-2.5 pr-1"
-        >
-          <MessageSquare className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden="true" />
-          <span className="min-w-0 flex-1 truncate">{conversation.title}</span>
-          {conversation.pinned && (
-            <Pin className="h-3 w-3 shrink-0 fill-current text-primary/70" aria-hidden="true" />
-          )}
-        </Link>
-
-        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger asChild>
-            <button
-              className={cn(
-                'tap touch-lg affordance mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
-                'text-foreground-secondary transition-colors hover:bg-surface hover:text-foreground',
-                menuOpen && 'bg-surface text-foreground',
-              )}
-              aria-label={`Options for ${conversation.title}`}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" side="bottom">
-            <DropdownMenuItem onSelect={() => togglePin(conversation.id)}>
-              {conversation.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-              {conversation.pinned ? 'Unpin' : 'Pin'}
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => void handleShare()}>
-              <Share2 className="h-3.5 w-3.5" /> Share
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={startRename}>
-              <Pencil className="h-3.5 w-3.5" /> Rename
-            </DropdownMenuItem>
-
-            {/* Nothing new can be archived. Rows archived under the previous
-                implementation keep their way back, so no thread is stranded. */}
-            {conversation.archived && (
-              <DropdownMenuItem onSelect={handleUnarchive}>
-                <ArchiveRestore className="h-3.5 w-3.5" /> Unarchive
-              </DropdownMenuItem>
+      <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+        <DropdownMenuTrigger asChild>
+          <button
+            className={cn(
+              'tap touch-lg affordance mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+              'text-foreground-secondary transition-colors hover:bg-surface hover:text-foreground',
+              menuOpen && 'bg-surface text-foreground',
             )}
+            aria-label={`Options for ${conversation.title}`}
+          >
+            <MoreHorizontal className="h-4 w-4" />
+          </button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" side="bottom">
+          <DropdownMenuItem onSelect={() => togglePin(conversation.id)}>
+            {conversation.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+            {conversation.pinned ? 'Unpin' : 'Pin'}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => void handleShare()}>
+            <Share2 className="h-3.5 w-3.5" /> Share
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={startRename}>
+            <Pencil className="h-3.5 w-3.5" /> Rename
+          </DropdownMenuItem>
 
-            <DropdownMenuSeparator />
-            <DropdownMenuItem destructive onSelect={() => setConfirmOpen(true)}>
-              <Trash2 className="h-3.5 w-3.5" /> Delete
+          {/* Nothing new can be archived. Rows archived under the previous
+              implementation keep their way back, so no thread is stranded. */}
+          {conversation.archived && (
+            <DropdownMenuItem onSelect={handleUnarchive}>
+              <ArchiveRestore className="h-3.5 w-3.5" /> Unarchive
             </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </div>
+          )}
+
+          <DropdownMenuSeparator />
+          <DropdownMenuItem destructive onSelect={() => setConfirmOpen(true)}>
+            <Trash2 className="h-3.5 w-3.5" /> Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+    </DropdownMenu>
 
       <ConfirmDialog
         open={confirmOpen}
@@ -207,6 +210,6 @@ export function ConversationItem({ conversation, onNavigate }: { conversation: U
         destructive
         onConfirm={handleDelete}
       />
-    </>
+    </li>
   );
 }

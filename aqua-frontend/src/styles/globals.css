@@ -364,3 +364,240 @@
     }
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Markdown surface — prose wrapping + the responsive table system
+   Consumed by src/components/markdown/MarkdownRenderer.tsx and
+   MarkdownTable.tsx. Read the header comment in MarkdownTable.tsx before
+   changing any of this: the wrapping mode and the table layout are the same
+   bug seen from two ends.
+   ══════════════════════════════════════════════════════════════════════════ */
+@layer components {
+  /* ── Prose wrapping ───────────────────────────────────────────────────
+     `break-word`, never `anywhere`.
+
+     Both break an otherwise-unbreakable run that would overflow its line, so
+     they look identical in a paragraph. They differ in ONE place that matters
+     enormously here: `anywhere` contributes its break opportunities to
+     min-content intrinsic size, and `break-word` does not. Automatic table
+     layout derives every column minimum from min-content — so a prose
+     container set to `anywhere` tells the engine that a four-column table may
+     legally shrink each column to one character. That is the whole "Co / ol"
+     defect, and no amount of `overflow-x: auto` could ever have addressed it.
+
+     `anywhere` is still correct for the two things that genuinely need to
+     break mid-token, so it is applied to exactly those. */
+  .md-prose {
+    overflow-wrap: break-word;
+  }
+  .md-prose a,
+  .md-prose :not(pre) > code {
+    overflow-wrap: anywhere;
+  }
+
+  /* ── Table chrome (all layouts) ───────────────────────────────────────── */
+  .md-table-wrap {
+    /* Query the width of the COLUMN the table sits in, not the window. The
+       same table renders inside the message list, the artifact preview and a
+       settings dialog, and only this element knows how much room it has. */
+    container-type: inline-size;
+    container-name: aqua-md-table;
+    margin-block: 0.75rem;
+  }
+
+  .md-table-scroller {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+  }
+
+  .md-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-body);
+    line-height: 1.55;
+  }
+
+  /* Genuinely tabular data keeps its grid and pans instead of crushing.
+     `min-width: max-content` only bites when max-content exceeds the
+     container, so a compact table that fits still fills the width. */
+  .md-table[data-md-layout='scroll'] {
+    min-width: max-content;
+  }
+
+  .md-table thead {
+    background-color: var(--color-surface-secondary);
+  }
+
+  .md-th {
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-weight: 600;
+    color: var(--color-foreground);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .md-td {
+    padding: 0.5rem 0.75rem;
+    vertical-align: top;
+    color: var(--color-foreground-secondary);
+    border-bottom: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
+  }
+
+  .md-table tbody tr:last-child .md-td {
+    border-bottom: 0;
+  }
+
+  /* Markdown block elements inside a cell must not inherit the vertical
+     rhythm they get in a paragraph — a `<p>` per cell would double the row. */
+  .md-td > p:first-child,
+  .md-th > p:first-child {
+    margin-top: 0;
+  }
+
+  /* ── Narrow presentation: one labelled card per row ────────────────────
+     Only tables the shape test marked `stack` opt in. The DOM is unchanged —
+     this is `display` and a `::before` echo of the column header, which is
+     why copy/paste, find-in-page and the accessibility tree all survive
+     (roles are set explicitly in MarkdownTable.tsx because re-displaying a
+     table element drops its implicit semantics).
+
+     34rem ≈ 544px of COLUMN width. On a 390px phone the message column is
+     roughly 318px, so every phone stacks; a 768px tablet gives the message
+     column ~696px and keeps a real table. */
+  @container aqua-md-table (max-width: 34rem) {
+    .md-table[data-md-layout='stack'] {
+      display: block;
+      min-width: 0;
+    }
+    /* Visually hidden, still announced and still the association target for
+       each cell — do NOT change this to `display: none`. */
+    .md-table[data-md-layout='stack'] thead {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      white-space: nowrap;
+      border: 0;
+    }
+    .md-table[data-md-layout='stack'] tbody {
+      display: block;
+    }
+    .md-table[data-md-layout='stack'] .md-tr {
+      display: block;
+      padding: 0.75rem 0.875rem;
+      border-bottom: 1px solid var(--color-border);
+    }
+    .md-table[data-md-layout='stack'] tbody tr:last-child {
+      border-bottom: 0;
+    }
+    .md-table[data-md-layout='stack'] .md-td {
+      display: block;
+      padding: 0;
+      border: 0;
+    }
+    .md-table[data-md-layout='stack'] .md-td + .md-td {
+      margin-top: 0.5rem;
+    }
+    .md-table[data-md-layout='stack'] .md-td[data-md-label]::before {
+      content: attr(data-md-label);
+      display: block;
+      margin-bottom: 0.0625rem;
+      font-size: var(--text-micro);
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: color-mix(in srgb, var(--color-foreground-secondary) 70%, transparent);
+    }
+    /* The first cell is the row's subject, so it reads as the card's title
+       rather than as one more labelled field. */
+    .md-table[data-md-layout='stack'] .md-td:first-child {
+      font-size: var(--text-lead);
+      font-weight: 600;
+      line-height: 1.35;
+      color: var(--color-foreground);
+    }
+    .md-table[data-md-layout='stack'] .md-td:first-child::before {
+      content: none;
+    }
+    /* Citation stripping can empty a cell outright (an "Evidence" column of
+       bare 【2】 markers becomes nothing). In card mode that would leave a
+       label with no value under it. In table mode the cell must stay, or the
+       columns stop lining up — hence the scope. */
+    .md-table[data-md-layout='stack'] .md-td:empty {
+      display: none;
+    }
+  }
+
+  /* Fallback for engines without container queries (pre-2023 Safari/Firefox).
+     Same rules, keyed to the viewport instead — less precise, since it cannot
+     know the table is inside a narrower column, but it is the difference
+     between cards and a cramped four-column grid on a phone. Deliberately a
+     duplicate rather than a clever indirection: container queries cannot be
+     expressed through custom properties, and a reviewer should be able to see
+     both branches at once. */
+  @supports not (container-type: inline-size) {
+    @media (max-width: 40rem) {
+      .md-table[data-md-layout='stack'] {
+        display: block;
+        min-width: 0;
+      }
+      .md-table[data-md-layout='stack'] thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+        border: 0;
+      }
+      .md-table[data-md-layout='stack'] tbody {
+        display: block;
+      }
+      .md-table[data-md-layout='stack'] .md-tr {
+        display: block;
+        padding: 0.75rem 0.875rem;
+        border-bottom: 1px solid var(--color-border);
+      }
+      .md-table[data-md-layout='stack'] tbody tr:last-child {
+        border-bottom: 0;
+      }
+      .md-table[data-md-layout='stack'] .md-td {
+        display: block;
+        padding: 0;
+        border: 0;
+      }
+      .md-table[data-md-layout='stack'] .md-td + .md-td {
+        margin-top: 0.5rem;
+      }
+      .md-table[data-md-layout='stack'] .md-td[data-md-label]::before {
+        content: attr(data-md-label);
+        display: block;
+        margin-bottom: 0.0625rem;
+        font-size: var(--text-micro);
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        color: color-mix(in srgb, var(--color-foreground-secondary) 70%, transparent);
+      }
+      .md-table[data-md-layout='stack'] .md-td:first-child {
+        font-size: var(--text-lead);
+        font-weight: 600;
+        line-height: 1.35;
+        color: var(--color-foreground);
+      }
+      .md-table[data-md-layout='stack'] .md-td:first-child::before {
+        content: none;
+      }
+      .md-table[data-md-layout='stack'] .md-td:empty {
+        display: none;
+      }
+    }
+  }
+}

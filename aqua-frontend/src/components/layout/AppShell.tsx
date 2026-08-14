@@ -59,6 +59,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <TooltipProvider>
       <div className="flex h-dvh w-full overflow-hidden bg-background">
+        {/* Keyboard users otherwise tab the whole sidebar — search field,
+            every conversation row and its menu — before reaching the thread
+            or the composer. First stop on the page, invisible until focused. */}
+        <a
+          href="#aqua-main"
+          className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:left-3 focus-visible:top-3 focus-visible:z-[200] focus-visible:rounded-lg focus-visible:border focus-visible:border-border focus-visible:bg-surface focus-visible:px-3 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:text-foreground focus-visible:shadow-lg"
+        >
+          Skip to conversation
+        </a>
+
         <div className="hidden md:block">
           <Sidebar collapsed={sidebarCollapsed} />
         </div>
@@ -66,7 +76,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <Header />
-          <main className="flex min-h-0 flex-1 flex-col">{children}</main>
+          <main id="aqua-main" tabIndex={-1} className="flex min-h-0 flex-1 flex-col focus:outline-none">
+            {children}
+          </main>
         </div>
       </div>
 

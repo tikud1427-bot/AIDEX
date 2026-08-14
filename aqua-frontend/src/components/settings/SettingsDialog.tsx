@@ -33,7 +33,12 @@ export function SettingsDialog() {
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={setTab}>
-          <TabsList>
+          {/* Five triggers need ~340px; a 320px phone gives the dialog 256px
+              of content. The strip pans horizontally on its own instead of
+              pushing the dialog sideways. `-mx-*` lets it bleed to the
+              dialog's padding edge so the last tab isn't half-hidden under
+              an apparent margin. */}
+          <TabsList className="-mx-4 flex w-[calc(100%+2rem)] max-w-none justify-start overflow-x-auto rounded-none px-4 sm:mx-0 sm:w-full sm:rounded-lg sm:px-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="memory">Memory</TabsTrigger>
             <TabsTrigger value="account">Account</TabsTrigger>

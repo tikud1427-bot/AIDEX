@@ -108,7 +108,7 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
 
   if (collapsed && !isMobileOverlay) {
     return (
-      <div className="flex h-full w-[60px] flex-col items-center gap-1 border-r border-border bg-surface py-3">
+      <nav aria-label="AQUA" className="flex h-full w-[60px] flex-col items-center gap-1 border-r border-border bg-surface py-3">
         <Tooltip label="Expand sidebar" side="right">
           <button onClick={toggleSidebar} className="tap flex h-11 w-11 items-center justify-center rounded-lg text-foreground-secondary hover:bg-surface-secondary hover:text-foreground">
             <PanelLeftOpen className="h-4.5 w-4.5" />
@@ -143,12 +143,22 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
             <Settings className="h-4.5 w-4.5" />
           </button>
         </Tooltip>
-      </div>
+      </nav>
     );
   }
 
   return (
-    <div className={cn('flex h-full w-[280px] flex-col bg-surface', !isMobileOverlay && 'border-r border-border')}>
+    /* 280px of a 768px tablet is 36% of the screen given to a list. The rail
+       narrows through the tablet band and only reaches full width once there
+       is room for it — the conversation is the product, not the index. */
+    <nav
+      aria-label="AQUA"
+      className={cn(
+        'flex h-full w-[248px] flex-col bg-surface lg:w-[280px]',
+        isMobileOverlay && 'w-[min(20rem,86vw)]',
+        !isMobileOverlay && 'border-r border-border',
+      )}
+    >
       <div className="flex items-center gap-2 px-3 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
         <div className="flex h-7 w-7 shrink-0 items-center justify-center">
           <AquaLogo size={28} />
@@ -176,13 +186,17 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
           <SquarePen className="h-3.5 w-3.5" /> New chat
         </button>
 
-        <div className="relative mb-2">
-          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-secondary/60" />
+        <div className="relative mb-2" role="search">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-foreground-secondary/60" aria-hidden="true" />
           <input
             id={searchInputId}
             ref={searchRef}
+            type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            /* A placeholder is not a label: it disappears the moment there is
+               a value, and some screen readers never announce it at all. */
+            aria-label="Search conversations"
             placeholder="Search conversations…"
             className="h-9 w-full rounded-lg border border-border bg-background pl-8 pr-2 text-sm text-foreground placeholder:text-foreground-secondary/60 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           />
@@ -205,22 +219,22 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
             {pinned.length > 0 && (
               <div className="mb-3">
                 <GroupLabel>Pinned</GroupLabel>
-                <div className="space-y-0.5">
+                <ul className="space-y-0.5">
                   {pinned.map((c) => (
                     <ConversationItem key={c.id} conversation={c} onNavigate={onNavigate} />
                   ))}
-                </div>
+                </ul>
               </div>
             )}
 
             {byDay.map(([bucket, list]) => (
               <div key={bucket} className="mb-3">
                 <GroupLabel>{bucket}</GroupLabel>
-                <div className="space-y-0.5">
+                <ul className="space-y-0.5">
                   {list.map((c) => (
                     <ConversationItem key={c.id} conversation={c} onNavigate={onNavigate} />
                   ))}
-                </div>
+                </ul>
               </div>
             ))}
 
@@ -242,11 +256,11 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
                   <span className="ml-auto tabular-nums normal-case tracking-normal">{archived.length}</span>
                 </button>
                 {archivedOpen && (
-                  <div className="mt-0.5 space-y-0.5 opacity-75 transition-opacity hover:opacity-100">
+                  <ul className="mt-0.5 space-y-0.5 opacity-75 transition-opacity hover:opacity-100">
                     {archived.map((c) => (
                       <ConversationItem key={c.id} conversation={c} onNavigate={onNavigate} />
                     ))}
-                  </div>
+                  </ul>
                 )}
               </div>
             )}
@@ -272,7 +286,7 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
           </button>
         </div>
       </div>
-    </div>
+    </nav>
   );
 }
 

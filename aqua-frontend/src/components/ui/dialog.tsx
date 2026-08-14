@@ -33,9 +33,17 @@ export const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2',
-        'rounded-xl border border-border bg-surface p-6 shadow-2xl',
-        'data-[state=open]:animate-slide-up max-h-[85dvh] overflow-y-auto',
+        // `w-full` alone made every dialog exactly viewport-wide on a phone:
+        // the rounded corners and the border sat off-screen and the 24px
+        // padding was all that separated text from the bezel. A 1rem gutter
+        // each side, and a max-width that can never exceed the viewport.
+        'fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2',
+        'rounded-xl border border-border bg-surface p-4 shadow-2xl sm:p-6',
+        // overflow-y:auto forces the other axis to `auto` too, so a child that
+        // overflows horizontally (the Settings tab strip did) silently turned
+        // the whole dialog into a two-axis scroller. Contain it here; anything
+        // that genuinely needs to pan does it in its own scroller.
+        'data-[state=open]:animate-slide-up max-h-[85dvh] overflow-y-auto overflow-x-hidden',
         className,
       )}
       {...props}

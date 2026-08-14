@@ -153,6 +153,13 @@ export function Composer() {
           }}
           placeholder={readyAttachments > 0 ? 'Ask about your files…' : 'Message AQUA…'}
           rows={1}
+          /* Touch keyboards show a return key; precise pointers send on Enter.
+             Labelling the key for what it actually does on THIS device is the
+             difference between a newline and a message sent by accident. */
+          enterKeyHint={isMobile ? 'enter' : 'send'}
+          aria-label="Message AQUA"
+          aria-invalid={overLimit || undefined}
+          aria-describedby={overLimit ? 'aqua-composer-limit' : undefined}
           className="max-h-60 min-h-[52px] px-4 py-3.5 pr-14 text-lead"
         />
 
@@ -191,8 +198,14 @@ export function Composer() {
             </Tooltip>
 
             {text.length > MAX_CHARS - 500 && (
-              <span className={cn('ml-1 text-micro tabular-nums', overLimit ? 'text-danger' : 'text-foreground-secondary/60')}>
+              <span
+                id="aqua-composer-limit"
+                role="status"
+                aria-live="polite"
+                className={cn('ml-1 text-micro tabular-nums', overLimit ? 'text-danger' : 'text-foreground-secondary/60')}
+              >
                 {text.length}/{MAX_CHARS}
+                {overLimit && <span className="sr-only"> — too long to send</span>}
               </span>
             )}
           </div>
@@ -210,6 +223,14 @@ export function Composer() {
               disabled={!text.trim() || overLimit || uploading}
               className="tap h-9 w-9 rounded-full"
               aria-label="Send message"
+              /* A disabled control with no stated reason is a dead end. */
+              title={
+                uploading
+                  ? 'Waiting for your files to finish uploading'
+                  : overLimit
+                    ? `Message is over the ${MAX_CHARS.toLocaleString()} character limit`
+                    : 'Send message'
+              }
             >
               <ArrowUp className="h-4 w-4" />
             </Button>

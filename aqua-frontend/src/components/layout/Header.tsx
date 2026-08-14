@@ -66,7 +66,7 @@ function ContextChip() {
   return (
     <button
       onClick={() => setShowDashboard(true)}
-      className="tap flex h-8 min-w-0 shrink items-center gap-1.5 rounded-full border border-border px-2.5 text-micro font-medium text-foreground-secondary transition-colors hover:bg-surface-secondary hover:text-foreground"
+      className="tap flex h-8 min-w-0 max-w-[9rem] shrink items-center gap-1.5 rounded-full border border-border px-2.5 text-micro font-medium text-foreground-secondary transition-colors hover:bg-surface-secondary hover:text-foreground sm:max-w-[14rem]"
       title={`Answering with ${overview.name} in context`}
     >
       <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-primary" />
@@ -91,7 +91,17 @@ export function Header() {
   const activeTitle = activeId ? items.find((c) => c.id === activeId)?.title : null;
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 pt-[env(safe-area-inset-top)] md:h-14 md:px-4">
+    /* Height has to INCLUDE the safe-area inset, not be eaten by it. `h-12`
+       plus `pt-[env(...)]` under border-box means a notched iPhone in
+       standalone PWA mode (status-bar-style: black-translucent) leaves the
+       48px bar with ~0px of usable height and the controls sitting under the
+       status bar. env() resolves to 0 everywhere else, so the calc is exact
+       on desktop.
+
+       `overflow-hidden` is the last line of defence: the title yields first
+       via `min-w-0 flex-1`, but a maximally-wide control cluster on a 320px
+       phone must never turn into page-level horizontal scroll. */
+    <header className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center gap-2 overflow-hidden border-b border-border px-3 pt-[env(safe-area-inset-top)] md:h-[calc(3.5rem+env(safe-area-inset-top))] md:px-4">
       {isMobile ? (
         <button
           onClick={() => setMobileSidebarOpen(true)}
@@ -111,10 +121,18 @@ export function Header() {
           </button>
         )
       )}
+      {/* The conversation title is the page's heading — the only <h1> in the
+          app. Markdown headings inside a message are shifted down a level so
+          an answer can never mint a competing document-level heading.
+
+          `min-w-0 flex-1` is load-bearing: without flex-1 the title is sized
+          to its content and the controls to its right are the things that get
+          squeezed off a narrow screen. This way the title yields first and the
+          controls are never reachable-only-by-scrolling. */}
       {activeTitle ? (
-        <span className="truncate text-sm font-medium text-foreground">{activeTitle}</span>
+        <h1 className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{activeTitle}</h1>
       ) : (
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           <div className="flex h-6 w-6 shrink-0 items-center justify-center">
             <AquaLogo size={24} />
           </div>
@@ -123,15 +141,15 @@ export function Header() {
               strip is the highest-value persistent real estate in the app,
               and a static noun is the weakest thing it could hold. Phase D
               gives the space to a live context indicator. */}
-          <span className="text-sm font-semibold tracking-tight text-foreground">AQUA</span>
+          <h1 className="text-sm font-semibold tracking-tight text-foreground">AQUA</h1>
         </div>
       )}
-      <div className="ml-auto flex min-w-0 items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-1.5">
         <ContextChip />
         <CreditsChip />
         <button
           onClick={() => openArtifacts(true)}
-          className="tap flex h-8 w-8 items-center justify-center rounded-lg text-foreground-secondary hover:bg-surface-secondary hover:text-foreground"
+          className="tap flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground-secondary hover:bg-surface-secondary hover:text-foreground"
           aria-label="Open artifacts"
           title="Artifacts"
         >

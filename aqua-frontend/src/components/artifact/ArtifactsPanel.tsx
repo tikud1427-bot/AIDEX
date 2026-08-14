@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import {
   Archive, Check, Download, Eye, FileText, Loader2, Package, Pencil,
   RefreshCw, Trash2, X,
@@ -119,36 +120,65 @@ function Row({ a, onPreview }: { a: ArtifactListEntry; onPreview: (a: ArtifactLi
   );
 }
 
+/**
+ * The panel is a modal surface — it dims the page and swallows clicks behind
+ * it — but it was built on a bare `motion.aside`. Focus stayed on the page
+ * underneath, Escape did nothing, nothing announced that a modal had opened,
+ * the background still scrolled, and closing it left focus nowhere. The mobile
+ * sidebar drawer had exactly this defect and was already rebuilt on Radix;
+ * this is the same treatment, so both modal surfaces now behave alike.
+ *
+ * framer-motion still owns the movement via `asChild` + `forceMount`, and the
+ * slide is skipped under prefers-reduced-motion, which the raw motion.aside
+ * never honoured.
+ */
 export function ArtifactsPanel() {
-  const { open, scope, items, loading, loadedOnce } = useArtifactsStore();
+  // Per-field selectors: the destructured `useArtifactsStore()` re-rendered
+  // the whole panel on every unrelated store write, including `busy` ticking
+  // through a regenerate.
+  const open = useArtifactsStore((s) => s.open);
+  const scope = useArtifactsStore((s) => s.scope);
+  const items = useArtifactsStore((s) => s.items);
+  const loading = useArtifactsStore((s) => s.loading);
+  const loadedOnce = useArtifactsStore((s) => s.loadedOnce);
   const setOpen = useArtifactsStore((s) => s.setOpen);
   const setScope = useArtifactsStore((s) => s.setScope);
   const hasConversation = useChatStore((s) => !!s.conversationId);
   const [preview, setPreview] = useState<ArtifactListEntry | null>(null);
+  const reduce = useReducedMotion();
 
   const totalBytes = items.reduce((s, a) => s + a.totalBytes, 0);
 
   return (
     <>
+      <DialogPrimitive.Root open={open} onOpenChange={setOpen}>
       <AnimatePresence>
         {open && (
-          <>
-            <motion.div
-              key="artifacts-backdrop"
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setOpen(false)}
-              className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px]"
-            />
+          <DialogPrimitive.Portal forceMount>
+            <DialogPrimitive.Overlay asChild forceMount>
+              <motion.div
+                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                transition={{ duration: 0.15 }}
+                className="fixed inset-0 z-40 bg-black/30 backdrop-blur-[1px]"
+              />
+            </DialogPrimitive.Overlay>
+
+            <DialogPrimitive.Content asChild forceMount aria-describedby={undefined}>
             <motion.aside
               key="artifacts-panel"
-              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-              transition={{ type: 'tween', duration: 0.22, ease: 'easeOut' }}
-              className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col border-l border-border bg-background pt-[env(safe-area-inset-top)] shadow-xl"
-              aria-label="Artifacts"
+              initial={reduce ? false : { x: '100%' }}
+              animate={{ x: 0 }}
+              exit={reduce ? { opacity: 0 } : { x: '100%' }}
+              transition={reduce ? { duration: 0.01 } : { type: 'tween', duration: 0.22, ease: 'easeOut' }}
+              className="fixed inset-y-0 right-0 z-50 flex w-full max-w-sm flex-col border-l border-border bg-background pt-[env(safe-area-inset-top)] shadow-xl focus:outline-none"
             >
               <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 md:h-14">
-                <Package className="h-4 w-4 text-primary" />
-                <span className="text-sm font-semibold text-foreground">Artifacts</span>
+                <Package className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                {/* The visible heading IS the dialog's accessible name — no
+                    sr-only duplicate to drift out of sync with it. */}
+                <DialogPrimitive.Title asChild>
+                  <span className="text-sm font-semibold text-foreground">Artifacts</span>
+                </DialogPrimitive.Title>
                 {loadedOnce && <span className="text-micro text-foreground-secondary">{items.length} · {fmtBytes(totalBytes)}</span>}
                 <button
                   type="button"
@@ -195,16 +225,22 @@ export function ArtifactsPanel() {
                   </div>
                 ) : null}
               </div>
+            {/* Nested INSIDE the panel's dialog, not beside it. Radix's modal
+                layer marks everything outside the active layer inert; a
+                preview portalled as a sibling of the panel would open behind
+                its own parent. Nesting it in the React tree is what makes the
+                preview the top layer while the panel stays trapped below. */}
+            <ArtifactPreviewDialog
+              artifactId={preview?.id ?? null}
+              title={preview?.title}
+              onClose={() => setPreview(null)}
+            />
             </motion.aside>
-          </>
+            </DialogPrimitive.Content>
+          </DialogPrimitive.Portal>
         )}
       </AnimatePresence>
-
-      <ArtifactPreviewDialog
-        artifactId={preview?.id ?? null}
-        title={preview?.title}
-        onClose={() => setPreview(null)}
-      />
+      </DialogPrimitive.Root>
     </>
   );
 }

@@ -118,7 +118,7 @@ export const CodeBlock = memo(function CodeBlock({ language, code }: CodeBlockPr
   }, [lang]);
 
   return (
-    <div className="group/code my-3 overflow-hidden rounded-lg border border-border bg-surface">
+    <div className="group/code my-3 max-w-full overflow-hidden rounded-lg border border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border bg-surface-secondary px-3 py-1.5">
         <span className="font-mono text-micro font-medium text-foreground-secondary">
           {lang}
@@ -192,6 +192,14 @@ export const CodeBlock = memo(function CodeBlock({ language, code }: CodeBlockPr
           }}
           codeTagProps={{ style: { fontFamily: 'var(--font-mono)' } }}
           lineNumberStyle={{ opacity: 0.35, minWidth: '2em' }}
+          /* When lines pan, the <pre> IS a scroll container — and a scroll
+             container no keyboard can reach fails WCAG 2.1.1. Extra props are
+             forwarded to PreTag by react-syntax-highlighter, so this lands on
+             the real scroller. With wrap on, nothing scrolls and the tab stop
+             would be noise. */
+          {...(wrap
+            ? {}
+            : { tabIndex: 0, role: 'region' as const, 'aria-label': `${lang} code — scroll sideways for long lines` })}
         >
           {code.replace(/\n$/, '')}
         </SyntaxHighlighter>
