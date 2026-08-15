@@ -316,3 +316,72 @@ npm ci
 npm test
 npm audit
 ```
+
+---
+
+## The `image-size` advisories — accepted as unreachable, with proof
+
+**Two high advisories** appeared after Epic 1 closed at zero: ICNS and JXL/HEIF
+parsers in `image-size` allow denial of service through infinite loops. They
+reach us transitively through `pptxgenjs`.
+
+### There is no fixed version
+
+```
+range        : *
+patched      : <=2.0.2      ← and 2.0.2 IS the latest published
+fixAvailable : pptxgenjs@1.1.5   (isSemVerMajor: true)
+```
+
+Every published version is affected. npm's suggested fix is a **three-major
+downgrade of the pptx export path** to remove a DoS in a parser we never reach.
+That trade is not worth making, so the question became: is it reachable at all?
+
+### Five links, each checked
+
+| | claim |
+|---|---|
+| **1** | `image-size` is not a direct dependency of ours |
+| **2** | the pptxgenjs **ES build we load** never references `image-size` — the only dynamic size lookup is `require('sizeof')`, a *different* package that is not installed |
+| **3** | our exporter loads pptxgenjs as **ESM**, where `typeof require === 'undefined'`, so that branch is dead regardless |
+| **4** | our exporter **never calls `addImage`** — the vulnerable parsers only run on an image |
+| **5** | no other module in `src/` reaches pptxgenjs |
+
+The dependency is declared in `pptxgenjs`'s manifest and **never required by
+its code**. Unreachable three ways over.
+
+### This is not an ignore list
+
+An ignore list is how a real vulnerability hides six months later: someone adds
+an entry with a one-line reason, the reason stops being true, and nothing
+notices.
+
+Every link above is an **assertion in `dependencySafety.test.js`**. The battery
+goes red the moment any of them breaks:
+
+| mutation | failures |
+|---|---|
+| the exporter starts adding images | 1 |
+| a fixed version becomes available | 1 |
+| `image-size` becomes a direct dependency | 1 |
+| *(reverted)* | **0 — 18/18** |
+
+There is also an **expiry**: an entry asserts `noFixedVersionExists`, so the day
+`image-size` ships a patch, the test says *take it and remove this exception*.
+The honest failure mode of any accepted risk is that it is accepted forever.
+
+### What this does not claim
+
+`npm audit` will still report 2 high, because audit reads the dependency tree
+and not the call graph. The number is **correct and the risk is not** — and the
+right response to that is a checked argument, not a suppressed warning.
+
+If `pptxgenjs` ever publishes a release that drops `image-size`, or the pptx
+exporter grows image support, this section is what gets revisited.
+
+### Results
+
+```
+npm test    2289 / 212 suites / 0 fail / 1 skipped-with-a-reason
+eval:gate   exit 0 · pptx exporter unchanged and still loading
+```

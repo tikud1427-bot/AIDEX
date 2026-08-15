@@ -141,6 +141,111 @@ describe('dependency safety — retired packages stay retired', () => {
  * bumping beats replacing (constitution L17, composition over replacement).
  * What that costs is a floor nobody may silently drop below.
  */
+/**
+ * Advisories accepted because the vulnerable code is PROVABLY UNREACHABLE.
+ *
+ * This is not an ignore list. An ignore list is how a real vulnerability hides
+ * six months later: someone adds an entry with a one-line reason, the reason
+ * stops being true, and nothing notices.
+ *
+ * Every entry here is a set of ASSERTIONS. Each link in the unreachability
+ * argument is checked below, and the moment any link breaks — a fixed version
+ * appears, our code starts using the feature, the dependency starts actually
+ * requiring the package — the battery goes red and the exception has to be
+ * re-argued rather than inherited.
+ */
+const UNREACHABLE = [
+  {
+    package: 'image-size',
+    advisories: ['GHSA-w3rx-r6r6-pgpr (ICNS)', 'GHSA-5p2g-fcmc-qvqq (JXL/HEIF)'],
+    via: 'pptxgenjs',
+    // Checked when this was written: every published version is affected and
+    // the newest, 2.0.2, is still vulnerable. npm's suggested "fix" is
+    // pptxgenjs@1.1.5 — a THREE-MAJOR downgrade of the pptx export path to
+    // remove a DoS in a parser we never reach.
+    noFixedVersionExists: true,
+  },
+];
+
+describe('dependency safety — advisories accepted as unreachable', () => {
+  const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+
+  test('the exception list is short and justified — it is not a dumping ground', () => {
+    assert.ok(UNREACHABLE.length <= 3,
+      'the unreachable list is growing; each entry is a standing risk, not a free pass');
+    for (const e of UNREACHABLE) {
+      assert.ok(e.advisories.length > 0);
+      assert.ok(e.via, `${e.package}: no direct dependent recorded`);
+    }
+  });
+
+  test('LINK 1 — image-size is not a direct dependency of ours', () => {
+    // If it ever became one, we would be choosing it deliberately and the
+    // exception would need re-arguing on different grounds.
+    assert.equal(pkg.dependencies['image-size'], undefined);
+    assert.equal(pkg.devDependencies?.['image-size'], undefined);
+  });
+
+  test('LINK 2 — the pptxgenjs build we load never references image-size', () => {
+    // `import PptxGenJS from 'pptxgenjs'` resolves to the ES build. The only
+    // dynamic size lookup in it is `require('sizeof')` — a DIFFERENT package,
+    // which is not installed — and it sits behind `typeof require !==
+    // "undefined"`, which is false in an ES module.
+    const pptx = JSON.parse(readFileSync(
+      path.join(ROOT, 'node_modules/pptxgenjs/package.json'), 'utf8'));
+    const esBuild = pptx.exports?.['.']?.import?.default ?? pptx.module;
+    assert.ok(esBuild, 'pptxgenjs no longer publishes an ES build — re-check how it is loaded');
+
+    const src = readFileSync(path.join(ROOT, 'node_modules/pptxgenjs', esBuild.replace('./', '')), 'utf8');
+    assert.ok(!src.includes('image-size'),
+      'pptxgenjs now references image-size directly — the exception no longer holds');
+  });
+
+  test('LINK 3 — our exporter loads pptxgenjs as ESM, so the require branch is dead', () => {
+    const exporter = readFileSync(path.join(ROOT, 'src/artifacts/exporters/pptxExporter.js'), 'utf8');
+    assert.match(exporter, /import PptxGenJS from 'pptxgenjs'/);
+    assert.ok(!/require\(['"]pptxgenjs/.test(exporter),
+      'the exporter now loads pptxgenjs as CJS, where `require` IS defined — re-check the branch');
+  });
+
+  test('LINK 4 — our exporter never passes an image to pptxgenjs', () => {
+    // The vulnerable parsers only run on an image. We generate text slides.
+    // The day someone adds addImage(), this fails and the exception is
+    // re-argued rather than silently inherited.
+    const exporter = readFileSync(path.join(ROOT, 'src/artifacts/exporters/pptxExporter.js'), 'utf8');
+    assert.ok(!/addImage\s*\(/.test(exporter),
+      'the pptx exporter now adds images — the image-size advisory may be reachable, re-assess it');
+  });
+
+  test('LINK 5 — no other module reaches pptxgenjs', () => {
+    const offenders = [];
+    const walk = (dir) => {
+      for (const name of readdirSync(dir)) {
+        if (name === 'tests' || name.startsWith('.')) continue;
+        const full = path.join(dir, name);
+        if (statSync(full).isDirectory()) { walk(full); continue; }
+        if (!/\.(m?js|cjs)$/.test(name)) continue;
+        if (full.endsWith(path.join('exporters', 'pptxExporter.js'))) continue;
+        if (/pptxgenjs/.test(readFileSync(full, 'utf8'))) offenders.push(path.relative(ROOT, full));
+      }
+    };
+    walk(path.join(ROOT, 'src'));
+    assert.deepEqual(offenders, [],
+      'a second module uses pptxgenjs — the unreachability argument only covers the exporter');
+  });
+
+  test('the exception EXPIRES if a fixed version ships', () => {
+    // The honest failure mode of any accepted risk is that it is accepted
+    // forever. If image-size ever publishes a patched release, this entry
+    // should be deleted and the dependency updated — so the moment somebody
+    // records that, the test tells them to act.
+    for (const e of UNREACHABLE) {
+      assert.equal(e.noFixedVersionExists, true,
+        `${e.package}: a fix now exists — take it and remove this exception`);
+    }
+  });
+});
+
 const PINNED = [
   {
     pkg: 'adm-zip',
