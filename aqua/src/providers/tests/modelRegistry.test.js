@@ -185,6 +185,49 @@ describe('modelRegistry.js — Issue 6: startup validation', () => {
   });
 });
 
+describe('modelRegistry.js — Groq Llama → GPT-OSS migration (2026-08-16 decommission)', () => {
+  test('Groq registry contains both gpt-oss replacement models', () => {
+    __resetForTests();
+    const ids = getCandidateModels('groq').map(m => m.modelId);
+    assert.ok(ids.includes('openai/gpt-oss-120b'), 'gpt-oss-120b should be registered');
+    assert.ok(ids.includes('openai/gpt-oss-20b'), 'gpt-oss-20b should be registered');
+  });
+
+  test('Groq registry does NOT contain either decommissioned Llama model', () => {
+    __resetForTests();
+    const ids = getCandidateModels('groq').map(m => m.modelId);
+    assert.ok(!ids.includes('llama-3.3-70b-versatile'), 'llama-3.3-70b-versatile must be fully removed');
+    assert.ok(!ids.includes('llama-3.1-8b-instant'), 'llama-3.1-8b-instant must be fully removed');
+  });
+
+  test('gpt-oss-120b is the preferred (first) Groq candidate', () => {
+    __resetForTests();
+    assert.equal(pickModel('groq').modelId, 'openai/gpt-oss-120b');
+  });
+
+  test('gpt-oss-120b failing falls back to gpt-oss-20b, never to a Llama model', () => {
+    __resetForTests();
+    markModelUnavailable('groq', 'openai/gpt-oss-120b', 'simulated 404');
+    const ids = getCandidateModels('groq').map(m => m.modelId);
+    assert.deepEqual(ids, ['openai/gpt-oss-20b']);
+    assert.equal(pickModel('groq').modelId, 'openai/gpt-oss-20b');
+  });
+
+  test('exhausting both Groq models yields no candidates — no dead Llama entry to fall through to', () => {
+    __resetForTests();
+    markModelUnavailable('groq', 'openai/gpt-oss-120b', 'simulated 404');
+    markModelUnavailable('groq', 'openai/gpt-oss-20b', 'simulated 404');
+    assert.deepEqual(getCandidateModels('groq'), []);
+    assert.equal(pickModel('groq'), null);
+  });
+
+  test('the registry holds exactly 2 Groq entries total — dead model removed, not merely disabled', () => {
+    __resetForTests();
+    const snap = getRegistrySnapshot();
+    assert.equal(snap.groq.length, 2, 'a decommissioned model must be deleted from the array, not left disabled/hidden');
+  });
+});
+
 describe('modelRegistry.js — introspection', () => {
   test('getRegistrySnapshot returns every provider with an array of model summaries', () => {
     __resetForTests();

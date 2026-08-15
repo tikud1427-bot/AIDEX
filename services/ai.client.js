@@ -8,10 +8,10 @@
  * Search:  Serper + generateAI
  *
  * Smart routing:
- *   tiny/simple → llama-3.1-8b-instant   (Groq)
- *   normal chat/code → qwen/qwen3-32b    (Groq)
- *   heavy/long → llama-3.3-70b-versatile (Groq)
- *   hard reasoning → qwen3-235b-a22b:free (OpenRouter)
+ *   tiny/simple      → openai/gpt-oss-20b  (Groq)
+ *   normal chat/code → openai/gpt-oss-120b (Groq)
+ *   heavy/long       → openai/gpt-oss-120b (Groq)
+ *   hard reasoning   → existing verified OpenRouter reasoning fallback
  */
 
 const axios = require("axios");
@@ -48,10 +48,11 @@ Use this context to guide users toward relevant platform features when appropria
 // MODEL TIERS
 // ─────────────────────────────────────────────────────────────────────────────
 
-// Groq models (confirmed active)
-const MODEL_TINY    = process.env.GROQ_TINY_MODEL    || "llama-3.1-8b-instant";
-const MODEL_DEFAULT = process.env.GROQ_DEFAULT_MODEL || "llama-3.3-70b-versatile"; // qwen3-32b has 6k TPM limit → use 70b as default
-const MODEL_STRONG  = process.env.GROQ_STRONG_MODEL  || "llama-3.3-70b-versatile";
+// Groq models (confirmed active). llama-3.1-8b-instant / llama-3.3-70b-versatile
+// were decommissioned by Groq 2026-08-16 — see top-of-file routing comment.
+const MODEL_TINY    = process.env.GROQ_TINY_MODEL    || "openai/gpt-oss-20b";
+const MODEL_DEFAULT = process.env.GROQ_DEFAULT_MODEL || "openai/gpt-oss-120b";
+const MODEL_STRONG  = process.env.GROQ_STRONG_MODEL  || "openai/gpt-oss-120b";
 
 // Kept for back-compat exports
 const FAST_MODEL  = MODEL_DEFAULT;

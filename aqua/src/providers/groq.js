@@ -3,11 +3,11 @@
  *
  * Changes from v2:
  * - Model ID no longer hardcoded — pulled from the central Model Registry
- *   (Issue 5). llama-3.3-70b-versatile (the old hardcoded default) was
- *   announced deprecated by Groq on 2026-06-17; registry now defaults to
- *   openai/gpt-oss-120b (Groq's own recommended replacement — also faster
- *   and cheaper), with openai/gpt-oss-20b and the old llama model kept as
- *   ordered fallbacks.
+ *   (Issue 5). llama-3.3-70b-versatile and llama-3.1-8b-instant (the old
+ *   hardcoded defaults) were decommissioned by Groq on 2026-08-16; registry
+ *   now defaults to openai/gpt-oss-120b (Groq's own recommended replacement
+ *   — also faster and cheaper), with openai/gpt-oss-20b as the sole ordered
+ *   fallback. No Llama model is registered for Groq anymore.
  * - Added a per-request fallback loop across those candidate models
  *   (Issue 4/12): a single dead/rate-limited model no longer fails the
  *   whole Groq call — only exhausting every candidate does.

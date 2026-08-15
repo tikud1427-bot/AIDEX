@@ -19,7 +19,10 @@
  *      disabled + logged, never thrown — one bad entry can't break a
  *      provider or block boot.
  *
- * Model list last verified 2026-07-02. OpenRouter's free catalog in
+ * Model list last verified 2026-08-15 (Groq's llama-3.1-8b-instant and
+ * llama-3.3-70b-versatile removed ahead of Groq's 2026-08-16 decommission —
+ * gpt-oss-20b/120b are the full replacement, no Llama fallback retained).
+ * OpenRouter's free catalog in
  * particular churns fast (providers rotate free slots weekly) — that's
  * exactly why every model here is behind the same self-healing 404
  * handling instead of being trusted to stay valid forever. Re-verify
@@ -89,7 +92,7 @@ const PROVIDER_LISTS = {
         contextWindow: 131_072, maxOutputTokens: 65_536,
         supportsTools: true, supportsReasoning: true,
         costTier: 'free',
-        note: 'Primary. Groq\'s own recommended replacement for llama-3.3-70b-versatile (deprecation announced 2026-06-17) — also faster (500 t/s vs 280 t/s) and cheaper.',
+        note: 'Primary. Groq\'s recommended replacement for the deprecated 70B Llama model (decommissioned 2026-08-16) — also faster (500 t/s vs 280 t/s) and cheaper. No Llama model remains in this list; do not reintroduce one as a safety net.',
       }),
       model({
         provider: 'groq', modelId: 'openai/gpt-oss-20b',
@@ -97,15 +100,7 @@ const PROVIDER_LISTS = {
         contextWindow: 131_072, maxOutputTokens: 65_536,
         supportsTools: true, supportsReasoning: true,
         costTier: 'free',
-        note: 'Fallback — smaller/faster (~1000 t/s) sibling of the primary.',
-      }),
-      model({
-        provider: 'groq', modelId: 'llama-3.3-70b-versatile',
-        capabilities: ['chat', 'tools'],
-        contextWindow: 131_072, maxOutputTokens: 32_768,
-        supportsTools: true,
-        costTier: 'free',
-        note: 'Tertiary safety net only. Groq announced deprecation 2026-06-17; still live at time of writing but do not promote back to primary.',
+        note: 'Fallback — smaller/faster (~1000 t/s) sibling of the primary. Groq\'s recommended replacement for the deprecated 8B Llama model, decommissioned 2026-08-16.',
       }),
     ],
   },
