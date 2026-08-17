@@ -245,16 +245,26 @@ describe('boundedParse — wiring', () => {
     }
   });
 
-  test('KNOWN GAP: the workspace ingest loop is still unbounded (E1/PR-4b)', () => {
-    // fileIngester parses every document inside a workspace upload in a loop.
-    // A one-shot worker costs ~250 ms, so bounding it here would add 250 ms ×
-    // N files — a real regression. It needs a reusable session with respawn,
-    // which is its own PR. Recorded as a test, the way PR-1 recorded the
-    // missing ratio ceiling, so it inverts when PR-4b lands rather than being
-    // forgotten.
+  test('GAP CLOSED IN E1/PR-4b: the workspace ingest loop is bounded', () => {
+    // This assertion was the inverse until PR-4b. E1/PR-4 left the loop
+    // unbounded because a one-shot worker cost 82× inline on a batch
+    // (6275 ms vs 76 ms for 20 documents) and recorded the gap as a test so it
+    // would invert rather than be forgotten — the same mechanism E1/PR-1 used
+    // for the missing ratio ceiling that E1/PR-3 closed.
+    //
+    // PR-4b closes it with a REUSABLE session: the spawn is paid once per
+    // batch, 355 ms. Details in parseSession.test.js.
     const root = path.resolve(HERE, '../../..');
     const text = readFileSync(path.join(root, 'src/project/fileIngester.js'), 'utf8');
-    assert.match(text, /extracted = await parseDocument\(ext, buffer\);/,
-      'fileIngester now bounds its loop — invert this assertion and close the gap in the docs');
+    // Asserted on the ACTIVE CONDITION, not merely on the import. A first
+    // version checked only that `createParseSession` appeared somewhere —
+    // which a mutation to `extracted = false ? session.run(...) : inline`
+    // sailed straight past, because the import was still there. Bite: 0.
+    assert.match(text, /createParseSession/,
+      'the ingest loop no longer imports a parse session');
+    assert.match(text, /extracted = session\s*\n?\s*\? await session\.run\('parseDocument'/,
+      'the ingest loop no longer routes through the session — the gap has reopened');
+    assert.ok(!/extracted = await parseDocument\(ext, buffer\);/.test(text),
+      'the ingest loop parses inline again');
   });
 });

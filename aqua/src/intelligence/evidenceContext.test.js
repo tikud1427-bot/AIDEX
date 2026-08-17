@@ -28,9 +28,24 @@ test('empty parts compose to empty string (ungrounded turn unchanged)', () => {
 });
 
 test('single part composes with its label', () => {
+  // E1/PR-5b changed the SHAPE: an ingested section now carries a fence
+  // header between its label and its content. The label and the content are
+  // both still present and in order — asserted separately rather than as one
+  // adjacent match, which is what this test was really about.
   const out = composeEvidenceContext({ attachmentContext: 'VIDEO analysis: cat jumps.' });
-  assert.match(out, /── UPLOADED FILE ANALYSES ──\nVIDEO analysis: cat jumps\./);
+  assert.match(out, /── UPLOADED FILE ANALYSES ──/);
+  assert.match(out, /VIDEO analysis: cat jumps\./);
+  assert.ok(out.indexOf('UPLOADED FILE ANALYSES') < out.indexOf('VIDEO analysis'));
   assert.equal(hasGroundedEvidence(out), true);
+});
+
+test('E1/PR-5b: the content survives fencing byte for byte', () => {
+  // The fence must not mangle evidence. A reviewer that sees altered evidence
+  // would "correct" a grounded answer, which is the bug the grounding
+  // contract exists to prevent.
+  const analysis = 'VIDEO analysis: cat jumps. Duration 00:31. Frames: 4.';
+  const out = composeEvidenceContext({ attachmentContext: analysis });
+  assert.ok(out.includes(analysis), 'the fence altered the evidence text');
 });
 
 test('all parts compose in fixed order: attachments, project, search, memory', () => {

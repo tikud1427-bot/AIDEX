@@ -33,6 +33,8 @@
  * post-generation revisers) and threaded from chat.js prepareTurn().
  */
 
+import { fenceUntrusted, makeFenceNonce } from '../core/untrustedContent.js';
+
 /** Order fixed and labeled — reviewers see evidence the way the drafter did. */
 const SECTIONS = [
   ['attachmentContext', 'UPLOADED FILE ANALYSES'],
@@ -54,14 +56,36 @@ const SECTIONS = [
  */
 export function composeEvidenceContext(parts = {}) {
   const blocks = [];
+  const nonce = makeFenceNonce();
   for (const [key, label] of SECTIONS) {
     const v = typeof parts[key] === 'string' ? parts[key].trim() : '';
-    if (v) blocks.push(`── ${label} ──\n${v}`);
+    if (!v) continue;
+
+    // E1/PR-5b — the reviewer prompts get the same fence the drafter prompt
+    // got in E1/PR-5. This path was left open there and recorded as an
+    // inverting test, because fencing WITHOUT a hierarchy statement in the
+    // reviewer prompts would have been decorative. Both halves land together.
+    //
+    // MEMORY IS NOT FENCED, exactly as in PR-5: `memoryBlock` holds facts the
+    // user asserted about themselves — the same trust tier as their message,
+    // not ingested third-party text. Fencing it would tell the reviewer AQUA
+    // distrusts what the user said directly.
+    blocks.push(UNFENCED.has(key)
+      ? `── ${label} ──\n${v}`
+      : `── ${label} ──\n${fenceUntrusted(v, { source: label.toLowerCase(), nonce })}`);
   }
   return blocks.join('\n\n');
 }
 
 /** True when the turn had ANY grounded evidence — gates the refusal guard. */
+/**
+ * Sections whose content is the USER'S OWN, not ingested third-party text.
+ *
+ * One entry, and it is a decision rather than an oversight — see PR-5's
+ * identical call for the drafter prompt.
+ */
+const UNFENCED = new Set(['memoryBlock']);
+
 export function hasGroundedEvidence(evidenceContext) {
   return typeof evidenceContext === 'string' && evidenceContext.trim().length > 0;
 }

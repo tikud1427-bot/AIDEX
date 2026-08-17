@@ -38,6 +38,7 @@
  * the turn just absorbed rather than the one before it. Both are deferred so
  * neither adds a millisecond to the response the user is waiting on.
  */
+import { defer } from '../core/jobs/jobRegistry.js';
 import * as Brain from '../brain/index.js';
 import { memoryAfterTurn } from '../memory/engine.js';
 import { getConversation } from '../memory/conversationStore.js';
@@ -52,7 +53,12 @@ const REAL_DEPS = Object.freeze({
   observeConversationTurn: Brain.observeConversationTurn,
   observeTwin: Brain.observeTwin,
   reflectTurn: Brain.reflectTurn,
-  defer: setImmediate,
+  // E4/PR-1 — was a bare `setImmediate`. Measured: on SIGTERM, 3 of 3
+  // outstanding post-turn jobs were lost and NOTHING KNEW they existed. Same
+  // deferral and same fail-open; the registry simply makes the work visible
+  // to the shutdown drain. The injectable seam was already here, which is why
+  // this is a one-line change rather than new plumbing.
+  defer: fn => defer('post-turn', fn),
   reflectEvery: REFLECT_EVERY_TURNS,
   consolidate,
   consolidateEnabled,

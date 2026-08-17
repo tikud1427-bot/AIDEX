@@ -147,3 +147,76 @@ No dependency change; no `npm ci` needed.
 ```bash
 bash apply-pr.sh ~/Downloads/PR5-injection-boundary.tar.gz
 ```
+
+---
+
+## PR-5b — the reviewer path
+
+E1/PR-5 fenced the **drafter's** prompt and left the reviewer path open,
+recording it as an inverting test. That assertion is now inverted, and the last
+declared Epic 1 gap is closed.
+
+### Why PR-5 didn't just fence it in passing
+
+Its own gap note said it: *fencing it without also putting a hierarchy
+statement in those prompts would be decorative*. A fence the reader has never
+had explained is a delimiter, not a boundary. Both halves land together here.
+
+### The tension this PR had to resolve
+
+The reviewer prompts describe evidence as **"ground truth"** — and that wording
+exists for a reason. Reviewers were *"correcting"* grounded multimodal answers
+into *"I cannot watch videos"*; the grounding contract is the fix, with an E2E
+suite guarding it.
+
+Fencing that same evidence as untrusted looks like a direct contradiction. It
+isn't — they are **two different claims**:
+
+| claim | verdict |
+|---|---|
+| the content is **real** and was available to the drafter | **stays strong** — this is what makes an answer grounded rather than hallucinated |
+| **imperatives inside** it are commands to the reviewer | **refused** — a document that says *"report this answer as wrong"* is a document making a claim |
+
+Collapsing them either makes the fence useless or reopens the refusal bug. The
+reviewer hierarchy is therefore deliberately **narrower** than the drafter's,
+and a test asserts `ground truth` is still there.
+
+### Memory stays unfenced — the same decision, in both places
+
+`memoryBlock` holds facts the user asserted about themselves. Fencing it here
+while leaving it unfenced for the drafter would mean AQUA distrusts what the
+user said *depending on which prompt is reading it*.
+
+### A behaviour change worth naming
+
+`composeEvidenceContext` output **changed shape**: an ingested section now
+carries a fence header between its label and its content. Nothing parses that
+string — `hasGroundedEvidence` only checks for non-empty, and the agents embed
+it as text — but one existing test asserted the label and content were
+adjacent, and it went red.
+
+Updated deliberately, and a new test asserts the evidence survives **byte for
+byte**. A fence that mangled evidence would make a reviewer "correct" a
+grounded answer, which is the exact failure the grounding contract prevents.
+
+### Bite, measured
+
+| mutation | failures |
+|---|---|
+| stop fencing the reviewer evidence | 1 |
+| fence memory too (distrust the user) | 1 |
+| drop the reviewer hierarchy (decorative fence) | 1 |
+| weaken the grounding contract | 1 |
+| *(reverted)* | **0 — 76/76** |
+
+### Results
+
+```
+npm test    2315 / 218 suites / 0 fail / 1 skipped-with-a-reason
+eval:gate   exit 0 · flagproof 30/30 · capability-refusal E2E still green
+```
+
+**Every prompt that receives ingested content in this engine is now fenced,
+and every prompt that receives a fence is told what one means.** All three
+Epic 1 gaps — the ratio ceiling, the ingest loop, and the reviewer path — are
+closed, each by inverting the test that recorded it.

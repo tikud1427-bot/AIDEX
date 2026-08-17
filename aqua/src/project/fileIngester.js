@@ -7,6 +7,10 @@
  */
 import path from 'path';
 import { isDocumentExt, parseDocument } from './documentParser.js';
+// E1/PR-4b — closes the gap E1/PR-4 declared. A one-shot worker per file cost
+// 82x inline (6275 ms vs 76 ms for 20 documents), which is why the loop was
+// left unbounded. A session pays the ~280 ms spawn ONCE per batch: 355 ms.
+import { createParseSession } from '../upload/parseSession.js';
 import { isSecretFile, redactSecrets } from './secretGuard.js';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -158,7 +162,17 @@ export function detectProjectType(files) {
  */
 export async function ingestFiles(rawFiles) {
   const results = [];
+  /**
+   * One session for the whole batch, created LAZILY.
+   *
+   * Lazily because most uploads contain no base64 documents at all, and
+   * spawning a worker for a batch of plain source files would be a cost with
+   * no benefit. `session` stays null until the first document needs it.
+   */
+  let session = null;
+  const getSession = () => (session ??= createParseSession());
 
+  try {
   for (const file of rawFiles) {
     if (!file?.path || !file?.content) continue;
 
@@ -174,7 +188,7 @@ export async function ingestFiles(rawFiles) {
     if (!isBase64Document && shouldIgnore(file.path)) continue;
 
     if (isBase64Document) {
-      const entry = await ingestDocumentFile(file, ext);
+      const entry = await ingestDocumentFile(file, ext, getSession());
       if (entry) results.push(entry);
       continue;
     }
@@ -203,6 +217,16 @@ export async function ingestFiles(rawFiles) {
 
   console.log(`[Index] Ingested ${results.length} files from ${rawFiles.length} total`);
   return results;
+  } finally {
+    // ALWAYS closed, including when the loop throws. A session that outlives
+    // its batch leaves a worker thread alive for the life of the process, and
+    // one leaked thread per upload is a slow, invisible resource leak.
+    if (session) {
+      const { respawns } = session.stats();
+      if (respawns) console.warn(`[Index] parse worker respawned ${respawns}× during this batch`);
+      await session.close();
+    }
+  }
 }
 
 /**
@@ -216,7 +240,7 @@ export async function ingestFiles(rawFiles) {
  * @param {string} ext
  * @returns {Promise<{path, content, lang, size, truncated, documentMeta}|null>}
  */
-async function ingestDocumentFile(file, ext) {
+async function ingestDocumentFile(file, ext, session = null) {
   let buffer;
   try {
     buffer = Buffer.from(file.content, 'base64');
@@ -227,7 +251,13 @@ async function ingestDocumentFile(file, ext) {
 
   let extracted;
   try {
-    extracted = await parseDocument(ext, buffer);
+    // Bounded when a session is supplied, inline otherwise. Callers that parse
+    // ONE document need no session and pay no spawn; the batch loop supplies
+    // one and pays it once.
+    extracted = session
+      ? await session.run('parseDocument', { ext, buffer },
+        { inline: () => parseDocument(ext, buffer), label: file.path })
+      : await parseDocument(ext, buffer);
   } catch (err) {
     console.warn(`[Index] Skipped ${file.path}: ${err.message}`);
     return null;

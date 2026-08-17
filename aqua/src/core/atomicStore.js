@@ -41,6 +41,7 @@ import { mirrorWrite, drainMirror } from './mongoMirror.js';
 // moved; nothing about the public API or the semantics changed. See
 // src/core/storage/index.js for why the seam is keyed by path.
 import { getAdapter, flushStorage } from './storage/index.js';
+import { drainJobs, drainLine } from './jobs/jobRegistry.js';
 
 // ── P0 durability additions ──────────────────────────────────────────────────
 // loadJsonFile()  — corrupt-safe load: NEVER lets a bad parse wipe a store.
@@ -92,8 +93,18 @@ function hookShutdownOnce() {
       // memory when it returns). The sync flush above therefore does not mean
       // the bytes are safe; flushStorage awaits the deferred writes. Run
       // alongside the Mongo drain, not after it — a deploy will not wait twice.
-      Promise.allSettled([drainMirror(5_000), flushStorage(5_000)])
-        .finally(() => process.exit(code));
+      // E4/PR-1 — deferred post-turn work joins the drain. It was invisible
+      // here until now: measured, 3 of 3 outstanding jobs lost on SIGTERM
+      // with nothing tracking them, so every deploy discarded the
+      // understanding side-effects of whatever turns were in flight.
+      //
+      // Run alongside the others, not after — a deploy will not wait three
+      // times, and the platform sends SIGKILL on its own schedule regardless.
+      Promise.allSettled([
+        drainMirror(5_000),
+        flushStorage(5_000),
+        drainJobs(5_000).then(r => { const line = drainLine(r); if (r.drained || r.timedOut) console.log(line); }),
+      ]).finally(() => process.exit(code));
     });
   }
 }

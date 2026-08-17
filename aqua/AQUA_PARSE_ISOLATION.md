@@ -170,3 +170,101 @@ No dependency change; no `npm ci` needed.
 ```bash
 bash apply-pr.sh ~/Downloads/PR4-parse-isolation.tar.gz
 ```
+
+
+---
+
+## PR-4b — closing the gap
+
+E1/PR-4 bounded three call sites and left the fourth open, recording it as an
+inverting test. This closes it, and that assertion is now inverted.
+
+### Why it was left open — the number
+
+```
+20 documents, inline (today, UNBOUNDED)      76 ms
+20 documents, one-shot worker per file     6275 ms     ← 82× slower
+20 documents, REUSABLE SESSION              355 ms
+```
+
+A one-shot worker pays ~280 ms of spawn per file. On a 50-file repo that is
+fifteen seconds of tax to bound a loop, which is not a trade anyone would take
+— so the gap was recorded rather than closed badly.
+
+A session pays the spawn **once per batch**. The remaining overhead is one
+spawn, amortised.
+
+### What a long-lived worker must get right that a one-shot does not
+
+**Respawn.** A one-shot worker that dies takes one parse with it. A *session*
+that dies would take the whole batch — and `ingestFiles` already promises
+*"one bad document can't fail an entire batch upload"*. A death rejects only
+the in-flight request; the next file gets a fresh worker.
+
+**No state bleed.** A session carries one user's document after another. A
+parser that remembered anything would be a cross-document leak nobody would
+spot in a log. The worker holds no module-level mutable state, asserted.
+
+**Per-request limits.** The deadline and the RSS watchdog apply to each parse,
+not to the session. A session-wide budget would let file 1 spend the allowance
+and make file 2 look like the culprit.
+
+The ceilings are E1/PR-4's, **imported rather than copied** — two definitions
+of "too big" would drift.
+
+### Lazy, and always closed
+
+Most uploads contain no base64 documents at all, so the session is created on
+the first document that needs one. A batch of plain source files spawns
+nothing — measured at 1 ms.
+
+It is closed in a `finally`, including when the loop throws. A session that
+outlives its batch leaves a thread alive for the life of the process, and one
+leaked thread per upload is a slow, invisible leak.
+
+### 🔴 A test that proved less than it looked like
+
+The respawn test closed the session and built a **new one by hand** — which
+proves the constructor works twice, not that recovery works. Measuring bite
+exposed it: removing `worker = null` from the death handler failed **zero**
+tests, because no test ever asked the *same* session to parse again after a
+death.
+
+It now kills the worker underneath a live session and reuses that session.
+Bite: 0 → 1. Fourth time in this project a bite measurement has revealed
+something about the code or the test rather than confirming it.
+
+### 🔴 A gap test that checked a string, not a behaviour
+
+The inverted assertion first checked only that `createParseSession` appeared in
+the file. A mutation to `extracted = false ? session.run(...) : inline` sailed
+straight past it — the import was still there. Bite: 0.
+
+It now asserts the **active condition**, not the import.
+
+### Also caught
+
+An import edit whose anchor did not match, printed as "wired" without an
+assertion — the same class as E1/PR-4's partial replace. Found by running the
+code rather than reading the diff.
+
+### Bite, measured
+
+Every mutation verified as applied first.
+
+| mutation | failures |
+|---|---|
+| never drop the dead worker (no respawn) | 1 |
+| a closed session silently falls back | 1 |
+| reopen the gap (parse inline again) | 1 |
+| *(reverted)* | **0 — 16/16 + 17/17** |
+
+### Results
+
+```
+npm test    2311 / 218 suites / 0 fail / 1 skipped-with-a-reason
+eval:gate   exit 0 · flagproof 30/30 · router boots
+```
+
+Every untrusted-byte parse in the engine is now bounded. The debt E1/PR-4
+declared is closed.

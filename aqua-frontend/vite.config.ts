@@ -23,8 +23,8 @@ function buildStamp() {
 }
 
 // https://vite.dev/config/
-export default defineConfig({
-  base: '/aqua/',
+export default defineConfig(({ mode }) => ({
+  base: mode === 'android' ? './' : '/aqua/',
   plugins: [
     react(),
     tailwindcss(),
@@ -160,4 +160,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

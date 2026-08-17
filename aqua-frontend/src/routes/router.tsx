@@ -84,5 +84,5 @@ export const router = createBrowserRouter(
       ],
     },
   ],
-  { basename: '/aqua' }
+  { basename: import.meta.env.VITE_APP_BASENAME || '/aqua' }
 );
