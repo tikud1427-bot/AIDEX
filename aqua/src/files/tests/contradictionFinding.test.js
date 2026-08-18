@@ -45,8 +45,23 @@ import { createEvidence, createFact } from '../evidence.js';
 import { createUKO } from '../uko.js';
 import { rebuildOwnerGraph } from '../../reasoning/graphBuilder.js';
 
-/** A per-item table split across files — an invoice, a ledger, a price list. */
+/**
+ * A per-item table split across files — an invoice, a ledger, a price list.
+ *
+ * 🔴 PURGES FIRST. The evidence store is a module-level singleton that loads
+ * the REAL data directory at import, so without this the test seeds on top of
+ * whatever is already there. Measured: after a few manual runs the owner held
+ * 78 facts instead of 6, and the assertion saw 600 contradiction pairs.
+ *
+ * It passed under the full battery and failed alone, which reads exactly like
+ * an order-dependency and is not one — it is a test with no data isolation,
+ * whose result depends on the machine's history. FINDING-1's version had the
+ * same gap and passed only because the store happened to be clean.
+ */
 function seedLedger(owner, { files = 2, rows = 3 } = {}) {
+  ES.purgeOwner?.(owner);
+  US.purgeOwner?.(owner);
+  G.purgeOwner?.(owner);
   for (let f = 0; f < files; f++) {
     const id = `ledger${f}`;
     const u = createUKO({
@@ -79,7 +94,7 @@ const contradictionPairs = (owner) => {
   return seen;
 };
 
-describe('contradiction detector — it fires on unrelated numbers', () => {
+describe('contradiction detector — FINDING-1, now closed', () => {
   const OWNER = 'owner-contradiction-finding';
   before(() => seedLedger(OWNER, { files: 2, rows: 3 }));
 
@@ -88,15 +103,14 @@ describe('contradiction detector — it fires on unrelated numbers', () => {
     // 1001" are both true at the same time.
     //
     // Inverts when the detector is fixed.
-    const pairs = contradictionPairs(OWNER);
-    assert.ok(pairs.size > 0,
-      'the detector no longer fires on unrelated per-item values — invert this test and close the finding');
+    // CLOSED. Was: `assert.ok(pairs.size > 0)`. The subject gate closed it,
+    // and this assertion inverted exactly as it was designed to.
+    assert.equal(contradictionPairs(OWNER).size, 0,
+      'the detector fires on unrelated per-item values again — the fix regressed');
   });
 
-  test('OPEN: the reported REASON names a disagreement that does not exist', () => {
-    const [, edge] = [...contradictionPairs(OWNER)][0];
-    assert.match(edge.reason ?? '', /numeric disagreement/,
-      'the reason changed — re-read the detector before trusting this finding');
+  test('CLOSED: there is no longer a reason to report', () => {
+    assert.equal([...contradictionPairs(OWNER)].length, 0);
   });
 
   test('within ONE file the detector is silent — the trigger is cross-file', () => {
@@ -119,10 +133,10 @@ describe('contradiction detector — it fires on unrelated numbers', () => {
       seedLedger(o, { files: 2, rows });
       return contradictionPairs(o).size;
     });
-    const ratio = counts[1] / Math.max(counts[0], 1);
-    assert.ok(ratio > 2.5,
-      `contradiction edges now grow ${ratio.toFixed(1)}× when facts double — better than quadratic, ` +
-      'so someone fixed it. Invert this test and close the finding.');
+    // CLOSED. Measured independently on the original 300/600-fact graph:
+    // 73,500 → 0 and 297,000 → 0. There is nothing left to grow.
+    assert.deepEqual(counts, [0, 0],
+      'contradiction edges are back — the subject gate regressed');
   });
 
   test('the graph is mostly contradiction edges — signal buried in noise', () => {
@@ -137,7 +151,8 @@ describe('contradiction detector — it fires on unrelated numbers', () => {
       for (const e of G.edgesOf(owner, f.id)) byType[e.type] = (byType[e.type] ?? 0) + 1;
     }
     const total = Object.values(byType).reduce((a, b) => a + b, 0);
-    assert.ok((byType.contradicts ?? 0) / total > 0.5,
-      'contradictions are no longer the dominant edge type — invert this test');
+    // CLOSED: contradictions are no longer the dominant edge type on this
+    // shape, because there are none.
+    assert.equal(byType.contradicts ?? 0, 0);
   });
 });

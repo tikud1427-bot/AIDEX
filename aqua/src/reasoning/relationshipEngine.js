@@ -254,27 +254,245 @@ export function detectCrossFileContradictions(entities, facts, store, ownerId) {
   return contradictions;
 }
 
+/**
+ * Exposed for the contradiction eval.
+ *
+ * A seam rather than a copy: the eval must score the PREDICATE THE ENGINE
+ * ACTUALLY USES. A duplicated rule in the harness would drift the first time
+ * one side changed, and the baseline would then measure a detector nobody
+ * ships. FINDING-1 exists because this predicate over-fires; a scorer aimed at
+ * a copy of it would be worthless.
+ */
+export function _conflictKindForTests(a, b) { return conflictKind(a, b); }
+
 function conflictKind(a, b) {
+  // ── GATE 0: one statement REVISING the other is history, not conflict ────
+  //
+  // "The beta date was 1 August" / "The beta date MOVED TO 15 September" are
+  // both true: one records a change. Revision language is an explicit signal
+  // that the writer knows about the earlier value.
+  if (REVISION.test(a) !== REVISION.test(b)) return null;
+
+  // ── GATE 1: the two statements must be about the SAME THING ──────────────
+  //
+  // The idea the predicate never had. `Item 0 for VendorCo recorded value
+  // 1000` and `Item 1 … 1001` share an entity and five words and disagree on
+  // a number — and are both true, because they describe DIFFERENT ITEMS.
+  //
+  // Measured before this gate existed: 95.5% of per-item table rows fired,
+  // 73,500 edges from 300 facts. That single missing idea is nearly all of the
+  // false-positive damage.
+  if (differentSubjects(a, b)) return null;
+
   const numA = numbers(a), numB = numbers(b);
-  // FI-2: SIGNIFICANT figures compared separately — two statements sharing a
-  // date ("… on 2026-01-05") but disagreeing on the amount (4000000 vs
-  // 9000000) are a numeric conflict; the shared date components must not
-  // mask it. Significant = ≥4 digits and not year-shaped. Requires stronger
-  // textual overlap (≥4 shared words) than the fallback, to stay conservative.
   const sigA = significant(numA), sigB = significant(numB);
   if (sigA.length && sigB.length && !sigA.some(n => sigB.includes(n)) && !sigB.some(n => sigA.includes(n)) && overlap(a, b) >= 4) {
     return 'numeric';
   }
   if (numA.length && numB.length && !numA.some(n => numB.includes(n)) && overlap(a, b) >= 3) {
-    // Distinguish date-shaped conflicts from plain numeric.
     if (/\b(19|20)\d{2}\b/.test(a) && /\b(19|20)\d{2}\b/.test(b)) return 'date';
     return 'numeric';
   }
   const negA = NEG.test(a), negB = NEG.test(b);
   if (negA !== negB && overlap(a, b) >= 4) return 'negation';
+
+  // ── The recall half. Everything above compares DIGITS, so the detector was
+  // blind to disagreements that carry no numeral at all. Measured: 9 of 15
+  // genuine contradictions missed. These run only after the subject gate, so
+  // they cannot reintroduce the per-item false positives.
+  if (monthConflict(a, b) && overlap(a, b) >= 3) return 'date';
+  // A spelled-number rule was here and was DEAD: "runway is fourteen months"
+  // vs "six months" is already caught by the bare `is` relation-tail rule
+  // below. Removing it cost zero tests across the whole battery — the same
+  // check that found E5/PR-2's `autoLogged` Set guarding nothing.
+  if (categoricalConflict(a, b) && overlap(a, b) >= 3) return 'status';
+  const tail = relationTailConflict(a, b);
+  if (tail) return tail;
+
   return null;
 }
 
+/**
+ * Do the two statements describe different members of a series?
+ *
+ * A per-item table is the shape: `Item 0 …`, `Item 1 …`, `Invoice 1042 …`,
+ * `Sprint 4 …`, `Q1 revenue …`. When both sides carry a LABEL + INDEX and the
+ * indices differ, they are about different things and cannot contradict.
+ *
+ * Deliberately narrow. It only fires when BOTH sides show the same label with
+ * a different index — an unlabelled numeric difference is still a candidate
+ * conflict, which is what keeps `Revenue was 4200000` vs `9100000` firing.
+ */
+function differentSubjects(a, b) {
+  const A = subjectKeys(a), B = subjectKeys(b);
+  for (const [label, idx] of A) {
+    if (B.has(label) && B.get(label) !== idx) return true;
+  }
+  return differentQualifier(a, b);
+}
+
+/**
+ * A shared head noun carrying a DIFFERENT qualifier on each side.
+ *
+ *   "The BANGALORE office has 12 desks"  /  "The DELHI office has 30 desks"
+ *   "The 2024 audit cost 15000"          /  "The 2025 audit cost 21000"
+ *   "Plan BASIC costs 4900"              /  "Plan PRO costs 9900"
+ *
+ * Same predicate, different subject, both true. The series-index gate misses
+ * these because the discriminator is a name or a year rather than an index —
+ * and a year is deliberately excluded there, correctly, since `on 2026-01-10`
+ * is a date and not a series.
+ *
+ * Requires the qualifier to be adjacent to the shared noun, so it cannot fire
+ * on two statements that merely contain different words somewhere.
+ */
+function differentQualifier(a, b) {
+  const toks = (s) => String(s).toLowerCase().replace(/[^a-z0-9 ]/g, ' ').split(/\s+/).filter(Boolean);
+  const ta = toks(a), tb = toks(b);
+  const shared = new Set(ta.filter(w => tb.includes(w) && w.length >= 4));
+  for (const noun of shared) {
+    // 🔴 The shared word must be a NOUN the qualifier modifies.
+    //
+    // `Acme Corporation RAISED $10M` vs `Acme Holdings RAISED $99M` put two
+    // names before a VERB — but a name before a verb is the subject itself,
+    // not a series label, and suppressing there hid a real conflict. A
+    // past-tense "-ed" form is a cheap, honest proxy for a verb without a POS
+    // tagger; it errs toward FIRING the detector, which is the safer side
+    // given the alternative is silently losing a contradiction.
+    if (/(?:ed|ing)$/.test(noun)) continue;
+    const qa = ta[ta.indexOf(noun) - 1];
+    const qb = tb[tb.indexOf(noun) - 1];
+    if (!qa || !qb || qa === qb) continue;
+    if (NOT_A_SERIES_LABEL.has(qa) || NOT_A_SERIES_LABEL.has(qb)) continue;
+    // Both qualifiers must be CONTENT: a name, or a number acting as one.
+    if (!/^[a-z0-9]{2,}$/.test(qa) || !/^[a-z0-9]{2,}$/.test(qb)) continue;
+    // 🔴 A qualifier only DISTINGUISHES subjects if it is absent from the
+    // other statement.
+    //
+    // `OpenAI raised 10000000` vs `OpenAI Inc. raised 99000000` put "openai"
+    // and "inc" before the shared word, so the raw-token comparison read them
+    // as different subjects and suppressed a GENUINE contradiction between two
+    // files. They are the same company with a suffix — which is precisely what
+    // entity resolution exists to handle.
+    //
+    // Found by the existing battery, not by my 53-case dataset. That dataset
+    // had no same-entity-with-a-suffix pair, and four rounds of tuning against
+    // it would never have surfaced this.
+    if (tb.includes(qa) || ta.includes(qb)) continue;
+    // 🔴 A UNIT is not a subject.
+    //
+    // `reduces duration by 30 PERCENT` vs `by 12 PERCENT` puts two numbers
+    // before a shared word — but that IS the disagreement, not a
+    // distinguisher. `2024 audit` vs `2025 audit` is the opposite: a year
+    // qualifying a noun, naming two different audits.
+    //
+    // So a NUMERIC qualifier distinguishes subjects only when the shared word
+    // is not a unit of measure. Also found by the existing battery, not by my
+    // dataset.
+    if (UNIT_WORDS.has(noun) && /^[0-9]/.test(qa) && /^[0-9]/.test(qb)) continue;
+    return true;
+  }
+  return false;
+}
+
+/** Words that measure rather than name — a number before one is a VALUE. */
+const UNIT_WORDS = new Set([
+  'percent', 'percentage', 'months', 'month', 'weeks', 'days', 'hours',
+  'minutes', 'people', 'users', 'customers', 'dollars', 'units', 'tickets',
+  'desks', 'seats', 'points', 'times', 'items', 'rows', 'words',
+]);
+
+const MONTHS = ['january','february','march','april','may','june','july',
+  'august','september','october','november','december'];
+
+/** "signed on 12 January" vs "3 March" — a month name is a date, not a word. */
+function monthConflict(a, b) {
+  const of = (s) => MONTHS.filter(m => new RegExp(`\\b${m}\\b`, 'i').test(String(s)));
+  const ma = of(a), mb = of(b);
+  return ma.length > 0 && mb.length > 0 && !ma.some(m => mb.includes(m));
+}
+
+/** label → index, for `Item 3`, `Invoice 1042`, `Q2`, `Sprint 5`, `web-01`. */
+function subjectKeys(s) {
+  const out = new Map();
+  const text = String(s);
+  for (const m of text.matchAll(/\b([A-Za-z][A-Za-z-]{1,20})[ -]([0-9]{1,6})\b/g)) {
+    const label = m[1].toLowerCase();
+    // A year is not a series index.
+    if (/^(19|20)\d\d$/.test(m[2])) continue;
+    // 🔴 A FUNCTION WORD IS NOT A SERIES LABEL.
+    //
+    // The first version of this gate treated "on 12" and "is 88400" as
+    // labelled indices, so `signed on 12 January` vs `signed on 3 March` read
+    // as two different subjects and the contradiction was suppressed.
+    // Measured: it cost three genuine detections.
+    //
+    // This is the stopword class this project has fixed four times already
+    // (classifier task verbs, goal outcome verbs, self-declaration verbs,
+    // TECH_TERMS). A closed list of function words is the narrow fix; a label
+    // has to be a NOUN naming a series.
+    if (NOT_A_SERIES_LABEL.has(label)) continue;
+    if (!out.has(label)) out.set(label, m[2]);
+  }
+  for (const m of text.matchAll(/\b(Q[1-4]|H[12])\b/g)) {
+    if (!out.has('period')) out.set('period', m[1].toUpperCase());
+  }
+  return out;
+}
+
+/** Function words that precede a number without naming a series. */
+const NOT_A_SERIES_LABEL = new Set([
+  'on', 'is', 'was', 'are', 'were', 'at', 'in', 'of', 'to', 'by', 'for',
+  'about', 'over', 'under', 'and', 'or', 'the', 'a', 'an', 'be', 'been',
+  'has', 'have', 'had', 'totals', 'total', 'costs', 'cost', 'raised',
+]);
+
+/**
+ * Opposite states of one thing: confirmed/cancelled, passed/failed.
+ *
+ * A closed list, on purpose. An open one would need a lexicon this codebase
+ * does not have, and guessing antonyms is how a detector starts firing on
+ * "increased"/"decreased" in two unrelated metrics.
+ */
+const OPPOSITES = [
+  ['confirmed', 'cancelled'], ['confirmed', 'canceled'],
+  ['passed', 'failed'], ['approved', 'rejected'],
+  ['complete', 'incomplete'], ['open', 'closed'],
+  ['active', 'inactive'], ['signed', 'unsigned'],
+  ['accepted', 'declined'], ['available', 'unavailable'],
+];
+function categoricalConflict(a, b) {
+  const la = String(a).toLowerCase(), lb = String(b).toLowerCase();
+  const has = (s, w) => new RegExp(`\\b${w}\\b`).test(s);
+  return OPPOSITES.some(([x, y]) => (has(la, x) && has(lb, y)) || (has(la, y) && has(lb, x)));
+}
+
+/**
+ * Same relation, different object: "Dev reports to Priya" / "to Karan".
+ *
+ * Compares the TAIL after a shared relation phrase. Requires the heads to
+ * match, so it cannot fire on two different subjects.
+ */
+const RELATIONS = [
+  'reports to', 'is the', 'is our', 'works at', 'is based in',
+  'is led by', 'belongs to', 'is assigned to', 'is owned by',
+  'we chose', 'is', 'are',
+];
+function relationTailConflict(a, b) {
+  const la = String(a).toLowerCase().replace(/[.!?]+$/, '');
+  const lb = String(b).toLowerCase().replace(/[.!?]+$/, '');
+  for (const rel of RELATIONS) {
+    const ia = la.indexOf(rel), ib = lb.indexOf(rel);
+    if (ia < 0 || ib < 0) continue;
+    if (la.slice(0, ia).trim() !== lb.slice(0, ib).trim()) continue;   // different heads
+    const ta = la.slice(ia + rel.length).trim();
+    const tb = lb.slice(ib + rel.length).trim();
+    if (ta && tb && ta !== tb) return 'entity';
+  }
+  return null;
+}
+
+const REVISION = /\b(moved to|changed to|updated to|revised to|pushed to|slipped to|now|since|until)\b/i;
 const NEG = /\b(not|no|never|isn't|aren't|won't|cannot|can't|failed|rejected|denied)\b/i;
 function numbers(s) { return [...String(s).matchAll(/\d[\d,]*(?:\.\d+)?/g)].map(m => m[0].replace(/,/g, '')); }
 function significant(ns) { return ns.filter(n => n.length >= 4 && !/^(19|20)\d\d$/.test(n)); }
