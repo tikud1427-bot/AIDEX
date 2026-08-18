@@ -137,7 +137,7 @@ describe('contradiction eval — what the numbers say', () => {
     assert.equal(m.false_fire_per_item_table, 0);
   });
 
-  test('IMPROVED, still incomplete: recall 40% → 73.3%', () => {
+  test('IMPROVED TWICE, still incomplete: recall 40% → 73.3% → 93.3%', () => {
     // FINDING-1 could not see this half. The predicate only compares DIGITS,
     // so it is blind to:
     //   spelled numbers      "fourteen months" vs "six months"
@@ -148,9 +148,12 @@ describe('contradiction eval — what the numbers say', () => {
     // Spelled numbers, categorical conflict and relation tails are now read.
     // Four genuine contradictions are still missed — recorded rather than
     // rounded up to "fixed".
-    assert.ok(m.recall > 0.7, `recall ${m.recall}`);
+    // FIX-2: the qualifier gate was suppressing spelled numbers and month
+    // names before they could be compared. "This rule bites nothing" turned
+    // out to mean "something upstream is eating its input".
+    assert.ok(m.recall > 0.9, `recall ${m.recall}`);
     assert.ok(m.recall < 1, 'recall is perfect — update this test and the note');
-    assert.equal(m.false_negatives, 4);
+    assert.equal(m.false_negatives, 1);
   });
 
   test('the categories it gets RIGHT are recorded too', () => {

@@ -301,6 +301,11 @@ function conflictKind(a, b) {
   // genuine contradictions missed. These run only after the subject gate, so
   // they cannot reintroduce the per-item false positives.
   if (monthConflict(a, b) && overlap(a, b) >= 3) return 'date';
+  // Re-added. It was removed in FIX-1 as dead — and it WAS dead, because the
+  // qualifier gate suppressed every case before it could run. Fixing the gate
+  // brought its cases back, which is a reminder that "this rule bites nothing"
+  // can mean "something upstream is eating its input".
+  if (spelledNumberConflict(a, b) && overlap(a, b) >= 3) return 'numeric';
   // A spelled-number rule was here and was DEAD: "runway is fourteen months"
   // vs "six months" is already caught by the bare `is` relation-tail rule
   // below. Removing it cost zero tests across the whole battery — the same
@@ -389,10 +394,41 @@ function differentQualifier(a, b) {
     // So a NUMERIC qualifier distinguishes subjects only when the shared word
     // is not a unit of measure. Also found by the existing battery, not by my
     // dataset.
-    if (UNIT_WORDS.has(noun) && /^[0-9]/.test(qa) && /^[0-9]/.test(qb)) continue;
+    // A qualifier that is ITSELF A VALUE does not name a subject.
+    //
+    //   "fourteen MONTHS" / "six MONTHS"   → two values of one measure
+    //   "january 2026"    / "march 2026"   → two dates, the year shared
+    //   "2024 AUDIT"      / "2025 AUDIT"   → two different audits ✓ distinguish
+    //
+    // The discriminator is what the qualifier MODIFIES: a unit or another
+    // value means the pair is one measure disagreeing; a plain noun means two
+    // named things. The first version only recognised DIGIT qualifiers, so
+    // spelled numbers and month names still suppressed four genuine
+    // contradictions.
+    if (isValueToken(qa) && isValueToken(qb) && (UNIT_WORDS.has(noun) || isValueToken(noun))) continue;
     return true;
   }
   return false;
+}
+
+/** Spelled cardinals, so "fourteen" reads as a quantity and not as a name. */
+const SPELLED_NUMBERS = new Set([
+  'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+  'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+  'seventeen', 'eighteen', 'nineteen', 'twenty', 'twenty-four', 'thirty',
+  'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety', 'hundred',
+]);
+
+/** "fourteen months" vs "six months" — invisible to a digit comparison. */
+function spelledNumberConflict(a, b) {
+  const of = (s) => (String(s).toLowerCase().match(/[a-z-]+/g) ?? []).filter(w => SPELLED_NUMBERS.has(w));
+  const wa = of(a), wb = of(b);
+  return wa.length > 0 && wb.length > 0 && !wa.some(n => wb.includes(n));
+}
+
+/** A digit run, a spelled cardinal, or a month name — a VALUE, never a name. */
+function isValueToken(w) {
+  return /^[0-9]/.test(w) || SPELLED_NUMBERS.has(w) || MONTHS.includes(w);
 }
 
 /** Words that measure rather than name — a number before one is a VALUE. */

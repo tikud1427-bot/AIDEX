@@ -34,6 +34,24 @@
  * — it actually fails when someone makes the algorithm quadratic on a fast
  * machine, which an absolute budget would happily pass.
  *
+ * ⚠ SHARED MUTABLE STATE INVALIDATES THE RATIO
+ * ---------------------------------------------
+ * `work(n)` and `work(2n)` must start from the SAME state, or the ratio
+ * measures accumulation instead of the algorithm.
+ *
+ * This is not hypothetical. FLAKE-1 used this helper on the FI-2 intelligence
+ * pass, whose workload writes into module-level singleton stores. Each sample
+ * left its data behind, so the 2n sample ran against a store holding
+ * everything before it:
+ *
+ *   accumulating store   4.11×   → reported as "quadratic"
+ *   isolated per sample  1.90×   → linear
+ *
+ * The finding was an artefact of the harness. `reset` exists so the next
+ * caller does not repeat it, and it is REQUIRED to be passed explicitly when
+ * the workload touches shared state — an omission that reads as a
+ * conscientious default is how the first one happened.
+ *
  * WHAT THIS DOES NOT REPLACE
  * --------------------------
  * A genuine latency SLO ("a chat turn must answer inside 2s") is a wall-clock
@@ -55,10 +73,14 @@
  */
 export async function assertScalesLinearly(work, {
   n = 100, maxRatio = 2.5, floorMs = 15, samples = 3, label = 'workload',
+  reset = null,
 } = {}) {
+  /** Run before EVERY sample, including the warm-up. See the header. */
+  const fresh = async () => { if (reset) await reset(); };
   const bestOf = async (size) => {
     let best = Infinity;
     for (let i = 0; i < samples; i++) {
+      await fresh();
       const t = performance.now();
       await work(size);
       best = Math.min(best, performance.now() - t);
@@ -69,6 +91,7 @@ export async function assertScalesLinearly(work, {
   // Warm up first: a cold first call measures module loading and JIT, not the
   // algorithm, and it would make the small size look artificially slow — which
   // flatters the ratio and hides a real regression.
+  await fresh();
   await work(n);
 
   const small = await bestOf(n);

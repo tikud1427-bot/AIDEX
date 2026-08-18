@@ -107,3 +107,90 @@ as designed.
 npm test    2358 / 232 suites / 0 fail / 1 skipped-with-a-reason
 eval:gate   exit 0 — the contradiction suite is gated, and the baseline moved deliberately
 ```
+
+---
+
+## FIX-2 — raising recall from 73.3% to 93.3%
+
+```
+                 pre-fix    FIX-1     FIX-2
+precision         21.4%     100.0%    100.0%
+recall            40.0%      73.3%     93.3%
+f1                27.9%      84.6%     96.6%
+false negatives       9          4         1
+```
+
+Precision held at 100% while recall moved. That was the requirement both times.
+
+## 🔴 "This rule bites nothing" meant "something upstream is eating its input"
+
+FIX-1 removed a spelled-number rule after measuring **zero bite across the
+entire battery**, and concluded it was dead code — the same reasoning that
+correctly removed E5/PR-2's `autoLogged` Set.
+
+It was not dead. **The qualifier gate was suppressing every one of its cases
+before it could run.**
+
+`"Our runway is fourteen months"` vs `"six months"`: the gate saw `fourteen`
+and `six` before the shared word `months` and read them as two different
+subjects. The unit exclusion that should have stopped it only recognised
+**digit** qualifiers.
+
+So the rule was correct, unreachable, measured as useless, and deleted. Fixing
+the gate brought its cases back and it now bites 1.
+
+**That is a real limit on the zero-bite heuristic**, and worth carrying next to
+it: a rule that bites nothing is either dead *or* starved. Distinguishing them
+means checking whether its input ever arrives.
+
+## The unified rule
+
+A qualifier that is **itself a value** does not name a subject:
+
+| | verdict |
+|---|---|
+| `fourteen MONTHS` / `six MONTHS` | one measure, two values → **compare** |
+| `january 2026` / `march 2026` | two dates, year shared → **compare** |
+| `2024 AUDIT` / `2025 AUDIT` | two named things → **distinguish** |
+
+The discriminator is what the qualifier *modifies*: a unit or another value
+means one measure disagreeing; a plain noun means two different subjects. Value
+tokens are digits, spelled cardinals and month names.
+
+## FLAKE-1's quadratic pin, updated honestly
+
+The FI-2 pass is **4× faster in absolute terms** — 1109 ms → 274 ms at 300
+facts, because the O(N²) false contradiction edges are gone.
+
+**The shape is unchanged at 3.81×.** Something else is still quadratic, so the
+pin stays open rather than being quietly closed on the strength of a speedup.
+
+That test also flaked once in the battery and passed alone. The cause is
+structural: it pins a **lower** bound on a timing ratio, and a lower bound is
+the fragile direction — contention inflates the small sample and pushes the
+ratio down toward the threshold. Fixed with best-of-2 sampling rather than by
+loosening the threshold, which would have hidden a real fix.
+
+## Still not fixed
+
+**One genuine contradiction is still missed:** `Rahul joined in March 2025` vs
+`August 2025`. The month rule requires ≥3 shared content words and this pair
+has two (`rahul`, `joined`). Recorded rather than tuned around — lowering the
+overlap floor to catch it would risk the precision that is currently perfect.
+
+## Bite, measured
+
+| mutation | failures |
+|---|---|
+| revert the value-token rule to digits only | 1 |
+| drop the spelled-number rule again | 1 |
+| drop the month rule | 1 |
+| let a value token name a subject | 1 |
+| *(reverted)* | **0 — 17/17** |
+
+## Results
+
+```
+npm test    2358 / 232 suites / 0 fail / 1 skipped-with-a-reason
+eval:gate   exit 0 · baseline moved deliberately, precision held at 100%
+```

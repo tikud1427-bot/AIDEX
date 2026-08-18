@@ -92,30 +92,42 @@ test('AQUA_PIC=off silences the whole FI-2 surface', () => {
   process.env.AQUA_PIC = 'on';
 });
 
-test('perf: FI-2 pass is QUADRATIC in fact count — measured, and pinned', async () => {
-  // Was: `assert.ok(ms < 1500)`. The name claimed a scaling property and the
-  // assertion measured a stopwatch — different claims, and only one of them
-  // survives a loaded machine. It flaked twice in one session and passed in
-  // isolation both times, so each failure taught nobody anything.
+test('perf: the FI-2 pass is SUPERLINEAR in fact count — measured, and pinned', async () => {
+  // 🔴 I NEARLY RETRACTED A CORRECT FINDING ON ONE MEASUREMENT.
   //
-  // Loosening the budget would hide a real regression to silence a false one.
-  // This measures the RATIO instead: load slows both samples, so it cancels,
-  // and a quadratic rewrite now fails even on a fast machine — which the
-  // absolute budget would have passed.
+  // FLAKE-1 reported this pass as quadratic at 3.96×. Investigating today, a
+  // single better-isolated reading came back at 1.90× and I concluded the
+  // finding had been an artefact of accumulating store state.
+  //
+  // It was not. With ALL THREE singleton stores purged per sample, four
+  // consecutive runs give 3.12×, 3.31×, 3.73×, 3.09× — superlinear, close to
+  // the original number. The 1.90× was the outlier.
+  //
+  // Two things are true and worth keeping separate:
+  //
+  //   the FINDING stands       the pass is superlinear, ~3.2×
+  //   the HARNESS was wrong    it purged one store of three, so the earlier
+  //                            figure was inflated by accumulation
+  //
+  // The lesson is the retraction, not the finding: one reading is not a
+  // measurement, and I was one commit away from deleting a real result
+  // because a single number disagreed with it.
+  //
+  // FINDING-1 is unaffected either way — its 73,500 contradiction edges were
+  // counted DIRECTLY, never inferred from a ratio.
+  //
+  // The ceiling catches a WORSENING; the lower bound inverts when someone
+  // makes it linear.
   const { createEvidence, createFact } = await import('../evidence.js');
   const { createUKO } = await import('../uko.js');
   const { rebuildOwnerGraph } = await import('../../reasoning/graphBuilder.js');
+  const G = await import('../../reasoning/reasoningGraph.js');
   const { assertScalesLinearly } = await import('../../core/tests/helpers/perfShape.mjs');
 
-  let run = 0;
+  const owners = [];
   const workload = (factCount) => {
-    // Each sample gets a CLEAN store. The evidence store is a module-level
-    // singleton, so without this the second sample carries the first sample's
-    // data and the ratio measures accumulation rather than the algorithm —
-    // which would report a false superlinearity and send someone optimising
-    // code that was fine.
-    ES.purgeOwner?.(`owner-fi2-perf-${run}`);
-    const P = `owner-fi2-perf-${run++}`;
+    const P = `owner-fi2-perf-${owners.length}`;
+    owners.push(P);
     const perFile = Math.ceil(factCount / 6);
     for (let f = 0; f < 6; f++) {
       const u = createUKO({ ownerId: P, sourceFile: { name: `bulk${f}.pdf`, ext: '.pdf', bytes: 1, hash: String(f).padEnd(64, 'x') }, fileType: 'document' });
@@ -132,22 +144,19 @@ test('perf: FI-2 pass is QUADRATIC in fact count — measured, and pinned', asyn
     pic.getResearch(P, { mode: 'gaps' });
     pic.whatCaused(P, 'Item 40');
   };
+  // ALL THREE stores, not just evidence. The workload writes to the UKO store
+  // and the reasoning graph too, and purging one of three leaves the ratio
+  // measuring the other two.
+  const reset = () => {
+    for (const o of owners) { ES.purgeOwner?.(o); US.purgeOwner?.(o); G.purgeOwner?.(o); }
+    owners.length = 0;
+  };
 
-  // 🔴 THE FINDING. Measured with per-sample isolation: doubling 300 → 600
-  // facts costs **~3.9×**. Linear is ~2×, quadratic is ~4×. The pass is
-  // effectively QUADRATIC, and the old `ms < 1500` assertion could never have
-  // seen it — 300 facts simply fit under the budget on this machine.
-  //
-  // Nothing here made it slower. This test made it VISIBLE.
-  //
-  // The ceiling is set to catch a WORSENING, not to bless the shape: 4.5×
-  // fails if someone makes it cubic, and the day it becomes linear this
-  // assertion fails too and gets tightened — the same inverting-test
-  // mechanism used for E1's ratio ceiling and E3/PR-10's write shape.
   const r = await assertScalesLinearly(workload, {
-    n: 300, samples: 1, maxRatio: 4.5, label: 'FI-2 pass',
+    n: 300, samples: 1, maxRatio: 4.5, reset, label: 'FI-2 pass',
   });
-  assert.ok(r.skipped || r.ratio > 2.5,
-    `FI-2 is now scaling better than quadratic (${r.ratio?.toFixed(2)}×) — someone fixed it. ` +
-    'Tighten maxRatio toward 2.5 and rename this test.');
+  assert.ok(r.skipped || r.ratio > 2.4,
+    `FI-2 now scales at ${r.ratio?.toFixed(2)}× — better than superlinear, so someone fixed it. ` +
+    'Tighten this toward 2.0 and rename the test.');
 });
+
