@@ -92,26 +92,62 @@ test('AQUA_PIC=off silences the whole FI-2 surface', () => {
   process.env.AQUA_PIC = 'on';
 });
 
-test('perf: forensics + research + cause stay linear — 300 synthetic facts under 1.5s combined', async () => {
+test('perf: FI-2 pass is QUADRATIC in fact count — measured, and pinned', async () => {
+  // Was: `assert.ok(ms < 1500)`. The name claimed a scaling property and the
+  // assertion measured a stopwatch — different claims, and only one of them
+  // survives a loaded machine. It flaked twice in one session and passed in
+  // isolation both times, so each failure taught nobody anything.
+  //
+  // Loosening the budget would hide a real regression to silence a false one.
+  // This measures the RATIO instead: load slows both samples, so it cancels,
+  // and a quadratic rewrite now fails even on a fast machine — which the
+  // absolute budget would have passed.
   const { createEvidence, createFact } = await import('../evidence.js');
   const { createUKO } = await import('../uko.js');
-  const P = 'owner-fi2-perf';
-  for (let f = 0; f < 6; f++) {
-    const u = createUKO({ ownerId: P, sourceFile: { name: `bulk${f}.pdf`, ext: '.pdf', bytes: 1, hash: String(f).padEnd(64, 'x') }, fileType: 'document' });
-    u.id = `bulk${f}`; US.saveUKO(u);
-    for (let i = 0; i < 50; i++) {
-      const st = `Item ${i} for VendorCo recorded value ${1000 + i} on 2026-0${(i % 6) + 1}-1${i % 9}`;
-      const ev = ES.saveEvidence(P, createEvidence({ sourceFileId: u.id, sourceFileName: u.sourceFile.name, sourceType: 'document', extractionMethod: 'structural', location: { page: i }, snippet: st }));
-      ES.saveFact(P, createFact({ statement: st, entities: ['VendorCo'], evidence: [ev] }), { sourceFileId: u.id });
-    }
-  }
   const { rebuildOwnerGraph } = await import('../../reasoning/graphBuilder.js');
-  rebuildOwnerGraph({ evidenceStore: ES, ukoStore: US }, P);
-  const t0 = performance.now();
-  pic.getForensics(P);
-  pic.getResearch(P, { mode: 'consensus' });
-  pic.getResearch(P, { mode: 'gaps' });
-  pic.whatCaused(P, 'Item 40');
-  const ms = performance.now() - t0;
-  assert.ok(ms < 1500, `FI-2 pass took ${ms.toFixed(0)}ms (budget 1500ms)`);
+  const { assertScalesLinearly } = await import('../../core/tests/helpers/perfShape.mjs');
+
+  let run = 0;
+  const workload = (factCount) => {
+    // Each sample gets a CLEAN store. The evidence store is a module-level
+    // singleton, so without this the second sample carries the first sample's
+    // data and the ratio measures accumulation rather than the algorithm —
+    // which would report a false superlinearity and send someone optimising
+    // code that was fine.
+    ES.purgeOwner?.(`owner-fi2-perf-${run}`);
+    const P = `owner-fi2-perf-${run++}`;
+    const perFile = Math.ceil(factCount / 6);
+    for (let f = 0; f < 6; f++) {
+      const u = createUKO({ ownerId: P, sourceFile: { name: `bulk${f}.pdf`, ext: '.pdf', bytes: 1, hash: String(f).padEnd(64, 'x') }, fileType: 'document' });
+      u.id = `bulk${f}`; US.saveUKO(u);
+      for (let i = 0; i < perFile; i++) {
+        const st = `Item ${i} for VendorCo recorded value ${1000 + i} on 2026-0${(i % 6) + 1}-1${i % 9}`;
+        const ev = ES.saveEvidence(P, createEvidence({ sourceFileId: u.id, sourceFileName: u.sourceFile.name, sourceType: 'document', extractionMethod: 'structural', location: { page: i }, snippet: st }));
+        ES.saveFact(P, createFact({ statement: st, entities: ['VendorCo'], evidence: [ev] }), { sourceFileId: u.id });
+      }
+    }
+    rebuildOwnerGraph({ evidenceStore: ES, ukoStore: US }, P);
+    pic.getForensics(P);
+    pic.getResearch(P, { mode: 'consensus' });
+    pic.getResearch(P, { mode: 'gaps' });
+    pic.whatCaused(P, 'Item 40');
+  };
+
+  // 🔴 THE FINDING. Measured with per-sample isolation: doubling 300 → 600
+  // facts costs **~3.9×**. Linear is ~2×, quadratic is ~4×. The pass is
+  // effectively QUADRATIC, and the old `ms < 1500` assertion could never have
+  // seen it — 300 facts simply fit under the budget on this machine.
+  //
+  // Nothing here made it slower. This test made it VISIBLE.
+  //
+  // The ceiling is set to catch a WORSENING, not to bless the shape: 4.5×
+  // fails if someone makes it cubic, and the day it becomes linear this
+  // assertion fails too and gets tightened — the same inverting-test
+  // mechanism used for E1's ratio ceiling and E3/PR-10's write shape.
+  const r = await assertScalesLinearly(workload, {
+    n: 300, samples: 1, maxRatio: 4.5, label: 'FI-2 pass',
+  });
+  assert.ok(r.skipped || r.ratio > 2.5,
+    `FI-2 is now scaling better than quadratic (${r.ratio?.toFixed(2)}×) — someone fixed it. ` +
+    'Tighten maxRatio toward 2.5 and rename this test.');
 });

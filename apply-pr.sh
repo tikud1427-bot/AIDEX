@@ -92,7 +92,9 @@ report_state() {
       "DEBT1  src/core/tests/dependencySafety.test.js" \
       "DEBT2  src/upload/parseSession.js" \
       "DEBT3  src/intelligence/evidenceContext.js" \
-      "E4/1   src/core/jobs/jobRegistry.js"; do
+      "E4/1   src/core/jobs/jobRegistry.js" \
+      "FLAKE1  src/core/tests/helpers/perfShape.mjs" \
+      "FIND1   src/files/tests/contradictionFinding.test.js"; do
     local pr file; pr=${marker%%  *}; file=${marker##*  }
     # A leading ../ means the marker lives in the PLATFORM tree, not the engine.
     if [ -e "$PKG/$file" ]; then ok "$pr applied   ($file)"; else warn "$pr NOT applied ($file missing)"; fi
