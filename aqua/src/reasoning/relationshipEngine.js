@@ -220,23 +220,85 @@ export function detectCrossFileContradictions(entities, facts, store, ownerId) {
 
   const contradictions = [];
   const seen = new Set();
+
+  // Evidence lookups HOISTED out of the pair loop.
+  //
+  // `evidenceForFact` was called twice per PAIR — O(N²) store lookups to
+  // answer a question that only depends on ONE fact at a time. Measured: the
+  // pass spent 537ms on 300 facts, and this was most of it.
+  //
+  // Computing each fact's file set once is O(N). **The set of pairs reaching
+  // conflictKind is byte-for-byte identical**, which is why this is an
+  // optimisation and not a selection change — the thing FIX-4 said it could
+  // not safely do without an eval. The selection eval now exists and confirms
+  // it, and `comparisons_examined` is unchanged at 1104 precisely because
+  // nothing about the pairing changed.
+  const filesOfFact = new Map();
+  const filesFor = (fact) => {
+    let set = filesOfFact.get(fact.id);
+    if (!set) {
+      set = new Set(store.evidenceForFact(ownerId, fact.id).map(e => e.sourceFileId));
+      filesOfFact.set(fact.id, set);
+    }
+    return set;
+  };
+
   for (const [entId, group] of byEntity) {
     const entity = entities.find(e => e.id === entId);
-    for (let i = 0; i < group.length; i++) {
-      for (let j = i + 1; j < group.length; j++) {
-        const fa = group[i], fb = group[j];
-        const evA = store.evidenceForFact(ownerId, fa.id);
-        const evB = store.evidenceForFact(ownerId, fb.id);
-        const filesA = new Set(evA.map(e => e.sourceFileId));
-        const filesB = new Set(evB.map(e => e.sourceFileId));
+
+    // ── BUCKET BY SUBJECT ────────────────────────────────────────────────
+    //
+    // `differentSubjects` already rejected most pairs — but it was asked once
+    // per PAIR, so the O(N²) enumeration happened regardless. Computing each
+    // fact's subject key ONCE and comparing only within a bucket skips the
+    // enumeration itself.
+    //
+    // A fact with NO subject key joins the global bucket and is compared
+    // against everything, because "no series index" means "could be about
+    // anything". Dropping those would be the silent recall loss FIX-4 refused
+    // to risk without an eval — `contradiction-corpus.v1` is that eval.
+    const buckets = new Map();
+    const global = [];
+    for (const fact of group) {
+      const keys = subjectKeys(fact.statement);
+      if (keys.size === 0) { global.push(fact); continue; }
+      for (const [label, idx] of keys) {
+        const k = `${label}=${idx}`;
+        if (!buckets.has(k)) buckets.set(k, []);
+        buckets.get(k).push(fact);
+      }
+    }
+    const candidateGroups = [...buckets.values()].map(b => [...b, ...global]);
+    if (global.length) candidateGroups.push(global);
+
+    for (const cand of candidateGroups) {
+    for (let i = 0; i < cand.length; i++) {
+      const fa = cand[i];
+      const filesA = filesFor(fa);
+      for (let j = i + 1; j < cand.length; j++) {
+        const fb = cand[j];
+        const filesB = filesFor(fb);
         // Cross-FILE only: the two facts must come from different files.
-        const crossFile = [...filesA].some(f => ![...filesB].includes(f)) || [...filesB].some(f => ![...filesA].includes(f));
+        // Same predicate as before — a Set membership test rather than two
+        // array spreads per pair, which allocated 4 arrays for every pair.
+        let crossFile = false;
+        for (const f of filesA) if (!filesB.has(f)) { crossFile = true; break; }
+        if (!crossFile) for (const f of filesB) if (!filesA.has(f)) { crossFile = true; break; }
         if (!crossFile) continue;
+
+        // De-duplicate BEFORE comparing, not after.
+        //
+        // A fact carrying two subject keys sits in two buckets, and `global`
+        // is appended to every bucket, so the same pair can surface several
+        // times. Checking `seen` after `conflictKind` meant paying for every
+        // repeat: bucketing took comparisons from 1104 UP to 2609 — the
+        // opposite of its purpose — until this moved.
+        const key = [fa.id, fb.id].sort().join('|');
+        if (seen.has(key)) continue;
+        seen.add(key);
 
         const kind = conflictKind(fa.statement, fb.statement);
         if (!kind) continue;
-        const key = [fa.id, fb.id].sort().join('|');
-        if (seen.has(key)) continue; seen.add(key);
 
         contradictions.push({
           id: `contra:${key}`,
@@ -249,6 +311,7 @@ export function detectCrossFileContradictions(entities, facts, store, ownerId) {
           reason: `${kind} disagreement about "${entity?.canonical ?? entId}" across different files`,
         });
       }
+    }
     }
   }
   return contradictions;
@@ -265,7 +328,24 @@ export function detectCrossFileContradictions(entities, facts, store, ownerId) {
  */
 export function _conflictKindForTests(a, b) { return conflictKind(a, b); }
 
+/**
+ * How many statement PAIRS the last contradiction pass examined.
+ *
+ * Exported for the cost test. A comparison count is a fact about the
+ * ALGORITHM; a millisecond figure is a fact about the machine on the day.
+ * Pinning O(N²) with a timing ratio meant pinning a LOWER bound on a
+ * stopwatch, which is the fragile direction under load — it passed alone and
+ * failed in the battery, twice.
+ *
+ * Incrementing a counter is the whole cost of this seam, and it makes the pin
+ * exact and load-independent instead of merely usually-right.
+ */
+let comparisons = 0;
+export function _comparisonCountForTests() { return comparisons; }
+export function _resetComparisonCountForTests() { comparisons = 0; }
+
 function conflictKind(a, b) {
+  comparisons++;
   // ── GATE 0: one statement REVISING the other is history, not conflict ────
   //
   // "The beta date was 1 August" / "The beta date MOVED TO 15 September" are
