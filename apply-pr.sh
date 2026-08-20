@@ -99,7 +99,8 @@ report_state() {
       "FIX1    AQUA_CONTRADICTION_FIX.md" \
       "FIX4    src/files/tests/contradictionCost.test.js" \
       "EVAL2   eval/baselines/contradiction-corpus.v1.json" \
-      "FIX5    AQUA_BUCKETING.md"; do
+      "FIX5    AQUA_BUCKETING.md" \
+      "FIX6    AQUA_INDEXED_NOT_SCAN.md"; do
     local pr file; pr=${marker%%  *}; file=${marker##*  }
     # A leading ../ means the marker lives in the PLATFORM tree, not the engine.
     if [ -e "$PKG/$file" ]; then ok "$pr applied   ($file)"; else warn "$pr NOT applied ($file missing)"; fi

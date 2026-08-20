@@ -396,10 +396,30 @@ export function nodesByType(ownerId, type) {
  *
  * @param {object} [opts] - { type?: string|string[], exact?: boolean }
  */
+/**
+ * How many edges the last lookups INSPECTED.
+ *
+ * Exported for the "indexed, not a scan" test. That test previously asserted
+ * `queryMs < 200`, which could never fail: `Date.now()` has millisecond
+ * resolution and an indexed lookup is sub-millisecond, so it read `0 < 200`.
+ * A full scan of the same graph would also have passed comfortably — the
+ * assertion could not detect the regression its own message named.
+ *
+ * An inspection count is exact and load-independent: indexed means it equals
+ * the node's DEGREE, a scan means it equals the graph's TOTAL edges. Same
+ * instrument as the contradiction pass's comparison counter, for the same
+ * reason.
+ */
+let edgesInspected = 0;
+export function _edgesInspectedForTests() { return edgesInspected; }
+export function _resetEdgesInspectedForTests() { edgesInspected = 0; }
+
 export function edgesOf(ownerId, nodeId, { type = null, exact = false } = {}) {
   const g = graph(ownerId);
   const want = expandEdgeTypes(type, { exact });
-  return [...(g.adj.get(nodeId) ?? [])]
+  const ids = g.adj.get(nodeId) ?? [];
+  edgesInspected += ids.size ?? ids.length ?? 0;
+  return [...ids]
     .map(eid => g.edges.get(eid))
     .filter(e => e && (!want || want.has(e.type)));
 }

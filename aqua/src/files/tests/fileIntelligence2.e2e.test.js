@@ -152,8 +152,22 @@ test('perf: the FI-2 pass is SUPERLINEAR in fact count — measured, and pinned'
     owners.length = 0;
   };
 
+  // n RAISED to 600 after FIX-5.
+  //
+  // Bucketing the contradiction pass made this ~4× faster, and at 60–130ms the
+  // timing ratio stopped being an instrument: three isolated samples at n=300
+  // read 2.80×, 3.31×, 1.86× and the pin flaked one run in four. At n=600 the
+  // same three samples read 3.42×, 6.39×, 5.17× — still clearly superlinear,
+  // measured where the numbers are large enough to mean something.
+  //
+  // This is the THIRD time a lower bound on a timing ratio has needed
+  // attention here, and it is the fragile direction by nature. The contradiction
+  // stage — the one FIX-5 fixed — is pinned EXACTLY by a comparison counter in
+  // contradictionCost.test.js. This assertion covers the rest of the pass,
+  // where no counter exists yet, and should be replaced by one when the next
+  // superlinear stage is identified.
   const r = await assertScalesLinearly(workload, {
-    n: 300, samples: 1, maxRatio: 4.5, reset, label: 'FI-2 pass',
+    n: 600, samples: 1, maxRatio: 8, reset, label: 'FI-2 pass',
   });
   assert.ok(r.skipped || r.ratio > 2.4,
     `FI-2 now scales at ${r.ratio?.toFixed(2)}× — better than superlinear, so someone fixed it. ` +

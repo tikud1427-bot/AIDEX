@@ -110,11 +110,28 @@ test('STRESS: 500 files × ~5 facts build + query stays tractable and correct', 
   assert.ok(stats.nodes > 2000, `${stats.nodes} nodes`);
 
   // Cross-file query: GlobalCorp mentioned by 50 files.
-  const q0 = Date.now();
+  // COUNTED, not timed.
+  //
+  // This was `queryMs < 200`, which could never fail: `Date.now()` has
+  // millisecond resolution and an indexed lookup is sub-millisecond, so it
+  // read `0 < 200`. A full SCAN of the same graph would also have passed
+  // comfortably — the assertion could not detect the regression its own
+  // message named. Declared as a known gap in FLAKE-1; closed here.
+  //
+  // Indexed means edges inspected equals the node's DEGREE. A scan means it
+  // equals the graph's TOTAL edges — over 2000 here, so the two are now
+  // separated by more than an order of magnitude rather than by a stopwatch.
+  G._resetEdgesInspectedForTests();
   const files = G.neighbors('o', 'e:globalcorp', { type: 'file', edgeType: 'mentions' });
-  const queryMs = Date.now() - q0;
+  const inspected = G._edgesInspectedForTests();
   assert.equal(files.length, 50, 'the cross-file entity resolves to exactly its 50 files');
 
   assert.ok(buildMs < 5000, `build ${buildMs}ms within budget`);
-  assert.ok(queryMs < 200, `query ${queryMs}ms fast (adjacency-indexed, not a scan)`);
+  // The degree of `e:globalcorp` is what an index costs. Anything approaching
+  // the graph's total edge count is a scan.
+  const totalEdges = stats.edges;
+  assert.ok(inspected < totalEdges / 4,
+    `the lookup inspected ${inspected} of ${totalEdges} edges — that is a scan, not an index`);
+  assert.ok(inspected >= files.length,
+    `inspected ${inspected} edges but returned ${files.length} neighbours — the counter is miswired`);
 });
