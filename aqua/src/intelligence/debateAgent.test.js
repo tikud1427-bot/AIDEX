@@ -377,3 +377,36 @@ test('guard is grounded-only for debate too: ungrounded refusal-shaped revision 
   assert.equal(result.revised, true);
   assert.equal(result.finalAnswer, refusal);
 });
+
+// ═══ Forensic pass (Bug 1) — malformed/empty revision guard ═══════════════════
+// Reproduced against the pre-fix source: an escalated panel whose revision
+// call returned '' shipped that empty string as finalAnswer — a legitimate
+// escalation (real issue found) with a failed fix silently blanked a good
+// draft instead of falling back to it. Mirrors the "revision call error"
+// fail-open test above, but the call succeeds and returns nothing usable.
+
+test('EMPTY revision text is suppressed: draft ships, escalated issue preserved as a disagreement', async () => {
+  const generate = fakeGenerateSeq([
+    panelJSON([pass('skeptic'), issue('security', 'high', 'auth bypass'), pass('coder')]),
+    '', // the "fix" comes back empty
+  ]);
+  const r = await runDebate({ userMessage: 'q', draftAnswer: 'draft', taskType: 'coding', tags: ['security'], maxPasses: 2, generate });
+  assert.equal(r.ran, true, 'the panel DID run');
+  assert.equal(r.revised, false, 'an empty fix is not a revision');
+  assert.equal(r.converged, false);
+  assert.equal(r.finalAnswer, 'draft', 'good draft must survive an empty revision response');
+  assert.equal(r.disagreements.length, 1, "panel's objection stays on the record");
+  assert.match(r.disagreements[0].issue, /auth bypass/);
+  assert.equal(generate.calls.length, 2, 'loop stops after the guard hit, no re-panel attempted');
+});
+
+test('WHITESPACE-ONLY revision text is suppressed the same way', async () => {
+  const generate = fakeGenerateSeq([
+    panelJSON([issue('skeptic', 'high', 'unsupported claim'), pass('coder'), pass('performance')]),
+    '   \n  ',
+  ]);
+  const r = await runDebate({ userMessage: 'q', draftAnswer: 'draft', taskType: 'coding', maxPasses: 2, generate });
+  assert.equal(r.revised, false);
+  assert.equal(r.finalAnswer, 'draft');
+  assert.equal(r.disagreements.length, 1);
+});

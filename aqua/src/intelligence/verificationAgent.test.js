@@ -94,6 +94,77 @@ test('a verifier error fails open: original draft is returned unchanged, not thr
   assert.match(result.error, /All providers exhausted/);
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// Forensic pass (Bug 1) — malformed/empty revision guard.
+// Reproduced against the pre-fix source: a verifier call returning empty or
+// whitespace-only text became `finalAnswer` verbatim, silently blanking a
+// correct draft. `text.startsWith('VERIFICATION_PASSED')` is false for '',
+// and the capability-refusal regex only matches refusal-shaped prose — an
+// empty string matches neither, so nothing stopped it before this guard.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+test('EMPTY verifier output is suppressed — draft ships unchanged, not booked as a revision', async () => {
+  const generate = fakeGenerate('');
+
+  const result = await runVerification({
+    userMessage: 'What is the capital of France?',
+    draftAnswer: 'The capital of France is Paris.',
+    taskType:    'simple_qa',
+    generate,
+  });
+
+  assert.equal(result.finalAnswer, 'The capital of France is Paris.', 'good draft must survive an empty verifier response');
+  assert.equal(result.revised, false, 'an empty response is not a revision');
+  assert.equal(result.suppressedMalformed, 1);
+  assert.equal(result.suppressedRefusals, 0, 'distinct from the capability-refusal guard');
+});
+
+test('WHITESPACE-ONLY verifier output is suppressed the same way', async () => {
+  const generate = fakeGenerate('   \n\t  ');
+
+  const result = await runVerification({
+    userMessage: 'What is 2+2?',
+    draftAnswer: '2 + 2 equals 4.',
+    taskType:    'simple_qa',
+    generate,
+  });
+
+  assert.equal(result.finalAnswer, '2 + 2 equals 4.');
+  assert.equal(result.revised, false);
+  assert.equal(result.suppressedMalformed, 1);
+});
+
+test('malformed-revision guard forfeits remaining passes, same as the capability-refusal guard', async () => {
+  const generate = fakeGenerate(''); // would be called again on every pass if the loop didn't stop
+
+  const result = await runVerification({
+    userMessage: 'Explain TCP handshakes',
+    draftAnswer: 'TCP uses a three-way handshake: SYN, SYN-ACK, ACK.',
+    taskType:    'reasoning',
+    maxPasses:   2,
+    generate,
+  });
+
+  assert.equal(generate.calls.length, 1, 'loop stops after the guard hit, does not burn the second pass');
+  assert.equal(result.finalAnswer, 'TCP uses a three-way handshake: SYN, SYN-ACK, ACK.');
+});
+
+test('malformed guard does not shadow a real, substantive revision', async () => {
+  const corrected = 'Actually, TCP uses a four-way handshake in this scenario because of simultaneous open.';
+  const generate = fakeGenerate(corrected);
+
+  const result = await runVerification({
+    userMessage: 'Explain TCP handshakes',
+    draftAnswer: 'TCP always uses a three-way handshake.',
+    taskType:    'reasoning',
+    generate,
+  });
+
+  assert.equal(result.revised, true);
+  assert.equal(result.finalAnswer, corrected);
+  assert.equal(result.suppressedMalformed, 0);
+});
+
 // ── Rubric sourcing (no duplicate risk list) ──────────────────────────────────
 
 test('focusRisks comes from critic.js getFocusRisks — same rubric, not a second copy', async () => {

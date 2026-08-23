@@ -58,6 +58,24 @@ export const DECLARATIVE_CONFIDENCE = 0.62;
 const INTERROGATIVE_OPENER =
   /^(?:so\s+|and\s+|but\s+|ok(?:ay)?[,\s]+|hey[,\s]+)*(?:what|when|where|which|who|whom|whose|why|how|is|are|was|were|do|does|did|can|could|should|would|will|shall|may|might|have|has|had|am)\b/i;
 
+/**
+ * Forensic pass (Bug 2) — imperative information-requests disqualify the
+ * "statement" reading, same role as INTERROGATIVE_OPENER for a different
+ * grammatical mood. "give me the latest on the Israel-Gaza ceasefire" has no
+ * "?" and does not start with a WH-word or auxiliary, so it reached the
+ * catch-all below and was classified `personal_info` — which
+ * searchDecision.js hard-blocks — silently killing a live-news query with an
+ * explicit "latest" freshness signal. It is a REQUEST, not self-disclosure:
+ * grammatically imperative, built on a request verb + "me", asking AQUA for
+ * something rather than telling AQUA something.
+ *
+ * A false disqualify here only returns the message to its existing 0.45
+ * fallback (simple_qa/research) — never worse than the classification the
+ * message already had, so this can only widen coverage, not regress it.
+ */
+const IMPERATIVE_REQUEST_OPENER =
+  /^(?:so\s+|and\s+|but\s+|ok(?:ay)?[,\s]+|hey[,\s]+|please\s+)*(?:give|tell|show|update|fill)\s+me\b|^(?:let\s+me\s+know|walk\s+me\s+through|fill\s+me\s+in)\b/i;
+
 /** First-person markers. Singular and plural both count as "about the speaker's
  *  world" — the exclusion of `we` in `selfDeclaration.js` is about attributing
  *  a claim to the INDIVIDUAL, which is a stricter question than this one. Here
@@ -143,7 +161,7 @@ export function resolveDeclarativeIntent(msg) {
   // Postgres or Mongo?") is not a self-disclosure. Question mark OR an
   // interrogative opener disqualifies — both, because chat drops the mark
   // constantly and "how do I deploy this" is still a question.
-  const isQuestion = text.endsWith('?') || INTERROGATIVE_OPENER.test(text);
+  const isQuestion = text.endsWith('?') || INTERROGATIVE_OPENER.test(text) || IMPERATIVE_REQUEST_OPENER.test(text);
   if (isQuestion) return null;
 
   if (UPDATE_CUES.some(re => re.test(text))) {

@@ -40,7 +40,7 @@ import { generateText }  from '../providers/router.js';
 import { createContext } from '../core/observability.js';
 import { registerAgent } from './agentRegistry.js';
 import { selectPanel, normalizeFinding, synthesizeDebate } from './debatePanel.js';
-import { hasGroundedEvidence, isCapabilityRefusal } from './evidenceContext.js';
+import { hasGroundedEvidence, isCapabilityRefusal, isUsableRevision } from './evidenceContext.js';
 
 /**
  * Phase 0 (audit F3) — grounding contract, panel edition. Deep-review turns
@@ -278,6 +278,20 @@ export async function runDebate({
       );
       provider = result.provider ?? provider;
       const revision = (result.text ?? '').trim();
+
+      // ── Forensic pass (Bug 1) — malformed/empty-revision guard ──────────────
+      // Same contract as verificationAgent.js: REVISION_PROMPT demands "the
+      // complete corrected replacement answer" — empty/whitespace is not that,
+      // it is a failed fix. Treat it exactly like the revision call throwing:
+      // the panel's objection stands on the record as a disagreement, the
+      // draft under review is kept, and the loop stops (an escalation whose
+      // fix came back blank has forfeited the remaining budget this turn).
+      if (!isUsableRevision(revision)) {
+        console.warn(`[DEBATE] empty/malformed revision SUPPRESSED (pass ${passes}/${cap}) — keeping ${revised ? 'latest revision' : 'draft'}`);
+        disagreements = synth.issues;
+        converged = false;
+        break;
+      }
 
       // ── Phase 0 (audit F1/F3) — capability-deletion guard ───────────────────
       // Same invariant as verificationAgent.js: a reviser may correct facts,

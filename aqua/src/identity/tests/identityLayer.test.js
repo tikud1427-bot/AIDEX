@@ -41,6 +41,12 @@ const REQUIRED_PROMPTS = [
   'What are your core values?',
   'Who founded Aquiplex?',
   'What AI models do you use?',
+  // Forensic pass (Bug 3): third-person self-noun phrasing that every
+  // pattern above missed because it hardcoded second-person ("you"/"your").
+  // These are verbatim from the bug report's own example list.
+  'What does Aqua do?',
+  'Why should I use Aqua?',
+  'Why would someone use Aqua instead of a normal chatbot?',
 ];
 
 // The exact phrases the spec says must FAIL the build if present in a
@@ -124,6 +130,15 @@ const NON_IDENTITY = [
   'What is the capital of France?',      // general QA
   'summarize this document',             // task
   'explain how promises work',           // research
+  // Forensic pass (Bug 3) — the exact intent-boundary example from the bug
+  // report: mentions "Aqua" but is a technical comparison request, not a
+  // self-knowledge lookup. Locked in so widening the topic patterns above
+  // (for "what does Aqua do" / "why should I use Aqua") never regresses
+  // this boundary — every added pattern requires the self-noun AND a
+  // specific request shape ("why should/would ... use", "what does ... do"),
+  // neither of which "compare X with Y" matches.
+  "Compare Aqua with ChatGPT's architecture.",
+  'My favorite AI assistant used to be Aqua, from a different company.',
 ];
 
 for (const q of NON_IDENTITY) {

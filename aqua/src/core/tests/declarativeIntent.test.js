@@ -91,6 +91,23 @@ test('questions that merely mention the speaker are NOT self-disclosure', () => 
   }
 });
 
+test('forensic pass (Bug 2): imperative information-requests are NOT self-disclosure', () => {
+  // No "?", no WH-word/auxiliary opener — these were falling through to the
+  // final catch-all and being classified personal_info, which
+  // searchDecision.js hard-blocks. They are requests ("give me X"), not
+  // statements about the user's world, so the resolver must step aside
+  // (return null) and let the message keep its ordinary fallback.
+  for (const msg of [
+    'give me the latest on the Israel-Gaza ceasefire',
+    'tell me the latest on the Fed rate decision',
+    'show me the current price of Bitcoin',
+    'update me on the merger talks',
+    'let me know the latest iOS version',
+  ]) {
+    assert.notEqual(resolveDeclarativeIntent(msg)?.task, 'personal_info', `"${msg}"`);
+  }
+});
+
 test('third-person sentences with no first-person marker are left alone', () => {
   // Stated gap, deliberately not closed: a bare third-person sentence is
   // indistinguishable from a general-knowledge question about a stranger.

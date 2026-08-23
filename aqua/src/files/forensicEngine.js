@@ -39,6 +39,34 @@ const WEAK_MEAN = 0.6;
 const round = (n) => Math.round(n * 100) / 100;
 
 /** Full forensic report for one owner's knowledge space. */
+/**
+ * The TEXTUAL half of the `edited_number` rule, extracted as a seam.
+ *
+ * Extracted so a forensics eval can score the PREDICATE the engine actually
+ * uses — a copy in the harness would drift the first time either side changed,
+ * and the baseline would then measure a rule nobody ships. Same reasoning as
+ * `_conflictKindForTests` in relationshipEngine.
+ *
+ * The FILE gate is deliberately NOT here: it is provenance policy, and
+ * FINDING-2's false positives all passed it legitimately, exactly as
+ * FINDING-1's did. The text is where the error is.
+ */
+export function maskNumbers(text) {
+  return String(text).replace(/\d[\d,]*(?:\.\d+)?/g, '#');
+}
+
+export function maskIsUsable(key) {
+  return /#/.test(key) && key.length >= 20;
+}
+
+/** Would this pair be reported as an edited number, on TEXT alone? */
+export function _looksEditedForTests(a, b) {
+  const ka = maskNumbers(a), kb = maskNumbers(b);
+  if (!maskIsUsable(ka) || !maskIsUsable(kb)) return false;
+  if (ka !== kb) return false;              // different sentence shape
+  return String(a) !== String(b);           // identical including numbers → not edited
+}
+
 export function forensicReport(deps, ownerId, { now = Date.now() } = {}) {
   const { ukoStore: US, evidenceStore: ES } = deps;
   const ukos = US.listUKOs(ownerId, { limit: 100000 });
@@ -128,8 +156,8 @@ export function forensicReport(deps, ownerId, { now = Date.now() } = {}) {
   // ── edited_number: same sentence shape, different numbers, different files ──
   const masked = new Map(); // number-masked normalized statement → [{fact, files}]
   for (const f of facts) {
-    const key = String(f.normalizedRepresentation ?? f.statement).replace(/\d[\d,]*(?:\.\d+)?/g, '#');
-    if (!/#/.test(key) || key.length < 20) continue;
+    const key = maskNumbers(f.normalizedRepresentation ?? f.statement);
+    if (!maskIsUsable(key)) continue;
     const evs = ES.evidenceForFact(ownerId, f.id);
     const files = [...new Set(evs.map(e => e.sourceFileId))];
     if (!masked.has(key)) masked.set(key, []);

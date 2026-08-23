@@ -54,12 +54,20 @@ const POSITIVE = [
   // Releases / versions / changelogs / current APIs
   { re: /\b(release(d|s)?|changelog|roadmap update|out yet|shipped|launch(ed)?|version|v\d+(\.\d+)+|deprecat(ed|ion))\b/i, w: 3, tag: 'release' },
   { re: /\b(still (supported|maintained)|end of life|eol\b|breaking changes? in)\b/i,              w: 3, tag: 'lifecycle' },
+  // Forensic pass (Bug 2): "is X still Y" / "does X still Y" asks whether a
+  // past/settled-sounding state holds TODAY — a freshness question in
+  // present-tense clothing ("is Joe Rogan's podcast still airing?", "does
+  // India still have the caste reservation system?"). Anchored to a genuine
+  // question opener + "still" so it cannot fire on unrelated uses of "still".
+  { re: /\b(is|are|does|do|has|have)\b[^.!?\n]{0,60}\bstill\b/i,                                    w: 2, tag: 'ongoing_status' },
   // Programming documentation / GitHub / packages
   { re: /\b(documentation|docs|api reference|official (guide|docs)|readme)\b/i,                    w: 3, tag: 'docs' },
   { re: /\b(github|gitlab) (repo(sitory)?|project|org)\b|\bgithub\.com\b/i,                        w: 3, tag: 'github' },
   { re: /\bnpm (package|module)\b|\bpypi\b|\bcrates\.io\b|\bpip install\b|\bnpm install\b/i,       w: 2, tag: 'package' },
   // Pricing / money / market
-  { re: /\b(price|pricing|cost of|how much (is|does|do)|subscription (cost|price)|fee[s]?)\b/i,    w: 3, tag: 'pricing' },
+  // Forensic pass (Bug 2): "price" was singular-only, so "current prices of
+  // GPUs" scored zero pricing signal while the singular phrasing scored +3.
+  { re: /\b(prices?|pricing|cost of|how much (is|does|do)|subscription (costs?|prices?)|fee[s]?)\b/i, w: 3, tag: 'pricing' },
   { re: /\b(stock|share price|market cap|exchange rate|crypto|bitcoin|valuation|funding round)\b/i, w: 3, tag: 'market' },
   // Live-world facts
   { re: /\b(weather|forecast|temperature (in|at)|score|match result|won the|election)\b/i,          w: 3, tag: 'live_facts' },
@@ -126,7 +134,7 @@ export function decideWebSearch({ userMessage, taskType, hasWorkspaceId = false,
     if (re.test(msg)) {
       score += w;
       signals.push(`+${tag}`);
-      if (['freshness', 'temporal', 'news', 'release', 'lifecycle', 'live_facts', 'role_holder', 'recent_year'].includes(tag)) {
+      if (['freshness', 'temporal', 'news', 'release', 'lifecycle', 'ongoing_status', 'live_facts', 'role_holder', 'recent_year'].includes(tag)) {
         hasFreshnessSignal = true;
       }
     }

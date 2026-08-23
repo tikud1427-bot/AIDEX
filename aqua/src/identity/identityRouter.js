@@ -40,10 +40,35 @@ const TOPIC_PATTERNS = {
   vision:          [/\bvision\b/i],
   mission:         [/\bmission\b/i, /\bpurpose\b/i],
   values:          [/\b(core\s+)?values?\b/i, /\bprinciples?\b/i],
-  capabilities:    [/\bcapabilit/i, /\bwhat\s+can\s+you\s+do\b/i, /\bwhat\s+do\s+you\s+do\b/i, /\b(able|ability)\s+to\s+do\b/i, /\byour\s+features?\b/i, /\bwhat\s+are\s+you\s+capable\b/i],
+  capabilities:    [/\bcapabilit/i, /\bwhat\s+can\s+you\s+do\b/i, /\bwhat\s+do\s+you\s+do\b/i, /\b(able|ability)\s+to\s+do\b/i, /\byour\s+features?\b/i, /\bwhat\s+are\s+you\s+capable\b/i,
+                    // forensic pass (Bug 3): third-person self-noun phrasing
+                    // ("what does Aqua do?") is as common as second-person
+                    // ("what can you do?") but every existing pattern here
+                    // hardcoded "you" — requiring the self-noun keeps this
+                    // exactly as narrow as the "you" patterns above.
+                    /\bwhat\s+does\s+(aqua|aquiplex)\s+do\b/i, /\bwhat\s+is\s+(aqua|aquiplex)\s+capable\s+of\b/i],
   files:           [/\b(files?|file\s*types?|formats?|documents?)\b[\s\S]{0,30}\b(process|handle|read|support|upload|accept|ingest|parse)\b/i,
                     /\b(process|handle|read|support|upload|accept|ingest|parse)\b[\s\S]{0,30}\b(files?|documents?|formats?)\b/i],
-  differentiators: [/\bdifferent(iat)?/i, /\bunique\b/i, /\bstand\s?out\b/i, /\bwhat\s+makes\s+(you|aqua)\b/i, /\bwhy\s+(use|choose|pick)\b/i, /\bbetter\s+than\b/i, /\byour\s+edge\b/i],
+  differentiators: [
+                    // Forensic pass (Bug 3, found via the boundary test below):
+                    // the original bare /different(iat)?/ matched ANY mention
+                    // of the word "different" anywhere in the message, so
+                    // "...used to be Aqua, from a different company" (a name
+                    // COLLISION, not a claim about Aqua) false-positived on
+                    // hasSelfNoun + this pattern alone. "differentiat*" (verb/
+                    // noun form: differentiate/differentiator) is unambiguous
+                    // enough to stay unanchored; bare "different" (the common
+                    // adjective) now requires tight adjacency to the self-noun
+                    // in either order, which "a different company" does not have.
+                    /\bdifferentiat\w*/i,
+                    /\b(aqua|aquiplex)(?:'s)?\s+different\b/i,
+                    /\bdifferent\s+(about|from|than)\s+(aqua|aquiplex|you)\b/i,
+                    /\bunique\b/i, /\bstand\s?out\b/i, /\bwhat\s+makes\s+(you|aqua)\b/i, /\bwhy\s+(use|choose|pick)\b/i, /\bbetter\s+than\b/i, /\byour\s+edge\b/i,
+                    // forensic pass (Bug 3): "why SHOULD/WOULD I use Aqua" was
+                    // missed because "why" and "use" were required adjacent —
+                    // requiring the self-noun (aqua/aquiplex) keeps this from
+                    // widening beyond "why ... use/choose/pick <product>".
+                    /\bwhy\s+(should|would)\s+(i|you|someone|anyone|we)\s+(use|choose|pick)\s+(aqua|aquiplex)\b/i],
   founders:        [/\bfound(er|ers|ed)\b/i, /\bwho\s+(made|created|started|owns)\s+aquiplex\b/i, /\bwho['’]?s?\s+behind\b/i],
   creator:         [/\bwho\s+(built|made|created|developed|designed)\s+(you|aqua)\b/i, /\bbuilt\s+by\b/i, /\byour\s+(creator|maker|developer|builder)\b/i, /\bwho\s+are\s+you\s+(built|made|created)\s+by\b/i],
   roadmap:         [/\broad\s?map\b/i, /\bwhat['’]?s\s+next\b/i, /\bfuture\s+plans?\b/i, /\bupcoming\b/i, /\bwhat\s+are\s+you\s+(building|planning)\b/i],

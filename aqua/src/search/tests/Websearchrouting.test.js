@@ -80,6 +80,46 @@ describe('classifier no longer swallows factual questions as conversation', () =
   });
 });
 
+describe('forensic pass (Bug 1 investigation, Bug 2 findings) — present-tense status, plural pricing, imperative requests', () => {
+  // "Is X still Y?" reads as settled/historical but asks about RIGHT NOW —
+  // exactly the shape flagged for search regardless of how the question is
+  // phrased. Neither the old 'status' signal (down/up/available/out/open/
+  // closed only) nor 'lifecycle' (still supported/maintained only) covered
+  // general present-tense continuity questions.
+  test('present-tense "still" status questions route THROUGH web search', () => {
+    searches("Is Joe Rogan's podcast still airing?");
+    searches('Does India still have the caste reservation system?');
+    searches('Is the James Webb telescope still operational?');
+  });
+
+  // Bare plural of a positive-signal noun must score the same as the
+  // singular — "prices" was silently worth 0 while "price" was worth +3.
+  test('plural "prices" scores the same as singular "price"', () => {
+    searches('current prices of GPUs');
+    searches("what's the current price of GPUs");
+  });
+
+  // Imperative information-requests ("give me…") were swept into
+  // `personal_info` by the classifier's declarative-intent fallback (no "?",
+  // no WH-word/auxiliary opener) and then hard-blocked by searchDecision —
+  // silently killing a live-news query carrying an explicit "latest" signal.
+  test('imperative "give me the latest on…" requests route THROUGH web search, not personal_info', () => {
+    assert.notEqual(classifyTask('give me the latest on the Israel-Gaza ceasefire').task, 'personal_info');
+    searches('give me the latest on the Israel-Gaza ceasefire');
+    searches('tell me the latest on the Fed rate decision');
+  });
+
+  test('"still" alone, without a question opener, does not spuriously add signal', () => {
+    // Control: the pattern requires is/are/does/do/has/have near "still" —
+    // an ordinary declarative use of "still" must not be scored at all.
+    noSearch('I still need to buy groceries');
+  });
+
+  test('genuine first-person statements keep classifying as personal_info (imperative guard did not widen the fallback itself)', () => {
+    assert.equal(classifyTask('my team ships every two weeks').task, 'personal_info');
+  });
+});
+
 describe('routing is deterministic (orchestrate() purity)', () => {
   test('same message → identical enabled/skipped decision', () => {
     const a = routesToSearch('Current Bitcoin price').enabled;

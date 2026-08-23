@@ -844,6 +844,7 @@ function buildResponsePayload({
       disagreements: verification.disagreements ?? [], // debate only: preserved minority findings
       grounded:           verification.grounded ?? false,           // Phase 0: reviewer saw the drafter's evidence
       suppressedRefusals: verification.suppressedRefusals ?? 0,     // Phase 0: capability-deleting revisions discarded
+      suppressedMalformed: verification.suppressedMalformed ?? 0,   // forensic pass (Bug 1): empty/whitespace revisions discarded
       escalatedByCognition: verification.escalatedByCognition ?? false, // CIE: monitor pulled review into an orchestrator-skipped turn
     },
 

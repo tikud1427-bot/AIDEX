@@ -134,3 +134,29 @@ export function isCapabilityRefusal(text) {
 }
 
 export { CAPABILITY_REFUSAL_PATTERNS as _capabilityRefusalPatterns };
+
+// ── Malformed / empty revision detection (forensic pass, Bug 1) ──────────────
+//
+// A verifier/reviser response is only ever one of two valid shapes: the exact
+// PASS sentinel (checked by the caller before this ever runs), or "the
+// complete corrected replacement answer" — literally what both the critique
+// prompt (verificationAgent.js) and the revision prompt (debateAgent.js)
+// demand. Nothing else is a revision. An empty string or whitespace is not a
+// "complete corrected replacement answer" under any reading of that
+// contract, so it must be treated the same as a malformed/unparseable
+// response: discard it, keep the current best answer, never ship it.
+//
+// Deliberately NOT task-aware and NOT brevity-intent-aware like
+// core/validator.js's validateResponse(): that module judges the FINAL
+// answer against what the user asked for ("reply with only the letter A" ⇒
+// "A" is a complete answer). Reusing that logic here would read the
+// ORIGINAL question's brevity request as license for the CRITIQUE/REVISION
+// call's own output to be empty — a different call, answering a different
+// question ("does this draft have a problem, and if so what replaces it?"),
+// for which brevity intent from the user's original message is irrelevant.
+//
+// @param {string} text
+// @returns {boolean}
+export function isUsableRevision(text) {
+  return typeof text === 'string' && text.trim().length > 0;
+}

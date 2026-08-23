@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-08-23T03:00:19.074Z",
+  "node": "v22.22.2",
+  "suiteFingerprint": "0e15da46f1a6899c",
+  "caseCount": 29,
+  "note": "Baseline of the CURRENT edited_number textual predicate. It catches every genuine alteration (recall 1.0) and 16 ordinary pairs with it (precision 0.333). A fix must raise precision while HOLDING recall at 1.0 — this rule accuses a document of tampering, so a false positive is louder than a missed one, but losing a real one is what the rule exists for. Regenerate with: npm run eval:gate -- forensic-edited --update",
+  "coverage": {
+    "complete": true,
+    "errored": 0,
+    "executed": 29,
+    "skipped": 0,
+    "total": 29
+  },
+  "metrics": {
+    "edited_pairs": 8,
+    "f1": 0.5,
+    "false_fire_different_shape": 0,
+    "false_fire_per_item_table": 1,
+    "false_fire_restatement": 0,
+    "false_negatives": 0,
+    "false_positives": 16,
+    "ordinary_pairs": 21,
+    "precision": 0.3333333333333333,
+    "recall": 1,
+    "true_positives": 8
+  }
+}

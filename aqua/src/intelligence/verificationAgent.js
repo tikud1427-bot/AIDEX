@@ -52,7 +52,7 @@ import { generateText }    from '../providers/router.js';
 import { createContext }   from '../core/observability.js';
 import { getFocusRisks }   from './critic.js';
 import { registerAgent }   from './agentRegistry.js';
-import { hasGroundedEvidence, isCapabilityRefusal } from './evidenceContext.js';
+import { hasGroundedEvidence, isCapabilityRefusal, isUsableRevision } from './evidenceContext.js';
 
 const PASS_SENTINEL =
   'VERIFICATION_PASSED — the draft was checked against the listed risks and no material issues were found; returning it unchanged.';
@@ -127,6 +127,8 @@ function buildCritiquePrompt(focusRisks, grounded = false) {
  *   passes: number,           // critique calls completed
  *   finalAnswer: string,
  *   focusRisks: string[],
+ *   suppressedRefusals?: number,  // capability-deleting revisions discarded (Phase 0)
+ *   suppressedMalformed?: number, // empty/whitespace "revisions" discarded (forensic pass, Bug 1)
  *   provider?: string,
  *   latencyMs?: number,
  *   attemptCount?: number,
@@ -173,7 +175,8 @@ export async function runVerification({
   // (b) replaces it with a revision → re-critique if budget remains, or
   // (c) errors → fail open with `current` as-is. A broken verifier can
   // therefore never lose an accepted revision, let alone the original draft.
-  let suppressedRefusals = 0;   // Phase 0 (F2 interplay): guarded revisions never count as `revised`
+  let suppressedRefusals  = 0;  // Phase 0 (F2 interplay): guarded revisions never count as `revised`
+  let suppressedMalformed = 0;  // forensic pass (Bug 1): empty/whitespace "revisions" never count as `revised`
 
   while (passes < cap) {
     const critiqueMessages = [{
@@ -205,6 +208,7 @@ export async function runVerification({
         focusRisks,
         grounded,
         suppressedRefusals,
+        suppressedMalformed,
         provider,
         latencyMs: Date.now() - start,
         error: err.message,
@@ -219,6 +223,20 @@ export async function runVerification({
     if (text.startsWith('VERIFICATION_PASSED')) {
       passed = true;
       break;                 // converged — current draft confirmed clean
+    }
+
+    // ── Forensic pass (Bug 1) — malformed/empty-revision guard ────────────────
+    // Contract: a critique response is EITHER the PASS sentinel above OR "the
+    // complete corrected replacement answer" (see buildCritiquePrompt). There
+    // is no third shape. Empty or whitespace-only text is neither — treating
+    // it as a revision would silently blank out a working draft (reproduced:
+    // an empty/blank generate() response previously became finalAnswer
+    // verbatim). Same invariant as the capability-refusal guard below: `current`
+    // never regresses, `revised` never books a malfunction as a correction.
+    if (!isUsableRevision(text)) {
+      suppressedMalformed += 1;
+      console.warn(`[VERIFICATION] empty/malformed revision SUPPRESSED (pass ${passes}/${cap}) — keeping ${revised ? 'latest revision' : 'draft'}`);
+      break;
     }
 
     // ── Phase 0 (audit F1/F5) — capability-deletion guard ─────────────────────
@@ -250,6 +268,7 @@ export async function runVerification({
     focusRisks,
     grounded,
     suppressedRefusals,
+    suppressedMalformed,
     provider,
     latencyMs: Date.now() - start,
     attemptCount: verifyCtx.attempts.length,
