@@ -55,7 +55,7 @@
 export const DECLARATIVE_CONFIDENCE = 0.62;
 
 /** Openers that make a message a QUESTION even without a question mark. */
-const INTERROGATIVE_OPENER =
+export const INTERROGATIVE_OPENER =
   /^(?:so\s+|and\s+|but\s+|ok(?:ay)?[,\s]+|hey[,\s]+)*(?:what|when|where|which|who|whom|whose|why|how|is|are|was|were|do|does|did|can|could|should|would|will|shall|may|might|have|has|had|am)\b/i;
 
 /**
@@ -73,7 +73,7 @@ const INTERROGATIVE_OPENER =
  * fallback (simple_qa/research) — never worse than the classification the
  * message already had, so this can only widen coverage, not regress it.
  */
-const IMPERATIVE_REQUEST_OPENER =
+export const IMPERATIVE_REQUEST_OPENER =
   /^(?:so\s+|and\s+|but\s+|ok(?:ay)?[,\s]+|hey[,\s]+|please\s+)*(?:give|tell|show|update|fill)\s+me\b|^(?:let\s+me\s+know|walk\s+me\s+through|fill\s+me\s+in)\b/i;
 
 /** First-person markers. Singular and plural both count as "about the speaker's

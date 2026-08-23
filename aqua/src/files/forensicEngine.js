@@ -59,12 +59,59 @@ export function maskIsUsable(key) {
   return /#/.test(key) && key.length >= 20;
 }
 
-/** Would this pair be reported as an edited number, on TEXT alone? */
+const NUMBER_RE = /\d[\d,]*(?:\.\d+)?/g;
+
+/**
+ * How many numeric positions differ between two same-shaped sentences?
+ * −1 when the shapes are incomparable (different count of numbers).
+ *
+ * FINDING-2. The rule fired on 20 ledger rows across 2 files and produced 90
+ * accusations where the truth was 0. Measured on the labelled set, every
+ * genuine doctoring changed EXACTLY ONE number while every table row changed
+ * two or four in lockstep — the row index, the value and the date all moving
+ * together, because they are different rows rather than one altered row:
+ *
+ *   doctored   "Payment of 250000 …"  →  "Payment of 750000 …"        1 differs
+ *   table row  "Item 4 … 1004 … 05-14" → "Item 5 … 1005 … 06-15"      4 differ
+ *
+ * So the count of differing positions, not the mask equality alone, is what
+ * separates the two. `severity: 'alert'` is the reason precision is worth a
+ * declared recall cost here: this finding tells a user their document may be
+ * forged, and it was wrong 17 times out of 27.
+ */
+export function numericDiffCount(a, b) {
+  const A = String(a).match(NUMBER_RE) ?? [];
+  const B = String(b).match(NUMBER_RE) ?? [];
+  if (A.length !== B.length) return -1;
+  let d = 0;
+  for (let i = 0; i < A.length; i++) if (A[i] !== B[i]) d++;
+  return d;
+}
+
+/**
+ * Would this pair be reported as an edited number, on TEXT alone?
+ *
+ * WHAT THIS FIX DOES NOT DO, measured and kept in the dataset as failing cases
+ * rather than left to be discovered in production:
+ *
+ *   e030  two table rows differing ONLY in the row index still fire. The
+ *         single-differing-number shape is indistinguishable from a doctored
+ *         figure on text alone; closing it needs table structure, which this
+ *         engine does not have.
+ *   e031  a doctoring that changed the amount AND the date is now MISSED.
+ *   e032  likewise an amount and a percentage.
+ *
+ * Recall therefore falls from 1.000 to 0.818 by construction. That trade is
+ * deliberate for a rule at `severity: 'alert'`, and it is a trade rather than
+ * an improvement, so it is stated here and measured in the gate rather than
+ * described as a clean win.
+ */
 export function _looksEditedForTests(a, b) {
   const ka = maskNumbers(a), kb = maskNumbers(b);
   if (!maskIsUsable(ka) || !maskIsUsable(kb)) return false;
   if (ka !== kb) return false;              // different sentence shape
-  return String(a) !== String(b);           // identical including numbers → not edited
+  if (String(a) === String(b)) return false; // identical including numbers → not edited
+  return numericDiffCount(a, b) === 1;
 }
 
 export function forensicReport(deps, ownerId, { now = Date.now() } = {}) {
@@ -168,6 +215,12 @@ export function forensicReport(deps, ownerId, { now = Date.now() } = {}) {
     for (let i = 0; i < group.length; i++) for (let j = i + 1; j < group.length; j++) {
       const A = group[i], B = group[j];
       if (A.f.normalizedRepresentation === B.f.normalizedRepresentation) continue;   // identical incl. numbers
+      // FINDING-2 — one changed number is a doctored figure; several changing
+      // together are different rows of the same table. See numericDiffCount.
+      // Applied here, on the SAME predicate the eval scores, so the shipped
+      // rule and the measured rule cannot drift apart.
+      if (numericDiffCount(A.f.normalizedRepresentation ?? A.f.statement,
+                           B.f.normalizedRepresentation ?? B.f.statement) !== 1) continue;
       if (!A.files.some(x => !B.files.includes(x)) && !B.files.some(x => !A.files.includes(x))) continue; // same file(s)
       findings.push({
         type: 'edited_number', severity: 'alert', confidence: 0.75,

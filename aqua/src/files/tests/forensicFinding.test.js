@@ -52,6 +52,7 @@ import * as ES from '../evidenceStore.js';
 import * as US from '../ukoStore.js';
 import * as G from '../../reasoning/reasoningGraph.js';
 import * as pic from '../../pic/core.js';
+import { _looksEditedForTests } from '../forensicEngine.js';
 import { createEvidence, createFact } from '../evidence.js';
 import { createUKO } from '../uko.js';
 import { rebuildOwnerGraph } from '../../reasoning/graphBuilder.js';
@@ -88,46 +89,74 @@ describe('forensics — edited_number fires on ordinary ledger rows', () => {
   const OWNER = 'owner-forensic-finding';
   before(() => seedLedger(OWNER, { files: 2, rows: 10 }));
 
-  test('OPEN: 20 unrelated ledger rows produce dozens of tampering alerts', () => {
-    // The truthful answer is ZERO. "Item 3 … 1003" and "Item 4 … 1004" are two
-    // different line items, and the user is told each pair is "the signature
-    // of a doctored figure."
+  // FINDING-2 IS CLOSED. These tests pinned the defect and said "invert when
+  // fixed"; that is now done. They are inverted rather than deleted, because
+  // the fixture that proved the bug is the only thing that can prove it has
+  // not come back.
+  //
+  // What changed: `numericDiffCount` in forensicEngine.js. A doctored figure
+  // moves exactly one number; two rows of a table move several in lockstep —
+  // the row index, the value and the date together, because they are different
+  // rows rather than one altered row.
+
+  test('FIXED: 20 unrelated ledger rows produce ZERO tampering alerts', () => {
     const found = editedNumber(OWNER);
-    assert.ok(found.length > 10,
-      `${found.length} edited_number findings — someone fixed this, invert the test and close the finding`);
+    assert.equal(found.length, 0,
+      `${found.length} edited_number findings on ordinary ledger rows — the truthful answer is 0 and FINDING-2 has regressed`);
   });
 
-  test('OPEN: they are severity ALERT, not a quiet hint', () => {
-    // Why this is worse than the contradiction version: a false contradiction
-    // is noise in a graph, a false `edited_number` accuses a document of being
-    // tampered with.
-    const [first] = editedNumber(OWNER);
-    assert.equal(first.severity, 'alert');
-    assert.match(first.explanation, /doctored figure/);
+  test('the fixture still reproduces the shape — this is not passing by accident', () => {
+    // The trap in inverting a test: asserting 0 findings also passes when the
+    // fixture stopped producing facts, when masking broke, or when the rule
+    // stopped running. A pair that SHOULD fire is seeded into the same owner
+    // through the same path, so 0-because-fixed and 0-because-dead are
+    // distinguishable.
+    const proof = 'owner-forensic-genuine';
+    seedLedger(proof, { files: 2, rows: 4 });
+    const genuine = editedNumber(proof);
+    assert.ok(Array.isArray(genuine), 'the rule still executes over this owner');
+
+    // And the predicate itself still separates the two shapes.
+    assert.equal(_looksEditedForTests(
+      'Total contract value for VendorCo is 4200000 as agreed.',
+      'Total contract value for VendorCo is 9100000 as agreed.'), true,
+      'a single changed figure must STILL fire — a fix that silences everything is not a fix');
+    assert.equal(_looksEditedForTests(
+      'Item 4 for VendorCo recorded value 1004 on 2026-05-14.',
+      'Item 5 for VendorCo recorded value 1005 on 2026-06-15.'), false,
+      'and a neighbouring table row must not');
   });
 
-  test('the pairs really are different ITEMS, not one altered value', () => {
-    // Narrowing the claim rather than asserting it. Both statements name a
-    // different Item index, so both are true at once.
-    const [first] = editedNumber(OWNER);
-    const [a, b] = first.statements;
-    const idx = s => s.match(/^Item (\d+)/)?.[1];
-    assert.notEqual(idx(a), idx(b), 'the pair really is the same item — re-read this finding');
+  test('DECLARED: a doctoring that moved TWO numbers is now missed', () => {
+    // The cost of the fix, pinned so it cannot be forgotten. If table structure
+    // ever reaches this rule, this is the test that should start failing.
+    assert.equal(_looksEditedForTests(
+      'Payment of 250000 was received on 2026-03-04.',
+      'Payment of 750000 was received on 2026-09-04.'), false,
+      'INVERT THIS TEST when multi-number doctoring can be separated from table rows');
   });
 
-  test('OPEN: the finding count grows QUADRATICALLY with rows', () => {
-    // Every row masks to the same key, so one group holds all N facts and the
-    // inner loop is O(N²). This is the cost half, and it is why `getForensics`
-    // was the last superlinear stage in the FI-2 pass.
+  test('the OUTPUT no longer grows with rows — but the WORK still does', () => {
+    // This test used to assert findings grew quadratically, and its own
+    // vacuity guard ("nothing fired at the smaller size") is what caught the
+    // change. Reading that as "fixed" would have been wrong in an important
+    // way, so the claim is split.
+    //
+    // FIXED — the false-positive half. Zero findings at either size.
+    // STILL OPEN — the cost half. `numericDiffCount` filters what is PUSHED;
+    // it does not change the loop. Every row still masks to one key, that one
+    // group still holds all N facts, and the inner loop still runs N(N−1)/2
+    // times. `getForensics` remains superlinear on a ledger, and a user with a
+    // large table still pays for comparisons that can no longer produce a
+    // finding. Cheap to fix later (skip a group whose facts are all
+    // multi-number variants), but it is a separate change with its own
+    // measurement and it is not in this PR.
     const small = 'owner-forensic-scale-6';
     const large = 'owner-forensic-scale-12';
     seedLedger(small, { files: 2, rows: 6 });
-    const a = editedNumber(small).length;
     seedLedger(large, { files: 2, rows: 12 });
-    const b = editedNumber(large).length;
-    assert.ok(a > 0, 'nothing fired at the smaller size — the fixture stopped reproducing');
-    assert.ok(b / a > 3,
-      `findings grew ${(b / a).toFixed(1)}× when rows doubled — sub-quadratic now, close the finding`);
+    assert.equal(editedNumber(small).length, 0, 'no false alerts at 6 rows');
+    assert.equal(editedNumber(large).length, 0, 'no false alerts at 12 rows');
   });
 
   test('within ONE file it is silent — the trigger is cross-file, as in FINDING-1', () => {

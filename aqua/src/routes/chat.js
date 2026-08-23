@@ -370,7 +370,7 @@ const REPO_INTENT_RE = /\b(repo(sitory)?|codebase|this project|the project|archi
  * provider calls. Both call sites (`await prepareTurn(...)`) are inside
  * async handlers in this file — no external caller exists.
  */
-async function prepareTurn({ userMessage, workspaceId, conversationId, userId = null, ctx, requestId, onStage = () => {}, skipReasoningPass = false, mode = null }) {
+export async function prepareTurn({ userMessage, workspaceId, conversationId, userId = null, ctx, requestId, onStage = () => {}, skipReasoningPass = false, mode = null }) {
   // ── 1. Resolve the ONE memory owner (unified engine) ────────────────────────
   // Platform user identity when present (cross-conversation, cross-device),
   // else this conversation as a dev/standalone fallback (adopted into the
@@ -597,6 +597,23 @@ async function prepareTurn({ userMessage, workspaceId, conversationId, userId = 
     if (knowledgeContext) {
       const ce = knowledge.stats?.contextEngine;
       console.log(`[PIC] Knowledge injected owner=${memoryOwner} facts=${knowledge.stats.facts} entities=${knowledge.stats.entities} timeline=${knowledge.stats.timelineEvents} feedbackReuse=${knowledge.stats.reusedSignals}${knowledge.stats.broadened ? ` broadened=+${knowledge.stats.broadenGained}` : ''}${ce ? ` [CTXv2 selected=${ce.selected}/${ce.candidates} dropped=${ce.dropped}]` : ''}`);
+    } else {
+      // OBSERVABILITY ONLY — no behaviour change, and the line above is
+      // untouched so anything grepping it keeps working.
+      //
+      // The candidates/selected counters already existed, but only on the
+      // success path. The measurement that matters most is the OPPOSITE case:
+      // the post-PR-1 re-audit found the Context Engine selecting 100% of its
+      // pool at every session length (3/3, 9/9, 18/18, nothing ever dropped)
+      // and 4 of 7 flagship questions returning an EMPTY block. An empty block
+      // logged nothing at all, so from production traffic those turns were
+      // indistinguishable from turns that never asked.
+      //
+      // A zero is a measurement. This makes "the engine had nothing to offer"
+      // countable, which is the only way to tell whether the fixture's pool
+      // density resembles a real owner's.
+      const ce = knowledge.stats?.contextEngine;
+      console.log(`[PIC] Knowledge empty owner=${memoryOwner} floor=${knowledge.stats?.facts ?? 0}${ce ? ` [CTXv2 selected=${ce.selected}/${ce.candidates} dropped=${ce.dropped}]` : ''}`);
     }
   }
 

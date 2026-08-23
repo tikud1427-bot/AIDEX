@@ -30,8 +30,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  buildFixtures, manifestFor, buildTar, sha256, normalizeForGolden, SPEC_VERSION,
+  buildFixtures, manifestFor, buildTar, sha256, normalizeForGolden, SPEC_VERSION, gzipPortable,
 } from '../../../scripts/build-parser-fixtures.mjs';
+import zlib from 'node:zlib';
+
 import { extractArchive, parseTar } from '../archiveExtractor.js';
 import { processDocument } from '../documentPipeline.js';
 import { extractZip } from '../../project/fileIngester.js';
@@ -75,7 +77,77 @@ describe('parser fixtures — integrity', () => {
   });
 
   test('manifest is a faithful description of the rebuilt set', () => {
-    assert.deepEqual(manifestFor(buildFixtures()).files, manifest.files);
+    // THIS TEST FAILED ON WINDOWS AND PASSED ON LINUX AND CI.
+    //
+    // The test above it exempts `zlibDependent` fixtures from having to
+    // rebuild byte-identically — compressed output belongs to the running
+    // zlib, declared in build-parser-fixtures.mjs's header. This test then
+    // deep-equalled the WHOLE manifest, sha256 included, re-asserting for
+    // every fixture exactly what the line above had just exempted.
+    //
+    // What surfaced it: gzip header byte 9 is the producing filesystem. Node
+    // writes 0x03 on Linux and 0x0a on Windows, so project.tar.gz rebuilt to
+    // 236a202e… against the committed 55342ef9… — same length, one byte.
+    // That specific cause is now fixed at source by `gzipPortable`, but the
+    // exemption is honoured here as well, because the NEXT zlib difference
+    // (a DEFLATE change across Node majors, which highratio.zip is exposed to)
+    // has no header byte to pin and would land in exactly this assertion.
+    //
+    // Green where it is checked and red where the developer works is the worst
+    // shape a test can have, so the relaxation is scoped as narrowly as the
+    // declared contract allows: the file SET, the notes and the flags stay
+    // strict, and non-zlib fixtures still compare in full.
+    const rebuilt = manifestFor(buildFixtures()).files;
+
+    assert.deepEqual(Object.keys(rebuilt).sort(), Object.keys(manifest.files).sort(),
+      'the rebuilt set and the committed set describe the same files');
+
+    for (const [name, entry] of Object.entries(manifest.files)) {
+      const got = rebuilt[name];
+      assert.equal(got.zlibDependent, entry.zlibDependent, `${name}: zlibDependent flag drifted`);
+      assert.equal(got.note, entry.note, `${name}: note drifted`);
+      if (entry.zlibDependent) continue;   // bytes + sha exempt, per the declared contract
+      assert.deepEqual(got, entry, `${name}: rebuilt description does not match the manifest`);
+    }
+  });
+
+  test('the zlib exemption covers exactly two fixtures and cannot quietly grow', () => {
+    // The exemption above is the only place a fixture can escape byte-level
+    // comparison. Marking a fixture zlibDependent to silence a real drift
+    // would be invisible without this.
+    const exempt = Object.entries(manifest.files)
+      .filter(([, e]) => e.zlibDependent).map(([n]) => n).sort();
+    assert.deepEqual(exempt, ['highratio.zip', 'project.tar.gz'],
+      'a fixture was added to or removed from the zlib exemption — justify it in the PR');
+  });
+
+  test('gzipPortable NORMALISES the OS byte — provable on a Unix host', () => {
+    // Without a seam this is untestable here: on Linux zlib already emits
+    // 0x03, so deleting the normalisation changes nothing locally and every
+    // assertion still passes. That is precisely why CI never caught the bug
+    // and a Windows developer did. The injected `gzip` lets the test stand in
+    // for a Windows zlib and prove the normalisation actually fires.
+    const asWindows = (buf, opts) => { const b = Buffer.from(zlib.gzipSync(buf, opts)); b[9] = 0x0a; return b; };
+    const out = gzipPortable(Buffer.from('hello world'), 9, asWindows);
+    assert.equal(out[9], 0x03, 'the NTFS byte a Windows host would emit is normalised to Unix');
+
+    const native = gzipPortable(Buffer.from('hello world'));
+    assert.deepEqual([...out], [...native],
+      'and a Windows build and a Linux build produce identical bytes — the whole point');
+  });
+
+  test('gzip fixtures are byte-reproducible ACROSS platforms, not merely exempt', () => {
+    // gzipPortable pins RFC-1952 header byte 9 (the producing filesystem) to
+    // 0x03, so the bytes no longer depend on the host. Asserted on the
+    // committed fixture rather than on a fresh build, because the committed
+    // bytes are what every other test and the manifest are measured against.
+    const gz = bytes('project.tar.gz');
+    assert.equal(gz[0], 0x1f, 'gzip magic');
+    assert.equal(gz[1], 0x8b, 'gzip magic');
+    assert.equal(gz[9], 0x03,
+      'header byte 9 is pinned to Unix — 0x0a here means a Windows rebuild was committed, which breaks Linux and CI');
+    assert.deepEqual([...gz.slice(4, 8)], [0, 0, 0, 0],
+      'MTIME stays zeroed — a timestamp would make every rebuild differ');
   });
 
   test('every fixture is documented', () => {

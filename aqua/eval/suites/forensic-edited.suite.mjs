@@ -36,10 +36,15 @@ export default {
   id: 'forensic-edited',
   title: 'forensics — does `edited_number` only fire on edited numbers',
   about: [
-    'Runs the textual half of the edited_number rule over 29 labelled pairs: 8 genuine',
-    'alterations and 21 ordinary pairs, 16 of them the per-item-table shape FINDING-2 measured',
+    'Runs the textual half of the edited_number rule over 33 labelled pairs: 11 genuine',
+    'alterations and 22 ordinary pairs, 16 of them the per-item-table shape FINDING-2 measured',
     'firing 90 times on 20 rows. Precision and recall reported separately — this rule accuses a',
     'document of tampering, so a false positive is louder than a missed one.',
+    'Four cases were added WITH the fix and are expected to fail: e030 is a table row whose only',
+    'differing number is the row index, which text alone cannot separate from a doctored figure;',
+    'e031/e032 are doctorings that moved two numbers and are now missed. Counts carry an n_ prefix',
+    'because the reporter renders any value in [0,1] as a percentage, and a single false positive',
+    'printed as "100.0%" is a number that will be misquoted.',
   ].join('\n'),
 
   cases: DS.cases,
@@ -72,13 +77,13 @@ export default {
       precision,
       recall,
       f1: precision + recall ? (2 * precision * recall) / (precision + recall) : 0,
-      true_positives: tp,
-      false_positives: fp,
-      false_negatives: fn,
+      n_true_positives: tp,
+      n_false_positives: fp,
+      n_false_negatives: fn,
       ...Object.fromEntries(Object.entries(byCat).sort()
         .map(([cat, v]) => [`false_fire_${cat.replace(/-/g, '_')}`, ratio(v.fired, v.n)])),
-      edited_pairs: scored.filter(s => s.shouldFire).length,
-      ordinary_pairs: scored.filter(s => !s.shouldFire).length,
+      n_edited_pairs: scored.filter(s => s.shouldFire).length,
+      n_ordinary_pairs: scored.filter(s => !s.shouldFire).length,
     };
   },
 };

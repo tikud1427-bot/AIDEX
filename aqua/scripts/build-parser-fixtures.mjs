@@ -352,7 +352,7 @@ export function buildFixtures() {
     'Source tree + node_modules + .git + nested .pptx + a ../ traversal entry.');
   add('project.tar', buildTar(projectTreeEntries(pptx)),
     'Same logical tree as project.zip, TAR/ustar encoded.');
-  add('project.tar.gz', zlib.gzipSync(buildTar(projectTreeEntries(pptx)), { level: 9 }),
+  add('project.tar.gz', gzipPortable(buildTar(projectTreeEntries(pptx))),
     'Gzipped project.tar — exercises the gunzip ratio guard and the tar-inside-gzip fallback.', true);
   add('encrypted.zip', buildZip([
     { name: 'README.md', data: '# secret\n', encryptedFlag: true },
@@ -367,6 +367,37 @@ export function buildFixtures() {
 // ── Manifest ──────────────────────────────────────────────────────────────────
 
 export const sha256 = buf => crypto.createHash('sha256').update(buf).digest('hex');
+
+/**
+ * gzip whose bytes do not depend on the host operating system.
+ *
+ * RFC 1952 reserves header byte 9 for the FILESYSTEM the stream was produced
+ * on. Node's zlib fills it in from the platform: 0x03 (Unix) on Linux and
+ * macOS, 0x0a (NTFS) on Windows. Everything else in the header is already
+ * fixed — MTIME is zeroed, XFL follows the level — so that single byte was the
+ * entire difference between a fixture built on Linux and the same fixture
+ * built on Windows.
+ *
+ * It cost a real failure. `project.tar.gz` rebuilt on Windows hashes to
+ * 236a202e… against the committed 55342ef9…, identical in length, differing in
+ * one byte. Confirmed by flipping byte 9 through its plausible values: OS=10
+ * reproduces the Windows hash exactly.
+ *
+ * The trap was worse than the failing test. `--check` compares on-disk bytes
+ * against a FRESH rebuild, so on Windows it reports DRIFTED and invites a
+ * rebuild — which would rewrite manifest.json with NTFS hashes and move the
+ * failure to every Linux machine and to CI.
+ *
+ * Pinning the byte to 0x03 makes the fixture genuinely reproducible everywhere
+ * instead of exempting it from being checked. On Linux the output is
+ * byte-identical to what is already committed, so this normalisation changes
+ * no fixture and no hash.
+ */
+export function gzipPortable(buf, level = 9, gzip = zlib.gzipSync) {
+  const out = Buffer.from(gzip(buf, { level }));
+  out[9] = 0x03;
+  return out;
+}
 
 export function manifestFor(fixtures) {
   const files = {};
@@ -439,13 +470,43 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const manifest = manifestFor(fixtures);
 
   if (check) {
+    // TWO SEPARATE QUESTIONS, and they were conflated.
+    //
+    //   INTEGRITY       do the committed bytes still match the committed
+    //                   manifest? Always checked, for every fixture.
+    //   REPRODUCIBILITY does a fresh build reproduce those bytes? Checked
+    //                   only for fixtures that are not zlibDependent, which
+    //                   is the exemption this file's header already declares.
+    //
+    // The previous version compared on-disk bytes against a FRESH REBUILD for
+    // everything, which is the reproducibility question wearing the integrity
+    // question's name. On Windows that reported DRIFTED for project.tar.gz and
+    // invited a rebuild that would have rewritten manifest.json with NTFS
+    // hashes and broken Linux and CI instead.
+    const committedPath = path.join(FIXTURE_DIR, 'manifest.json');
+    const committed = existsSync(committedPath)
+      ? JSON.parse(readFileSync(committedPath, 'utf8'))
+      : null;
+    if (!committed) { console.error('MISSING  manifest.json'); process.exit(1); }
+
     let bad = 0;
     for (const [name, f] of fixtures) {
       const p = path.join(FIXTURE_DIR, name);
       if (!existsSync(p)) { console.error(`MISSING  ${name}`); bad++; continue; }
-      const onDisk = sha256(readFileSync(p));
-      const expected = manifest.files[name].sha256;
-      if (onDisk !== expected) { console.error(`DRIFTED  ${name}`); bad++; }
+      const onDiskBytes = readFileSync(p);
+      const onDisk = sha256(onDiskBytes);
+
+      const entry = committed.files[name];
+      if (!entry) { console.error(`UNLISTED ${name} — on disk but absent from manifest.json`); bad++; continue; }
+      if (onDisk !== entry.sha256) { console.error(`DRIFTED  ${name} — committed bytes no longer match manifest.json`); bad++; continue; }
+
+      if (!f.zlibDependent && !Buffer.from(f.bytes).equals(onDiskBytes)) {
+        console.error(`UNREPRODUCIBLE  ${name} — a fresh build does not match the committed bytes`);
+        bad++;
+      }
+    }
+    for (const name of Object.keys(committed.files)) {
+      if (!fixtures.has(name)) { console.error(`ORPHANED ${name} — in manifest.json but the builder no longer produces it`); bad++; }
     }
     console.log(bad ? `${bad} fixture problem(s)` : `${fixtures.size} fixtures verified`);
     process.exit(bad ? 1 : 0);

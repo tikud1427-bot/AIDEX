@@ -103,20 +103,43 @@ describe('forensic eval — the baseline reproduces', () => {
 describe('forensic eval — what the numbers say', () => {
   const m = BASELINE.metrics;
 
-  test('OPEN: precision is 33% — two of every three alerts are false', () => {
-    assert.ok(m.precision < 0.5, `precision ${m.precision}`);
-    assert.ok(m.false_positives > m.true_positives);
+  // These three tests previously pinned the OPEN defect and said "invert when
+  // fixed". FINDING-2 is now fixed, so they are inverted — recording the state
+  // that shipped rather than being deleted, because the numbers a fix moved
+  // are the numbers a regression would move back.
+
+  test('FIXED: precision is 82% — was 33% on v1, 38% on this dataset', () => {
+    // 0.82 rather than the 0.90 the first draft of this test asserted. The
+    // difference is e034, a second instance of the index-only hole added
+    // DELIBERATELY after the fix was measured. Writing 0.90 would have meant
+    // quoting a number produced by a dataset chosen to flatter it.
+    assert.ok(m.precision >= 0.8, `precision ${m.precision}`);
+    assert.ok(m.n_false_positives < m.n_true_positives,
+      'false alerts are now the minority, which for a severity:alert finding is the whole point');
   });
 
-  test('OPEN: it fires on EVERY per-item table pair', () => {
-    assert.equal(m.false_fire_per_item_table, 1);
+  test('FIXED: the per-item table shape no longer fires at all', () => {
+    assert.equal(m.false_fire_per_item_table, 0,
+      'all 16 measured false positives are gone');
   });
 
-  test('recall is already perfect — this is purely an OVER-firing problem', () => {
-    // Unlike the contradiction detector, which was broken in both directions.
-    // A fix here has one job, and one thing it must not break.
-    assert.equal(m.recall, 1);
-    assert.equal(m.false_negatives, 0);
+  test('OPEN: one table shape still fires — a row differing ONLY in its index', () => {
+    // e030. Two rows of the same table where the value and date are identical
+    // and only the row number moved. On text alone this is indistinguishable
+    // from a doctored figure; separating them needs table structure the
+    // forensic engine does not have. Recorded rather than hidden.
+    assert.equal(m.false_fire_per_item_table_single, 1,
+      'INVERT THIS TEST if table structure ever reaches this rule');
+  });
+
+  test('DECLARED COST: recall fell to 82% — multi-number doctorings are now missed', () => {
+    // The trade this fix makes, stated as a number rather than a caveat.
+    // e031 (amount + date) and e032 (percent + amount) both moved two numbers
+    // and no longer fire. Accepted deliberately: this rule tells a user their
+    // document may be forged, and it was wrong 17 times in 27 before.
+    assert.ok(m.recall >= 0.8 && m.recall < 1,
+      `recall ${m.recall} — a rise back to 1.0 means the trade was reversed, a fall below 0.8 means the fix cut deeper than measured`);
+    assert.equal(m.n_false_negatives, 2, 'exactly the two multi-number cases, no others');
   });
 
   test('the categories it gets right are recorded too', () => {
