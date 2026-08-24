@@ -221,12 +221,26 @@ describe('predicate registry — explicit registration', () => {
 // ── Inertness ────────────────────────────────────────────────────────────────
 
 describe('predicate registry — nothing uses it yet', () => {
-  test('only the claim repository imports it', () => {
+  test('every importer of the registry is a DELIBERATE entry', () => {
     // E5/PR-2 asserted nothing imported it; E5/PR-3's repository must, to
     // resolve objectKind before a write. Red battery first, then a deliberate
     // entry — the guard working exactly as intended.
+    //
+    // E6/PR-4 (Aug 23) is the THIRD time it fired, and the first time from
+    // outside the claim layer. The STEP 0 audit recorded the claim substrate as
+    // having zero non-test importers — shipped, correct, and an island, the
+    // sixth instance of L12's build-but-never-called list. These two entries
+    // are the beginning of that closing: the extractor has to speak the claim
+    // vocabulary, and the only honest way to teach a model the vocabulary is to
+    // read it from the thing that enforces it. A hand-copied predicate list in
+    // the prompt is the drift this registry exists to prevent.
+    //
+    // Both are READERS. Neither writes a claim, and the one-writer guard in
+    // claimSchema.test.js is untouched and still passing.
     const ALLOWED = ['src/core/claims/claimRepository.js', 'src/core/claims/backfill.js',
-      'src/core/claims/projection.js'];
+      'src/core/claims/projection.js',
+      'src/brain/understanding/extractionPrompt.js',     // E6/PR-4 — generates the prompt vocabulary
+      'src/brain/understanding/extractionContract.js'];  // E6/PR-4 — refuses unregistered predicates
     const offenders = [];
     const walk = (dir) => {
       for (const name of fs.readdirSync(dir)) {
