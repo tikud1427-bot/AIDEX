@@ -25,8 +25,7 @@
 
 import Groq from 'groq-sdk';
 import {
-  getCandidateModels, markModelWorking, markModelUnavailable, markModelTempFailed,
-} from './modelRegistry.js';
+  getCandidateModels, markModelWorking, markModelUnavailable, markModelTempFailed, pinCandidates } from './modelRegistry.js';
 import { classifyProviderError, retryAfterMs } from './providerErrors.js';
 
 function getKeys() {
@@ -83,10 +82,24 @@ function nextKey() {
  *   actually selected.
  * @returns {Promise<{ text: string, truncated: boolean, finishReason: string }>}
  */
-export async function generateGroq(systemPrompt, messages, signal, maxTokens) {
+/**
+ * @param {object} [opts] E6/PR-5b — additive, and inert when omitted.
+ *   `opts.model`       pin to exactly this model, or throw
+ *                      MODEL_PIN_UNAVAILABLE. Never silently substituted.
+ *   `opts.temperature` sent only when supplied, so an omitted value leaves
+ *                      the request bytes identical to before this change.
+ *   The return gains `model`, naming which model actually answered. Additive:
+ *   every existing caller destructures { text, truncated, finishReason }.
+ *   Without it a run cannot be attributed — disqualifying for a measurement,
+ *   and invisible in the old return shape.
+ *   STREAMING IS DELIBERATELY UNTOUCHED. Extraction never streams, and the
+ *   stream paths carry their own truncation and abort handling; widening the
+ *   change to reach them would grow the risk envelope for no caller.
+ */
+export async function generateGroq(systemPrompt, messages, signal, maxTokens, opts = {}) {
   if (signal?.aborted) throw new Error('TIMEOUT');
 
-  const candidates = getCandidateModels('groq');
+  const candidates = pinCandidates(getCandidateModels('groq'), opts.model ?? null, 'groq');
   if (!candidates.length) throw Object.assign(new Error('No Groq models currently available (cooling down or deprecated)'), { code: 'NO_CANDIDATE_MODELS' });
 
   let lastError;
@@ -115,6 +128,7 @@ export async function generateGroq(systemPrompt, messages, signal, maxTokens) {
       model:    modelId,
       messages: chatMessages,
       ...(capTokens ? { max_tokens: capTokens } : {}),
+      ...(opts.temperature !== undefined ? { temperature: opts.temperature } : {}),
     });
     // Demo-stability fix: if the timeout wins the Promise.race below, `req`
     // keeps running detached. Should it later REJECT (network drop, 5xx),
@@ -175,7 +189,7 @@ export async function generateGroq(systemPrompt, messages, signal, maxTokens) {
       }
       console.log(`[GROQ] model=${modelId} hit maxTokens=${capTokens} cap — returning partial as successful completion`);
       markModelWorking('groq', modelId);
-      return { text, truncated: true, finishReason: 'length' };
+      return { text, truncated: true, finishReason: 'length', model: modelId };
     }
 
     if (!text) {
@@ -184,7 +198,7 @@ export async function generateGroq(systemPrompt, messages, signal, maxTokens) {
     }
 
     markModelWorking('groq', modelId);
-    return { text, truncated: false, finishReason: finishReason ?? 'stop' };
+    return { text, truncated: false, finishReason: finishReason ?? 'stop', model: modelId };
   }
 
   throw lastError ?? new Error('All Groq attempts exhausted');

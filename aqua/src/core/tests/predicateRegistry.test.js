@@ -220,7 +220,7 @@ describe('predicate registry — explicit registration', () => {
 
 // ── Inertness ────────────────────────────────────────────────────────────────
 
-describe('predicate registry — nothing uses it yet', () => {
+describe('predicate registry — who is allowed to use it', () => {
   test('every importer of the registry is a DELIBERATE entry', () => {
     // E5/PR-2 asserted nothing imported it; E5/PR-3's repository must, to
     // resolve objectKind before a write. Red battery first, then a deliberate
@@ -240,7 +240,13 @@ describe('predicate registry — nothing uses it yet', () => {
     const ALLOWED = ['src/core/claims/claimRepository.js', 'src/core/claims/backfill.js',
       'src/core/claims/projection.js',
       'src/brain/understanding/extractionPrompt.js',     // E6/PR-4 — generates the prompt vocabulary
-      'src/brain/understanding/extractionContract.js'];  // E6/PR-4 — refuses unregistered predicates
+      'src/brain/understanding/extractionContract.js',   // E6/PR-4 — refuses unregistered predicates
+      // E6/PR-6 — S4 gate ③. Read-only: it asks isRegistered and routes an
+      // unknown predicate to PROPOSE rather than registering it. That is the
+      // point — ensurePredicate would auto-admit a model's invention, and
+      // `enjoys_working_at` beside `works_at` splits one employment history
+      // in two, permanently and invisibly.
+      'src/brain/understanding/claimValidator.js'];
     const offenders = [];
     const walk = (dir) => {
       for (const name of fs.readdirSync(dir)) {

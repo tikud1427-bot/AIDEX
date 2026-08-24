@@ -203,6 +203,38 @@ export function getCandidateModels(provider) {
 }
 
 /** @returns {object|null} full registry entry, e.g. to clamp maxTokens against maxOutputTokens. */
+/**
+ * Restrict a candidate list to ONE model, for callers that must not be
+ * silently rerouted (E6/PR-5b).
+ *
+ * `getCandidateModels` exists to keep answers flowing: it returns a fallback
+ * chain, and for OpenRouter it ROTATES that chain per call so load spreads.
+ * Both behaviours are right for a user waiting on a reply and wrong for a
+ * measurement — an extraction run that silently hops between models produces
+ * numbers nobody can attribute, and E6/PR-11 compares this extractor against a
+ * committed baseline.
+ *
+ * A pin that cannot be honoured THROWS rather than falling back. Substituting
+ * a different model is the one outcome a pinning caller cannot tolerate, and
+ * it is exactly what would happen by default. The error carries a code so a
+ * caller can tell "your model is cooling down" from "your model does not
+ * exist" without parsing a message.
+ *
+ * @param {Array} candidates from getCandidateModels(provider)
+ * @param {string|null} modelId  null → unchanged, byte-identical to today
+ * @param {string} provider      for the error message only
+ */
+export function pinCandidates(candidates, modelId, provider = 'provider') {
+  if (!modelId) return candidates;
+  const only = candidates.filter(c => c.modelId === modelId);
+  if (!only.length) {
+    throw Object.assign(
+      new Error(`Pinned ${provider} model ${modelId} is not currently available (unknown, deprecated or cooling down)`),
+      { code: 'MODEL_PIN_UNAVAILABLE', modelId, provider });
+  }
+  return only;
+}
+
 export function getModelSpec(provider, modelId) {
   return findEntry(provider, modelId);
 }
