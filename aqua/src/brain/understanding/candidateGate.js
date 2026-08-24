@@ -112,9 +112,18 @@ const PROPER_NOUN = /\b[A-Z][a-z]{2,}\b/;
 const TEMPORAL_MARKER =
   /\b(?:yesterday|today|tomorrow|last|next|since|until|before|after|during|ago|in\s+\d|Q[1-4]|20\d\d|january|february|march|april|may|june|july|august|september|october|november|december|monday|tuesday|wednesday|thursday|friday|saturday|sunday|week|month|quarter|year|end\s+of)\b/i;
 
-/** Negation — polarity is a claim, and losing it is worse than losing nothing. */
-const NEGATION_MARKER =
-  /\b(?:not|isn'?t|aren'?t|doesn'?t|don'?t|didn'?t|no\s+longer|never|nobody|none)\b/i;
+/**
+ * Negation — polarity is a claim, and losing it is worse than losing nothing.
+ *
+ * EXPORTED because `surpriseGate.js` needs the same notion of "this segment is
+ * negative", and two divergent negation regexes in one pipeline is the same
+ * defect as two different length floors. Widened past the first draft's
+ * contraction list after measuring which negation cases it missed:
+ * "I'm not the CTO", "We haven't decided on pricing", "I dislike neither
+ * option" all carry polarity and none matched.
+ */
+export const NEGATION_MARKER =
+  /\b(?:not|isn'?t|aren'?t|wasn'?t|weren'?t|doesn'?t|don'?t|didn'?t|haven'?t|hasn'?t|hadn'?t|won'?t|can'?t|cannot|couldn'?t|wouldn'?t|shouldn'?t|no\s+longer|never|nobody|none|neither)\b/i;
 
 /** "The migration starts…", "A deposit was returned…" — definite subject. */
 const DEFINITE_SUBJECT = /^(?:the|a|an)\s+\w+/i;
