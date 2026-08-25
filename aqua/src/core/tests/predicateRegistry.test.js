@@ -246,7 +246,14 @@ describe('predicate registry — who is allowed to use it', () => {
       // point — ensurePredicate would auto-admit a model's invention, and
       // `enjoys_working_at` beside `works_at` splits one employment history
       // in two, permanently and invisibly.
-      'src/brain/understanding/claimValidator.js'];
+      'src/brain/understanding/claimValidator.js',
+      // E6/PR-8 — S7. Read-only: it asks getPredicate for objectKind, inverse
+      // and symmetric to decide edge DIRECTION, and routes an unknown
+      // predicate to the proposal queue with a usage count rather than
+      // registering it. The registry is the only thing that knows works_at and
+      // employs are one relationship; deciding direction from word order
+      // instead would write two opposed edges for every fact stated twice.
+      'src/brain/understanding/relationshipResolver.js'];
     const offenders = [];
     const walk = (dir) => {
       for (const name of fs.readdirSync(dir)) {
