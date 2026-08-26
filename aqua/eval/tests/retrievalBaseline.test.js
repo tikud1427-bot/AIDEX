@@ -116,32 +116,76 @@ describe('retrieval baseline — the findings, pinned', () => {
     assert.ok(m.recall_direct > 0.9, `direct recall ${m.recall_direct}`);
   });
 
-  test('FINDING: the SUPERSEDED fact wins — "where do I work" returns the old employer', () => {
-    // f003 says Intercom and is superseded by f001. The engine has no notion
-    // of currency, so the outdated fact ranks and the current one does not.
-    // This is the single clearest argument for the claim schema's valid_from /
-    // valid_to columns (Blueprint Part 3).
-    assert.ok(m.recall_superseded <= 0.3, `superseded recall ${m.recall_superseded} — better than recorded, update deliberately`);
+  // ── The five findings, and what closed them ────────────────────────────────
+  //
+  // These were RECORDED DEFECTS. They are now FIXED, and the assertions have
+  // been inverted deliberately: a test that pins a defect protects the defect
+  // once the defect is gone. The historical figures stay in the comments and in
+  // BASELINE.md so the movement is auditable, but the gate must guard the new
+  // number or it is guarding nothing.
+  //
+  // All five had ONE root cause. Lane 2b anchored on the owner for any
+  // first-person question and lane 3 hopped every `about` edge scoring each
+  // `confidence * 0.5 + 0.05` — an expression in which the query does not
+  // appear. Four different questions returned byte-identical output. The fix
+  // is `src/pic/questionShape.js` plus the relevance gate in
+  // `retrievalIntelligence.js`; see `src/pic/tests/relevanceGate.test.js`.
+
+  test('CLOSED: currency — the current employer outranks the superseded one', () => {
+    // WAS 0.20. f003 says Intercom and is superseded by f001; the engine had no
+    // notion of currency, so the outdated fact ranked and the current one did
+    // not. Supersession is now conditional on the question's tense: a
+    // superseded fact is withheld from a present-tense question and ADMITTED to
+    // a question about the past, because L5 says nothing is deleted and a
+    // reader that can never see a superseded claim has deleted it at read time.
+    assert.ok(m.recall_superseded >= 0.6, `superseded recall ${m.recall_superseded} — regression against 0.60`);
   });
 
-  test('FINDING: negation retrieval is near-blind', () => {
-    assert.ok(m.recall_negation <= 0.3, `negation recall ${m.recall_negation}`);
+  test('OPEN: negation recall is limited by REACH, not ranking', () => {
+    // WAS 0.20, now 0.30. Polarity is now read on both the question and the
+    // statement, which fixed the PRECISION half — an affirmative fact no longer
+    // answers a negated question. Recall stays low for a different reason:
+    // "What did we turn down?" and "We rejected the Bangalore relocation" share
+    // no vocabulary, as do "paused"/"on hold" and "database"/"Postgres". No
+    // surface rule reaches those; the dense lane (E7) does. A synonym table
+    // tuned to this corpus would score well here and teach the engine nothing.
+    assert.ok(m.recall_negation >= 0.3, `negation recall ${m.recall_negation} — regression against 0.30`);
+    assert.ok(m.recall_negation < 0.6, 'negation solved without a dense lane — verify this is real, not fitted');
   });
 
-  test('FINDING: the category/instance gap is real and large', () => {
-    // "What is my job?" against "I run product at Nummo" — no lexical overlap.
-    assert.ok(m.recall_category < m.recall_direct - 0.3);
+  test('NARROWED: the category/instance gap is bridged but not closed', () => {
+    // WAS 0.406 against direct 0.964 — a 55-point gap. The kind signal now
+    // bridges "What is my job?" to "I run product at Nummo" with zero lexical
+    // overlap. What remains is genuine vocabulary distance, same cause as the
+    // negation ceiling above.
+    assert.ok(m.recall_category >= 0.46, `category recall ${m.recall_category} — regression against 0.469`);
+    assert.ok(m.recall_direct - m.recall_category > 0.2, 'gap closed — verify the dense lane landed rather than the labels drifting');
   });
 
-  test('FINDING: only a third of unanswerable queries get silence', () => {
-    // Every noisy query is FIRST PERSON. The self-anchor fires on any "my"/"I"
-    // question and returns 8 owner facts whether or not they answer it — it
-    // has no relevance gate. That one behaviour is the whole honesty gap.
-    assert.ok(m.unknown_honesty < 0.5, `unknown honesty ${m.unknown_honesty}`);
-    assert.ok(m.noise_lines > 50, `noise lines ${m.noise_lines}`);
+  test('CLOSED: unanswerable queries mostly get silence', () => {
+    // WAS 0.344 honesty and 131 noise lines across 21 of 32 silence-expecting
+    // queries — every one of them first-person. The self-anchor fired on any
+    // "my"/"I" question and returned eight owner facts whether or not they
+    // answered it. It has a relevance gate now, and a sufficiency check: a
+    // typed question whose TOPIC noun is unknown ("who is my dentist") is not
+    // answered on kind alone. Unknown stays unknown.
+    assert.ok(m.unknown_honesty >= 0.70, `unknown honesty ${m.unknown_honesty} — regression against 0.719`);
+    assert.ok(m.noise_lines <= 20, `noise lines ${m.noise_lines} — regression against 16`);
   });
 
-  test('FINDING: the top hit is the right KIND less than half the time', () => {
-    assert.ok(m.top1_kind < 0.5, `top1_kind ${m.top1_kind}`);
+  test('IMPROVED: the top hit is the right KIND more often than not', () => {
+    // WAS 0.429 — and the reason was that the top hit was the SAME FACT for
+    // every first-person question. Kind is now a graded signal that reads the
+    // world model first and its own surface patterns second.
+    assert.ok(m.top1_kind > 0.5, `top1_kind ${m.top1_kind} — regression against 0.548`);
+  });
+
+  test('the honesty metrics are still reported SEPARATELY from the averages', () => {
+    // The averages cover 168 answerable queries; the 32 silence queries are
+    // scored on their own. Folding them together would let a noisier engine
+    // buy a better headline by answering more often — which is the exact
+    // failure this suite exists to catch.
+    assert.equal(m.answerable_queries + m.silence_queries, 200);
+    assert.ok(typeof m.noise_lines === 'number' && typeof m.unknown_honesty === 'number');
   });
 });

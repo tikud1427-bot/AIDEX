@@ -67,6 +67,7 @@
  * same validators.
  */
 import { createEvidence, createFact } from '../../files/evidence.js';
+import { readFidelity, isRequest } from './claimFidelity.js';
 import { isAboutSpeakersWorld } from './selfDeclaration.js';
 
 /** Conversational claims never reach document-grade confidence. */
@@ -196,11 +197,28 @@ export function buildConversationFacts(args, opts) {
 
   const facts = [];
   const evidence = [];
+  let skippedRequests = 0;
 
   for (let i = 0; i < sentences.length && facts.length < maxFacts; i++) {
     const sentence = sentences[i];
     const named = entitiesNamedIn(sentence, surfaces, selfCanonical);
     if (named.length < minEntities) continue;
+
+    // A REQUEST IS NOT EVIDENCE ABOUT THE USER'S WORLD.
+    //
+    // "Explain how OAuth works to me." produced a stored fact, because OAuth
+    // reads as an entity and this lane had no notion of a request. Six of the
+    // ten false positives on `extraction-core.v1` are that exact shape, and
+    // the same failure was already fixed once at the self-declaration gate —
+    // this is the general path catching up with a decision already made.
+    //
+    // The cost of getting this wrong points one way. A missed claim is
+    // recoverable: the user says it again, or it arrives from another turn. An
+    // imperative stored as a fact is not — it sits in the world model and gets
+    // retrieved later as though the user had told us something about
+    // themselves, which is how a system starts confidently describing a person
+    // back to themselves using their own to-do list.
+    if (isRequest(sentence)) { skippedRequests += 1; continue; }
 
     // One Evidence per sentence: the snippet IS the claim's source text, so
     // the checksum makes re-ingesting the same sentence a no-op at the store.
@@ -224,6 +242,27 @@ export function buildConversationFacts(args, opts) {
       evidence:   [ev],
       confidence,
     });
+
+    // FIDELITY IS STORED, NOT LEFT IN THE PROSE.
+    //
+    // The lane used to write the sentence and nothing else, so "I don't use
+    // Kubernetes" was stored as an ASSERTED fact whose text happened to contain
+    // "don't". Every consumer then had to re-derive the polarity from prose —
+    // the retrieval gate does exactly that on every read — and any consumer
+    // that summarises or reasons over polarity instead of rendering it gets the
+    // claim backwards. Negation, modality and temporal qualifiers must not be
+    // lost silently, and a qualifier that survives only as English is one
+    // careless reader away from being lost.
+    //
+    // These are grammatical properties of the sentence, so they are read here.
+    // The PREDICATE is not: choosing `works_at` over `role_is` is a semantic
+    // judgement belonging to the claim schema, and guessing it from surface
+    // patterns would fit this corpus and transfer nowhere.
+    const fid = readFidelity(sentence);
+    fact.polarity = fid.polarity;
+    fact.modality = fid.modality;
+    fact.tense    = fid.tense;
+    if (fid.time) fact.time = fid.time;
     // Derived id — see IDENTITY / IDEMPOTENCE above. Everything else about
     // the object stays exactly as the canonical constructor produced it.
     fact.id = `${sourceId}:fact:${i}`;
@@ -232,8 +271,8 @@ export function buildConversationFacts(args, opts) {
     facts.push(fact);
   }
 
-  if (!facts.length) return empty('no-qualifying-sentences');
-  return { facts, evidence, sourceId, skipped: null };
+  if (!facts.length) return empty(skippedRequests ? 'all-requests' : 'no-qualifying-sentences');
+  return { facts, evidence, sourceId, skipped: null, skippedRequests };
 }
 
 export const _internals = { sentencesOf, surfaceFormIndex, entitiesNamedIn, MIN_SENTENCE_LENGTH };

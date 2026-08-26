@@ -28,6 +28,9 @@
  */
 import { transition } from './knowledgeLifecycle.js';
 import { reasoningBoost } from './reasoningFeedback.js';
+import {
+  analyseQuestion, factAffinity, MIN_AFFINITY,
+} from './questionShape.js';
 
 const TEMPORAL_CUE = /\b(when|before|after|timeline|first|then|earlier|later|history|sequence|order of|chronolog)\b/i;
 
@@ -117,6 +120,49 @@ const W_DISPUTED = -0.20;
 const W_STALE    = -0.10;
 const W_GRAPH    = 0.05;    // facts reached through the graph, not lexically
 
+// ── Relevance gating ─────────────────────────────────────────────────────────
+//
+// THE DEFECT THIS CLOSES, AS MEASURED
+// -----------------------------------
+// On `retrieval-core.v1` (200 labelled queries through this exact facade)
+// every first-person question returned the SAME eight facts, because lane 2b
+// anchored on the owner and lane 3 hopped every `about` edge from that anchor
+// with a score of `confidence * 0.5 + 0.05` — a number in which the QUESTION
+// does not appear. Four different questions, byte-identical output:
+//
+//     "What is my job?"  "Which city am I in?"  "Where am I employed?"
+//     "What is my blood type?"   ← the store cannot answer this one at all
+//
+// Consequences, all measured on the committed baseline:
+//   · unknown_honesty 34.4% — a dossier for questions with no stored answer
+//   · noise_lines 131 across 21 of 32 silence-expecting queries
+//   · top1_kind 42.9% — the top hit was literally the same fact every time
+//   · recall_category 40.6% / recall_superseded 20.0% — the REAL answer was
+//     crowded out of the eight-item budget by the same eight generic facts
+//
+// So the gate is not a noise filter bolted on the end. It is the missing
+// relevance term in a lane that never had one.
+//
+// FAIL-OPEN IS PRESERVED WHERE IT BELONGS, AND NOT WHERE IT DOES NOT.
+// A lane that cannot decide keeps its candidate. A candidate that no signal
+// supports is dropped — that is not a failure to be open about, it is the
+// answer being "we do not know", and L11 says silence beats a confident wrong
+// line. Unknown stays unknown.
+
+/**
+ * How many facts may arrive on the self-anchor with NO lexical support.
+ *
+ * The anchor exists to bridge the category/instance gap ("where do I work" →
+ * "I run product at Nummo"), which needs a handful of candidates, not a
+ * dossier. Without a cap a well-typed question still returns everything that
+ * matches the kind, which is how "what is my job" came back with eight facts
+ * of which one was a job.
+ *
+ * Retrieval policy, so it stays here. The SCORING it caps lives in
+ * `questionShape.js`, shared with the Context Engine.
+ */
+const MAX_SELF_ANCHORED = 5;
+
 /**
  * @param {object} deps - { evidenceStore, evidenceRetrieval, graph, queryEngine }
  * @param {string} ownerId
@@ -145,6 +191,25 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
     return null;
   })();
   const selfLabel = String(selfNode?.label ?? '').toLowerCase();
+
+  // ── Question shape: what did the asker actually ask FOR? ───────────────────
+  //
+  // Computed ONCE, before any lane runs, because every lane below needs it and
+  // because the thing that was missing was not a better lane — it was any
+  // representation of the question at all. Lane 3 scored candidates with
+  // `confidence * 0.5 + 0.05`, an expression the query does not appear in.
+  const shape = analyseQuestion(query);
+
+  // Entity typing from the world model, for the kind signal. Read once; the
+  // regex fallback in `offeredKinds` only runs for entities the graph has not
+  // typed, so this map is what makes the signal improve as extraction does.
+  const entityTypes = new Map();
+  try {
+    for (const n of G.nodesByType(ownerId, 'entity')) {
+      const t = n?.data?.entityType;
+      if (t && n?.label) entityTypes.set(String(n.label).toLowerCase(), String(t));
+    }
+  } catch { /* fail-open: no typing is a weaker signal, not an error */ }
 
   // ── Lane 1: grounded facts (lexical + provenance) ──────────────────────────
   //
@@ -238,8 +303,23 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
   // model as "entities relevant to your question", and an item reading "You"
   // is noise at best and a distraction at worst. The anchor exists to reach
   // facts, so it is used for the hop only.
+  // WIDENED, AND SAFE ONLY BECAUSE OF THE GATE BELOW.
+  //
+  // The previous predicate required a first-person SUBJECT and deliberately
+  // excluded bare "me", because "tell me about Nummo" is a request and the
+  // anchor had nothing downstream to stop it. That exclusion cost real
+  // answers: "Which company pays me?" and "Who employs me right now?" both
+  // returned SILENCE on the committed baseline — neither contains a
+  // first-person subject, and neither shares a word with "I run product at
+  // Nummo".
+  //
+  // Narrowing the anchor was the wrong lever. It made the engine silent on
+  // questions it could answer while leaving it noisy on questions it could
+  // not, because both failures came from the SAME missing thing: no relevance
+  // test on what the anchor reached. Widening the anchor and gating its
+  // results is strictly better than narrowing it and gating nothing.
   const selfAnchors = [];
-  if (selfNode && isSelfQuestion(query)) selfAnchors.push({ entity: 'you', _nodeId: selfNode.id });
+  if (selfNode && shape.selfScoped && shape.isQuestion) selfAnchors.push({ entity: 'you', _nodeId: selfNode.id });
 
   // ── Lane 3: connected facts — one hop over `about` edges from matched
   //    entities; the graph surfacing what lexical matching missed ────────────
@@ -259,24 +339,86 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
         confidence: fact.confidence,
         score: (fact.confidence ?? 0.5) * 0.5 + W_GRAPH,
         via: `graph: about ${em.entity}`,
+        // The self anchor is not a topic. Everything else was named in the
+        // query, and that naming is what survives alias canonicalisation.
+        _namedAnchor: em._nodeId !== selfNode?.id,
       });
     }
   }
 
-  // ── Rank: base score ± lifecycle flags ± reasoning feedback ────────────────
-  const scored = [...factHits, ...connected]
-    .filter(h => !h.fact.archived && !h.fact.supersededBy)
-    .map(h => {
-      let s = h.score;
-      if (h.fact.trusted)  s += W_TRUSTED;
-      if (h.fact.disputed) s += W_DISPUTED;
-      if (h.fact.stale)    s += W_STALE;
-      const boost = reasoningBoost(ownerId, h.fact.id);
-      s += boost;
-      return { ...h, score: s, feedbackBoost: boost };
-    })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, limit);
+  // ── Rank: relevance × lifecycle × feedback, and DROP what nothing supports ─
+  //
+  // Order matters. Relevance is computed FIRST and gates; the lifecycle and
+  // feedback weights then rank what survived. The previous order had no
+  // relevance term at all, so lifecycle flags and confidence were ranking a
+  // pool that had never been filtered for whether it answered the question.
+  const gate = { considered: 0, droppedIrrelevant: 0, droppedPolarity: 0, droppedSelfCap: 0, droppedSuperseded: 0 };
+
+  const admitted = [];
+  let selfAnchoredKept = 0;
+
+  for (const h of [...factHits, ...connected]) {
+    if (h.fact.archived) continue;
+    gate.considered++;
+
+    // SUPERSESSION IS NOT UNCONDITIONAL SUPPRESSION.
+    //
+    // A superseded fact must not answer a present-tense question — that is the
+    // measured "old employer wins" defect. But it IS the answer to a question
+    // about the past: "Where do I not work anymore?" is answered by "I used to
+    // work at Intercom", the exact fact a blanket filter buries. L5 says
+    // nothing is deleted, only superseded; a reader that cannot ever see a
+    // superseded claim has deleted it at read time.
+    if (h.fact.supersededBy && !(shape.currency === 'past' || shape.polarity === 'negated')) {
+      gate.droppedSuperseded++;
+      continue;
+    }
+
+    const rel = factAffinity(shape, h.fact, entityTypes, h._namedAnchor === true);
+    const anchoredOnly = h._namedAnchor === false && rel.lexical === 0;
+
+    // "What do you know about me?" is a SUMMARY REQUEST, not a topic query.
+    //
+    // Self-scoped, no topic words, no typed expectation: there is nothing for
+    // the gate to match on, and the honest reading is not "we know nothing"
+    // but "you asked for an overview". The owner's own facts, capped as
+    // always, ARE the answer.
+    //
+    // The gate stays narrow on purpose — all three conditions must hold. Every
+    // unanswerable first-person question in the dataset carries topic words
+    // ("dog", "blood type", "dentist"), so this admits the summary shape
+    // without reopening the dossier it replaced.
+    const summaryAsk = anchoredOnly && shape.selfScoped && !shape.typed && shape.topicTerms.length === 0;
+
+    if (rel.score < MIN_AFFINITY && !summaryAsk) {
+      if (rel.polarityConflict) gate.droppedPolarity++; else gate.droppedIrrelevant++;
+      continue;
+    }
+    // Bound the dossier. A well-typed question still matches many owner facts
+    // on kind alone; the anchor exists to bridge a gap, not to summarise a life.
+    if (anchoredOnly && selfAnchoredKept >= MAX_SELF_ANCHORED) { gate.droppedSelfCap++; continue; }
+    if (anchoredOnly) selfAnchoredKept++;
+
+    // Relevance is the dominant term. The lifecycle and feedback weights keep
+    // the magnitudes they were tuned at, so their relative effect is unchanged
+    // — what changed is that they now modify a score that knows the question.
+    let s = rel.score;
+    if (h.fact.trusted)  s += W_TRUSTED;
+    if (h.fact.disputed) s += W_DISPUTED;
+    if (h.fact.stale)    s += W_STALE;
+    const boost = reasoningBoost(ownerId, h.fact.id);
+    s += boost;
+
+    // A non-finite score is not a low score, it is an ABSENT one, and
+    // `b.score - a.score` on NaN returns NaN, which sort treats as "leave the
+    // order alone" — so one malformed evidence record silently randomises the
+    // ranking around it. Observed live: a fact ranked FIRST with score=NaN.
+    if (!Number.isFinite(s)) s = rel.score;
+
+    admitted.push({ ...h, score: s, feedbackBoost: boost, relevance: rel });
+  }
+
+  const scored = admitted.sort((a, b) => b.score - a.score).slice(0, limit);
 
   // ── Lane 4: timeline, only when the question is temporal ───────────────────
   let timelineEvents = [];
@@ -318,6 +460,16 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
     timelineEvents: timelineEvents.length,
     reusedSignals: scored.filter(h => h.feedbackBoost !== 0).length,
     durationMs: Date.now() - started,
+    // L13: the gate is reported, never silent. "The engine had nothing to
+    // offer" and "the engine dropped eleven irrelevant facts" are different
+    // events and an operator has to be able to tell them apart — an abstention
+    // that logs nothing is indistinguishable from a turn that never asked.
+    relevance: {
+      expects: shape.expects, typed: shape.typed,
+      polarity: shape.polarity, currency: shape.currency,
+      selfScoped: shape.selfScoped, ...gate,
+      abstained: gate.considered > 0 && scored.length === 0,
+    },
   };
   return { items, block, stats };
 }
@@ -370,9 +522,23 @@ function renderBlock({ scored, entityMatches, timelineEvents, charBudget }) {
 
 const fmt = (n) => (n == null ? '?' : Number(n).toFixed(2));
 
+/**
+ * Query tokens for the entity lane.
+ *
+ * TRAILING PUNCTUATION USED TO BE PART OF THE TOKEN. `[\w\-.]` absorbs the
+ * full stop, so "Tell me about Priya." tokenised to `priya.` — which matches
+ * the entity label `Priya` in neither direction. The entity lane went blind on
+ * every query that ended in the name it was about, the graph hop that depends
+ * on it never fired, and the only reason anything came back at all was the
+ * self anchor, which cannot reach a fact the owner is not an entity of.
+ *
+ * Interior dots are KEPT: `v2.0` and `config.json` are single tokens and
+ * splitting them would break the case this character class was widened for.
+ * Only the trailing run is trimmed.
+ */
 function tokenize(q) {
   return [...String(q).toLowerCase().matchAll(/[a-z0-9][\w\-.]{1,}/g)]
-    .map(m => m[0])
+    .map(m => m[0].replace(/[.\-_]+$/, ''))
     .filter(t => t.length > 2);
 }
 const round3 = (n) => Math.round(n * 1000) / 1000;

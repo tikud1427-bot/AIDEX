@@ -47,7 +47,22 @@ export function retrieveGroundedFacts(store, ownerId, query, { limit = 10, minCo
     if (!hits) continue;
 
     const evidence = store.evidenceForFact(ownerId, fact.id);
-    const bestConf = evidence.length ? Math.max(...evidence.map(e => e.confidence)) : fact.confidence;
+    // `Math.max` over a confidence that is undefined returns NaN, and NaN
+    // poisons everything downstream silently: `NaN < minConfidence` is false
+    // so the fact is NOT filtered, `score` becomes NaN, and `b.score - a.score`
+    // returns NaN — which `Array.sort` treats as "leave the order alone".
+    // The result is a fact that ranks by insertion position while appearing to
+    // have been scored. Observed on the eval world: a fact ranked FIRST with
+    // score=NaN.
+    //
+    // `buildEvidence` always sets a confidence, so well-formed production data
+    // never reaches this. That is exactly why it needs a guard rather than a
+    // fix upstream: the failure is invisible, and anything writing evidence
+    // without going through `buildEvidence` inherits it.
+    const conf = evidence.length
+      ? Math.max(...evidence.map(e => Number.isFinite(e.confidence) ? e.confidence : 0))
+      : fact.confidence;
+    const bestConf = Number.isFinite(conf) ? conf : 0;
     if (bestConf < minConfidence) continue;
 
     // Rank: term coverage first, then evidence strength (grounded + confident wins).

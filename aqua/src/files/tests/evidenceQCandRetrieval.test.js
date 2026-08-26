@@ -110,6 +110,41 @@ test('retrieveGroundedFacts ranks by term coverage + evidence confidence and att
   assert.equal(filtered.length, 1, 'weak-evidence fact filtered out');
 });
 
+test('a confidence-less evidence record cannot poison the ranking with NaN', () => {
+  // `Math.max` over an undefined confidence returns NaN, and NaN is silent all
+  // the way down: `NaN < minConfidence` is false so the fact is NOT filtered,
+  // `score` becomes NaN, and `b.score - a.score` returns NaN — which
+  // `Array.sort` treats as "leave these two alone". The fact then ranks by
+  // insertion position while appearing to have been scored. Observed on the
+  // retrieval eval world: a fact ranked FIRST with score=NaN.
+  //
+  // `buildEvidence` always sets a confidence, so well-formed production data
+  // never reaches this — which is precisely why it needs a guard rather than a
+  // fix upstream. Anything that writes evidence without going through
+  // `buildEvidence` inherits the failure, and it is invisible when it happens.
+  const broken = store.saveEvidence('nan', createEvidence({
+    sourceFileId: 'u', sourceFileName: 'a.pdf', sourceType: 'document',
+    extractionMethod: 'text-layer', location: { page: 1 },
+  }));
+  delete broken.confidence;   // as a writer bypassing buildEvidence would leave it
+  const good = store.saveEvidence('nan', createEvidence({
+    sourceFileId: 'u', sourceFileName: 'b.pdf', sourceType: 'document',
+    extractionMethod: 'text-layer', confidence: 0.9, location: { page: 2 },
+  }));
+  store.saveFact('nan', createFact({ statement: 'Zeta migration schedule confirmed', entities: ['Zeta'], evidence: [broken] }));
+  store.saveFact('nan', createFact({ statement: 'Zeta migration budget approved', entities: ['Zeta'], evidence: [good] }));
+
+  const hits = retrieveGroundedFacts(store, 'nan', 'Zeta migration');
+  for (const h of hits) {
+    assert.ok(Number.isFinite(h.score), `non-finite score on "${h.fact.statement}"`);
+    assert.ok(Number.isFinite(h.confidence), `non-finite confidence on "${h.fact.statement}"`);
+  }
+  // And the guard must not become a bypass: an unscoreable record is treated as
+  // no confidence, so a real minConfidence floor still excludes it.
+  const filtered = retrieveGroundedFacts(store, 'nan', 'Zeta migration', { minConfidence: 0.5 });
+  assert.equal(filtered.length, 1, 'the NaN fact slipped past the confidence floor');
+});
+
 test('explainFact returns full provenance for the "explain this answer" primitive', () => {
   const e = store.saveEvidence('o', createEvidence({ sourceFileId: 'u', sourceFileName: 'meeting.mp4', sourceType: 'video', extractionMethod: 'timeline', location: { timestamp: '12:43' } }));
   const f = store.saveFact('o', createFact({ statement: 'budget approved', evidence: [e] }));

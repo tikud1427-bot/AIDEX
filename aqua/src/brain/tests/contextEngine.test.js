@@ -248,3 +248,104 @@ function stubGraph() {
     getNode: () => null,
   };
 }
+
+// ── Graph reach must not undo the floor's relevance gate ─────────────────────
+//
+// The Context Engine's step (b) hopped every `about` edge from every focus
+// entity and admitted whatever it found. That is the SAME defect the PIC
+// relevance gate closes, reimplemented one layer up — and because CE sits
+// ABOVE the floor, it silently undid it.
+//
+// Measured on the 32 silence-expecting queries of `retrieval-core.v1`:
+//
+//     PIC floor            16 noise lines
+//     after Context Engine 23 noise lines     ← CE put 7 back
+//
+// And on the 168 answerable queries the ungated lane was not merely noisy, it
+// was NET HARMFUL: recall fell 122 → 119, because the flood of irrelevant
+// hopped facts crowded real answers out of the eight-item budget. It added
+// zero answers of its own.
+//
+// BITE, MEASURED (revert the named change → count failures):
+//   second-person pronouns excluded from self match  → 2 fail
+//   relevance gate on CE graph reach                 → 2 fail
+
+/** A world where the owner has many facts and only one answers the question. */
+function reachWorld() {
+  const facts = {
+    f1: { id: 'f1', statement: 'I run product at Nummo.', entities: ['Nummo', 'You'], confidence: 0.6 },
+    f2: { id: 'f2', statement: 'Our runway is fourteen months.', entities: ['You'], confidence: 0.9 },
+    f3: { id: 'f3', statement: 'We raised a seed round in 2024.', entities: ['You'], confidence: 0.9 },
+    f4: { id: 'f4', statement: 'I prefer TypeScript over Go.', entities: ['You'], confidence: 0.9 },
+  };
+  return {
+    graph: {
+      nodesByType: () => [{ id: 'entity:you', label: 'You', data: { entityType: 'self' } }],
+      neighbors: (_o, id, { type } = {}) => (type === 'fact' && id === 'entity:you'
+        ? Object.keys(facts).map(f => ({ node: { id: `fact:${f}` } })) : []),
+    },
+    evidenceStore: {
+      getFact: (_o, id) => facts[id] ?? null,
+      evidenceForFact: () => [{ confidence: 0.6, sourceType: 'conversation' }],
+    },
+    peekMind: () => null,
+    formatCitation: () => 'Conversation c1',
+  };
+}
+
+test('REACH GATE: "you" addresses AQUA and does not hop the USER\'s facts', () => {
+  // "Can you run your tests?" is a question about the ASSISTANT. The user's
+  // self entity is labelled "You" — from AQUA's point of view, writing about
+  // the user — so a literal token match read "you" as naming the user and
+  // hopped their entire fact set into the prompt. The PIC floor correctly
+  // returned nothing for this; only this lane put facts back.
+  process.env.AQUA_BRAIN = 'on';
+  process.env.AQUA_CONTEXT_V2 = 'on';
+  const w = reachWorld();
+  const deps = { picRetrieve: () => ({ items: [], block: '', stats: {} }), ...w };
+  // "Are you able to open your settings?" — a real query from the dataset, and
+  // one with no lexical collision against the fixture, so anything that comes
+  // back arrived purely because "you" was read as naming the user.
+  const out = CE.assembleTurnContext(deps, 'o', 'Are you able to open your settings?', { limit: 8 });
+  assert.equal(out.items.filter(i => i.kind === 'fact').length, 0,
+    'the assistant was asked about itself and the user\'s dossier came back');
+});
+
+test('REACH GATE: an irrelevant owner fact is not hopped into the prompt', () => {
+  // Reach is not licence. A fact reached through the graph still has to be
+  // about the question — the same test the floor applies, using the same
+  // scorer so the two cannot drift apart.
+  process.env.AQUA_BRAIN = 'on';
+  process.env.AQUA_CONTEXT_V2 = 'on';
+  const w = reachWorld();
+  const deps = { picRetrieve: () => ({ items: [], block: '', stats: {} }), ...w };
+  const out = CE.assembleTurnContext(deps, 'o', 'Where do I work?', { limit: 8 });
+  const got = out.items.filter(i => i.kind === 'fact').map(i => i.id);
+  assert.ok(got.includes('f1'), `the answer was gated out: ${JSON.stringify(got)}`);
+  assert.ok(!got.includes('f4'), `an unrelated preference was hopped in: ${JSON.stringify(got)}`);
+});
+
+test('REACH GATE: what the floor already admitted is never re-judged here', () => {
+  // The assembler selects from the pool; it does not re-litigate the floor.
+  // Gating floor items here would mean two gates disagreeing about the same
+  // fact, and the floor's is the one with the eval behind it.
+  process.env.AQUA_BRAIN = 'on';
+  process.env.AQUA_CONTEXT_V2 = 'on';
+  const w = reachWorld();
+  const floor = { items: [{ kind: 'fact', id: 'f4', statement: 'I prefer TypeScript over Go.', confidence: 0.9, citations: [] }], block: 'F', stats: { facts: 1 } };
+  const deps = { picRetrieve: () => floor, ...w };
+  const out = CE.assembleTurnContext(deps, 'o', 'Where do I work?', { limit: 8 });
+  assert.ok(out.items.some(i => i.id === 'f4'), 'a floor item was dropped by the reach gate');
+});
+
+test('REACH GATE: gated facts are counted, not silently discarded', () => {
+  // L13. A gate that drops without counting is indistinguishable from a lane
+  // that never ran.
+  process.env.AQUA_BRAIN = 'on';
+  process.env.AQUA_CONTEXT_V2 = 'on';
+  const before = CE.contextEngineMetrics().reachGated;
+  const w = reachWorld();
+  const deps = { picRetrieve: () => ({ items: [], block: '', stats: {} }), ...w };
+  CE.assembleTurnContext(deps, 'o', 'Where do I work?', { limit: 8 });
+  assert.ok(CE.contextEngineMetrics().reachGated > before, 'reachGated never moved');
+});

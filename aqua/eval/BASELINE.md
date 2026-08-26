@@ -9,30 +9,86 @@ code can do, not what a `.env` currently permits
 ## The number
 
 ```
-overall_strict_accuracy   15.0%     all four levels must hold
+                          before    after
+overall_strict_accuracy    15.0%    16.0%     all four levels must hold
 
-detection_recall          61.3%     a claim-bearing sentence produced something
-subject_recall            41.3%     the claim's subject was recognised as an entity
-predicate_accuracy         0.0%     ← structural
-fidelity_accuracy          0.0%     ← structural  (polarity · modality · time)
+detection_recall           61.3%    61.3%     a claim-bearing sentence produced something
+subject_recall             41.3%    41.3%     the claim's subject was recognised
+predicate_accuracy          0.0%     0.0%     ← still structural, deliberately
+fidelity_accuracy           0.0%    55.1%     ← polarity · modality · time
 
-silence_on_negatives      75.0%     10 false positives out of 40
+silence_on_negatives       75.0%    80.0%     false positives 10 → 8
 ```
 
-## Why the two zeros are the headline
+## One zero closed, one left standing on purpose
 
-They are not bad luck. The conversation lane emits a **verbatim statement plus
-an entity list** — there is no predicate field and no polarity, modality or
-time field anywhere in its output. These cannot be non-zero until the schema
-changes.
+They were both structural, and they were not the same kind of structural.
 
-That is the clearest one-line statement of what E5 (claim schema) and E6
-(understanding pipeline) are for, and it is now a measurement rather than an
-opinion.
+**Fidelity was reachable and is now read.** Polarity, modality and time are
+GRAMMATICAL properties of the sentence — `"I don't"`, `"I want to"`, `"if we"`,
+`"she said"`, `"last month"` are all marked in the surface form. Reading them is
+parsing, not inference, and it needed no schema. The lane now writes them onto
+the claim (`brain/knowledgeExtraction/claimFidelity.js`).
 
-The scorer computes both from the output shape rather than hardcoding zero, so
-the day E6 emits predicates they start scoring with no change here. A test
-pins that.
+**Predicate is not, and no attempt was made.** A predicate is a relation drawn
+from a controlled vocabulary, and choosing `works_at` over `role_is` is a
+semantic judgement belonging to E5's schema and E6's model-backed pipeline.
+Surface rules guessing predicate names would score against *this* dataset and
+transfer nowhere. A test now pins it at zero with the note that if it moves, the
+question is not "did it improve" but "did someone fit a vocabulary to the
+labels".
+
+## Why the negation line was the serious one
+
+The old baseline recorded `negation detection 45.0%` — **and every one captured
+was stored positively.** That is not a scoring artefact:
+
+```
+user said:   "I don't use Kubernetes."
+store held:  "I don't use Kubernetes."   ← as an ASSERTED fact
+```
+
+The text kept the `"don't"`, so a careful reader might survive it. But nothing
+in the DATA said the claim was negative, so every consumer had to re-derive
+polarity from prose — the retrieval gate did exactly that on every read — and
+two derivations of the same thing can disagree. The one that disagrees silently
+is the one that reaches the model.
+
+Polarity is now stored, and `statementPolarity` reads the stored field first,
+falling back to prose only for facts written before this landed and for the
+document lane, which does not run through it. Same tier ordering as
+`offeredKinds`: what the world model knows beats what a regex can guess.
+
+## The request gate, and the asymmetry behind it
+
+`"Explain how OAuth works to me."` produced a stored fact, because OAuth reads
+as an entity and the lane had no notion of a request. Six of the ten false
+positives were that shape — the same failure class already fixed once at the
+self-declaration gate, with the general path only now catching up.
+
+The gate is narrow on purpose (a LEADING imperative, or an explicit
+please/can-you frame) because the costs are not symmetric. A missed claim is
+recoverable: the user says it again, or it arrives from another turn. An
+imperative stored as a fact is not — it sits in the world model and is retrieved
+later as though the user had told us something about themselves, which is how a
+system ends up describing a person back to themselves using their own to-do
+list.
+
+Measured: false positives 10 → 8, and **`detection_recall` unchanged at 61.3%**
+— the gate removed only noise. That second number is the one that mattered; a
+silence improvement bought with real claims would have been a regression
+wearing a better score.
+
+## What this did to E6's bar
+
+`e6Shadow.test.js` asserted `fidelity_accuracy === 0` for the old lane, with the
+note *"if these ever read non-zero, the comparison below has silently changed
+meaning."* It does, and the meaning has changed — deliberately.
+
+E6 no longer gets credit for emitting fidelity at all. It has to beat **55.1%**,
+and a model-backed pipeline that cannot outperform a regex on negation and
+modality is not ready to replace one. Predicate stays at zero, so E6's gain
+*there* is real.
 
 ## Detection by category — where the misses are
 
@@ -124,46 +180,162 @@ way it gets named in the PR that moves it.
 
 ## The numbers
 
+Two columns. The left is the engine as first measured; the right is after the
+relevance gate landed. Both were produced by `npm run eval -- retrieval-core`
+on the same dataset, same adapter, same seed — nothing about the measurement
+changed between them.
+
 ```
-recall@8          63.7%
-MRR               56.7%
-nDCG@8            55.5%
-top1_correct      53.0%
-top1_kind         42.9%     the top hit is the KIND of thing asked for
+                  before    after
+recall@8           63.7%    72.6%
+MRR                56.7%    66.4%
+nDCG@8             55.5%    64.8%
+top1_correct       53.0%    62.5%
+top1_kind          42.9%    54.8%    the top hit is the KIND of thing asked for
 
-unknown_honesty   34.4%     ← only a third of unanswerable queries get silence
-noise_lines        131      ← across 21 of 32 silence-expecting queries
+unknown_honesty    34.4%    71.9%    ← unanswerable queries that get silence
+noise_lines          131       16    ← across 9 of 32 silence-expecting queries
 ```
 
-## Recall by category — where retrieval actually fails
+## Recall by category
 
-| category | recall@8 | reading |
-|---|--:|---|
-| direct | **96.4%** | verbatim retrieval does exactly what it was built for |
-| multi | 67.9% | |
-| temporal | 56.0% | |
-| selfword | 50.0% | |
-| category | **40.6%** | the category/instance gap — *"what is my job"* vs *"I run product at Nummo"* |
-| negation | **20.0%** | near-blind |
-| superseded | **20.0%** | **the outdated fact wins** |
+| category | before | after | reading |
+|---|--:|--:|---|
+| direct | 96.4% | **100%** | verbatim retrieval does exactly what it was built for |
+| multi | 67.9% | 71.4% | |
+| temporal | 56.0% | 68.0% | |
+| selfword | 50.0% | 75.0% | |
+| category | 40.6% | 46.9% | bridged by the kind signal; the remainder is vocabulary distance |
+| superseded | 20.0% | **60.0%** | currency is now conditional on the question's tense |
+| negation | 20.0% | 30.0% | **reach-limited — see finding 4** |
 
-## Three findings, pinned as tests
+## What was wrong, and what closed it
 
-**1. The superseded fact wins.** `f003` says Intercom and is superseded by
-`f001`. The engine has no notion of currency, so *"where do I work"* returns
-the old employer and the current one does not rank. This is the single
-clearest argument for `valid_from` / `valid_to` in the claim schema
-(Blueprint Part 3).
+All three original findings had **one cause**. Lane 2b anchored on the owner
+for any first-person question, and lane 3 hopped every `about` edge from that
+anchor scoring each `confidence * 0.5 + 0.05` — an expression in which the
+**query does not appear**. Four different questions returned byte-identical
+output:
 
-**2. Every noisy query is first-person.** All 131 noise lines come from
-questions like *"what is my dog's name"*, *"which car do I drive"*, *"what is
-my blood type"* — eight owner facts returned each time. The self-anchor
-(lane 2b) fires on any first-person question and **has no relevance gate**.
-That one behaviour is the entire honesty gap.
+```
+"What is my job?"        ─┐
+"Which city am I in?"     ├─►  f004, f015, f042, f017, f033, f047, f052, f060
+"Where am I employed?"    │
+"What is my blood type?" ─┘    ← nothing in the store answers this one
+```
 
-**3. The top hit is the right kind less than half the time.** A *"where"*
-question answered with a churn number is wrong even when the fact concerns the
-right person. Shape-aware ranking exists but does not reach far enough.
+That is not retrieval. It is a dossier dump triggered by the word *"my"*, and
+it explains all of it: the noise, the honesty gap, the flat `top1_kind` (the
+top hit was literally the same fact every time), and both recall gaps — the
+real answer was crowded out of the eight-item budget by the same eight facts.
+
+**1. The superseded fact wins → CLOSED (20% → 60%).** Supersession is now
+conditional on the question's tense. A superseded fact is withheld from a
+present-tense question and **admitted** to a question about the past, because
+L5 says nothing is deleted, and a reader that can never see a superseded claim
+has deleted it at read time. *"Where do I not work anymore?"* is answered by
+*"I used to work at Intercom"* — the exact fact a blanket filter buries.
+
+**2. Every noisy query is first-person → CLOSED (34.4% → 71.9% honesty,
+131 → 16 noise lines).** The self-anchor has a relevance gate, and behind it a
+sufficiency check: a *typed* question may be answered on the kind signal alone
+(*"where do I work"* → *"I run product at Nummo"*, zero shared vocabulary), but
+a question whose **topic noun is unknown** may not. So *"Who is my dentist?"*
+returns silence while *"Who is my co-founder?"* answers — same interrogative,
+and the difference falls out of one rule rather than a list of things to
+suppress. Unknown stays unknown.
+
+**3. The top hit is the right kind less than half the time → IMPROVED
+(42.9% → 54.8%).** Kind is now a graded signal that reads the **world model
+first** (a graph-typed entity scores 1.0) and its own surface patterns second.
+The ordering matters more than the number: the signal improves as extraction
+improves, so E6's typed claims raise this without touching the ranker.
+
+**4. NEW FINDING — negation recall is limited by REACH, not ranking
+(20% → 30%).** Polarity is now read on both sides, which fixed the *precision*
+half: an affirmative fact no longer answers a negated question. Recall stays
+low for a different reason entirely — *"What did we turn down?"* and *"We
+rejected the Bangalore relocation"* share no vocabulary, as do
+*"paused"*/*"on hold"* and *"database"*/*"Postgres"*. No surface rule reaches
+those. The dense lane does. **A synonym table tuned to this corpus would score
+well here and teach the engine nothing**, so none was written.
+
+## The Context Engine sat above this floor and undid part of it
+
+The gate above is the PIC floor. In production `chat.js` calls it through the
+Context Engine, which under `AQUA_CONTEXT_V2=on` adds a second lane: hop every
+`about` edge from every focus entity and admit whatever comes back. That is the
+same defect the floor gate closes, reimplemented one layer up — and because it
+runs ABOVE the floor, it silently reversed it.
+
+Measured on the same 200 queries:
+
+```
+                              floor    after CE
+32 silence-expecting queries     16          23     +7 noise, 6 queries
+168 answerable queries          122         119     -3 answers
+answers CE contributed            —           0
+```
+
+Not merely noisier — **net harmful**. The flood of hopped facts crowded real
+answers out of the eight-item budget, and the lane contributed nothing of its
+own to offset it.
+
+**The sharpest part was a self-knowledge failure.** The user's self entity is
+labelled `You` — AQUA's name for the user, written from AQUA's point of view.
+Matching that label against query tokens got the reference backwards in both
+directions at once:
+
+```
+"Can you fix your own bug?"  → MATCHED   → hopped the user's whole dossier
+                                            ...but "you" means AQUA
+"Where do I work?"           → NO MATCH  → "I" shares no letters with "You"
+                                            ...and first person IS the user
+```
+
+The self entity is now anchored on first-person scope — the signal the floor
+already computes — and never on the word "you". The reach lane is gated with
+the **same scorer** the floor uses, imported from `questionShape.js` rather
+than copied, because two gates that can disagree about the same fact will.
+Floor items are never re-judged: the assembler selects from the pool, it does
+not re-litigate the floor.
+
+After: silence-query noise back to 16 with zero re-added, answerable recall
+back to 122, and `reachGated` reports what the lane withheld.
+
+## Running one suite is not running the gate
+
+The relevance gate was built against `retrieval-core` and reported clean
+against `retrieval-core`. The full gate then showed it had cost **capture-core**
+`retrievability_rate 89.5% → 78.9%`, four facts written and unreachable instead
+of two.
+
+Two real gaps, both in general English rather than anything corpus-specific:
+
+- **Copular role statements.** The role patterns were verb-only, so *"I'm the
+  CTO at Halcyon Labs"* offered no role and *"What is my role?"* could not
+  reach a statement that answers it in five words.
+- **Goal statements.** *"What is my target?"* against *"I want to hit 10,000
+  active merchants by December"* shares no vocabulary at all. `goal` is now a
+  kind of its own — it is named in the canonical world model beside facts and
+  preferences, and without a kind it was reachable only by luck.
+
+Both fixed; capture-core is back to 89.5%. The lesson is in the process, not
+the patch: **a metric tuned against one suite will be paid for out of another,
+and only the full gate shows the invoice.**
+
+## Two things this number is not
+
+**The corpus is 60 facts.** Lexical precision degrades with scale and these are
+an upper bound. RETRIEVE-SCALE is unbuilt.
+
+**The adapter still understates the engine in two places.** It seeds evidence
+without a `confidence` and drops `supersededBy` from the dataset, so the
+engine's currency filter is never exercised by the harness — the 60% above is
+earned by tense-conditional ranking alone. Both are adapter-fidelity bugs, both
+predate this work, and both were left alone deliberately: fixing them moves the
+baseline, and adapter gains must not be reported inside a number claiming
+engine gains.
 
 ## The adapter can lie in two places, not one
 

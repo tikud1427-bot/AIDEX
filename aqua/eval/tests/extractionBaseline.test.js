@@ -46,17 +46,25 @@ describe('extraction baseline — the adapter is not a stub', () => {
     assert.equal(extractWithCurrentEngine('Fix this for me please.').facts.length, 0);
   });
 
-  test('FINDING: a request CONTAINING a proper noun still produces a fact', () => {
-    // "Explain how OAuth works to me." emits a fact, because OAuth reads as an
-    // entity and the lane has no notion of a request. This is one of the 10
-    // false positives in the baseline, and it is the same failure class as
-    // "I need to check the logs" — fixed once at the self-declaration gate and
-    // still live on the general path.
+  test('CLOSED: a request containing a proper noun no longer produces a fact', () => {
+    // WAS a fact. "Explain how OAuth works to me." emitted one because OAuth
+    // reads as an entity and the lane had no notion of a request. Six of the
+    // ten false positives were this shape — the same failure class already
+    // fixed once at the self-declaration gate, with the general path only now
+    // catching up.
     //
-    // Written as an assertion of what the engine DOES. The first version of
-    // this test asserted silence, which is what I assumed rather than what I
-    // had measured.
-    assert.equal(extractWithCurrentEngine('Explain how OAuth works to me.').facts.length, 1);
+    // An imperative stored as a fact does not stay harmless. It sits in the
+    // world model and is retrieved later as though the user had told us
+    // something about themselves, which is how a system ends up describing a
+    // person back to themselves using their own to-do list.
+    //
+    // Measured: false_positives 10 → 8, silence_on_negatives 75% → 80%, and
+    // detection_recall UNCHANGED at 61.3% — the gate removed only noise.
+    assert.equal(extractWithCurrentEngine('Explain how OAuth works to me.').facts.length, 0);
+    assert.ok(BASELINE.metrics.silence_on_negatives >= 0.8,
+      `silence ${BASELINE.metrics.silence_on_negatives} — regression against 0.80`);
+    assert.ok(BASELINE.metrics.detection_recall >= 0.61,
+      'the request gate cost real claims — it must remove only noise');
   });
 
   test('FINDING: the speaker is recognised only when the sentence declares them', () => {
@@ -155,13 +163,32 @@ describe('extraction baseline — reproduces the committed figures', () => {
 // ── What the baseline actually says ──────────────────────────────────────────
 
 describe('extraction baseline — the findings, pinned', () => {
-  test('predicate and fidelity are ZERO — structurally, not by bad luck', () => {
-    // The lane emits a verbatim statement and an entity list. There is no
-    // predicate field and no polarity/modality/time field anywhere in its
-    // output, so these cannot be non-zero until the schema changes. This is
-    // the single clearest statement of what E5 and E6 are for.
-    assert.equal(BASELINE.metrics.predicate_accuracy, 0);
-    assert.equal(BASELINE.metrics.fidelity_accuracy, 0);
+  test('CLOSED: fidelity is read and STORED — polarity, modality, time', () => {
+    // WAS 0.0%. The lane emitted a verbatim statement and an entity list, so
+    // "I don't use Kubernetes" was stored as an ASSERTED fact. The text kept
+    // the "don't", but nothing in the DATA said the claim was negative, and
+    // every consumer had to re-derive it from prose — two derivations of the
+    // same thing that can disagree, silently, on the way to the model.
+    //
+    // Fidelity is now read at write time (`claimFidelity.js`). These are
+    // GRAMMATICAL properties of the sentence, which is why they were reachable
+    // without the claim schema: "I don't", "I want to", "if we", "she said",
+    // "last month" are all marked in the surface form. Reading them is parsing.
+    assert.ok(BASELINE.metrics.fidelity_accuracy >= 0.55,
+      `fidelity ${BASELINE.metrics.fidelity_accuracy} — regression against 0.551`);
+  });
+
+  test('OPEN: predicate is STILL zero, and is not being faked', () => {
+    // A predicate is a relation from a controlled vocabulary — choosing
+    // `works_at` over `role_is` is a semantic judgement that belongs to E5's
+    // schema and E6's model-backed pipeline. Surface rules guessing predicate
+    // names would score against THIS dataset and transfer nowhere.
+    //
+    // So this stays 0, and the test is here to make sure it stays honestly 0.
+    // If it moves, the question is not "did it improve" but "did someone fit
+    // a predicate vocabulary to the labels".
+    assert.equal(BASELINE.metrics.predicate_accuracy, 0,
+      'predicate moved — verify a real schema landed, not a regex fitted to the labels');
   });
 
   test('detection is well short of complete', () => {

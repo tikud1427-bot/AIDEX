@@ -201,11 +201,32 @@ describe('the promotion rule', () => {
 });
 
 describe('the committed baseline is what E6 must beat', () => {
-  test('predicate and fidelity are 0.0% today — structurally, not by accident', () => {
-    // If these ever read non-zero for the OLD lane, the comparison below has
-    // silently changed meaning.
+  test('THE BAR MOVED: fidelity is no longer zero, so E6 must beat a real number', () => {
+    // This assertion used to read `fidelity_accuracy === 0`, with the note "if
+    // these ever read non-zero for the OLD lane, the comparison below has
+    // silently changed meaning." It did read non-zero, and the meaning HAS
+    // changed — deliberately, not silently.
+    //
+    // The old lane now reads polarity, modality and time at write time
+    // (`knowledgeExtraction/claimFidelity.js`), because those are grammatical
+    // properties of the sentence rather than schema-dependent ones. Measured
+    // 0.0% → 55.1%.
+    //
+    // The consequence for E6 is the point of updating this rather than
+    // deleting it: E6 no longer gets credit for emitting fidelity at all. It
+    // has to beat 55.1%, and a model-backed pipeline that cannot outperform a
+    // regex on negation and modality is not ready to replace one.
+    assert.ok(BASELINE.fidelity_accuracy >= 0.55,
+      `fidelity ${BASELINE.fidelity_accuracy} — the bar regressed`);
+  });
+
+  test('predicate is STILL 0.0% — the one thing E6 gets for free', () => {
+    // Unchanged and deliberately so. A predicate is a relation from a
+    // controlled vocabulary; guessing `works_at` over `role_is` from surface
+    // patterns would fit this corpus and transfer nowhere. This is the part of
+    // the comparison that genuinely requires the schema, and it stays zero so
+    // that E6's gain there is real.
     assert.equal(BASELINE.predicate_accuracy, 0);
-    assert.equal(BASELINE.fidelity_accuracy, 0);
   });
 
   test('detection recall is 61.3%, which is also the gate ceiling measured in PR-6', () => {
