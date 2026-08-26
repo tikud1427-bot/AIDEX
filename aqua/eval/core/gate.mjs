@@ -32,12 +32,58 @@ export const EPSILON = 1e-9;
 /** Metrics where a larger number is worse. Everything else is higher-is-better. */
 export const LOWER_IS_BETTER = new Set([
   'noise_lines', 'noisy_queries', 'false_positives',
+  // A wrongly-admitted segment costs an extractor call and can mint a bad
+  // entity. Fewer is better, and the gate said otherwise: it reported
+  // `n_false_admits 17 → 16` as a REGRESSION and blocked on it, which is the
+  // exact inversion this file's header warns about, pointing the other way.
+  'n_false_admits', 'n_captured_but_unreachable',
+  // Found by widening the completeness test to every baseline instead of a
+  // hand-listed two: forensic-edited reports this and nobody had declared it,
+  // so the gate would have waved through a DOUBLING of false positives on that
+  // suite as an improvement.
+  'n_false_positives',
 ]);
 
-/** Metrics that are counts of the dataset, not quality. Compared for equality. */
+/**
+ * Metrics that describe the dataset or the route taken, not quality.
+ *
+ * `n_via_*` counts which lane admitted a segment. They move whenever an
+ * upstream lane gets better at its job — improving the entity extractor pushed
+ * `n_via_cue_proper_noun` 45 → 29 because the cue fallback was no longer
+ * needed, and the gate read a 16-point drop as a regression while
+ * `gate_recall` had not moved at all.
+ *
+ * A route count is a diagnostic. Reported, never gated: there is no direction
+ * in which it is "better", and pretending there is turns a healthy shift in
+ * where work happens into a blocked build.
+ */
 export const STRUCTURAL = new Set([
   'positives', 'negatives', 'labelled_claims',
-  'answerable_queries', 'silence_queries',
+  'answerable_queries', 'silence_queries', 'n_claim_bearing',
+]);
+
+/**
+ * DIAGNOSTIC — reported, compared, and never gated in either direction.
+ *
+ * STRUCTURAL was the wrong home for these and the distinction is worth keeping
+ * sharp. A structural change means the DATASET moved, so every other metric now
+ * means something different and the run must stop. A diagnostic change means
+ * the SYSTEM moved work from one lane to another, which is often the intended
+ * result of an improvement.
+ *
+ * Route counts are the clear case. Improving the entity extractor pushed
+ * `n_via_cue_proper_noun` 45 → 29, because the cue fallback was no longer
+ * needed to catch third-person subjects — while `gate_recall` did not move at
+ * all. Gating that as a regression blocks the build for getting better, and
+ * gating it as structural would claim the dataset had changed, which is worse:
+ * it is a true statement about the wrong thing.
+ *
+ * There is no direction in which a route count is "better". Report it, let a
+ * human read it, and gate on the quality metrics next to it.
+ */
+export const DIAGNOSTIC = new Set([
+  'n_admitted',
+  'n_via_cue_proper_noun', 'n_via_declarative_intent', 'n_via_entity_extractor',
 ]);
 
 /**
@@ -106,6 +152,11 @@ export function compareToBaseline(baseline, report) {
       if (!same) {
         blocking.push(`DATASET SHAPE CHANGED: ${name} ${was} → ${now} — every other metric now means something different`);
       }
+      continue;
+    }
+
+    if (DIAGNOSTIC.has(name)) {
+      rows.push({ name, was, now, delta, verdict: VERDICT.PASS });
       continue;
     }
 

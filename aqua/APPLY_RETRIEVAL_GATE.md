@@ -1,6 +1,6 @@
-# AQUIPLEX — relevance gate + claim fidelity
+# AQUIPLEX — relevance gate + claim fidelity + subject recall
 
-Cumulative (sessions 1-3). Supersedes every earlier tarball.
+Cumulative (sessions 1-4). Supersedes every earlier tarball.
 
 Extract from the REPO ROOT (the directory containing `aqua/`):
 
@@ -9,7 +9,7 @@ Extract from the REPO ROOT (the directory containing `aqua/`):
 ## Verify
 
     cd aqua
-    node scripts/run-tests.mjs     # 2862 tests / 339 suites / 0 fail / 1 skip
+    node scripts/run-tests.mjs     # 2873 tests / 341 suites / 0 fail / 1 skip
     npm run eval:gate              # ALL 7 suites PASS
 
 Run the FULL gate, not one suite. See "the invoice" below.
@@ -77,9 +77,21 @@ A metric tuned against one suite gets paid for out of another. Run the gate.
 
 ## Measured — extraction-core.v1, 200 cases / 167 labelled claims
 
-    overall_strict     15.0% -> 16.0%     fidelity      0.0% -> 55.1%
-    silence_negatives  75.0% -> 80.0%     predicate     0.0% -> 0.0%  (deliberate)
-    detection_recall   61.3% -> 61.3%     UNCHANGED - the request gate cost no claims
+    overall_strict     15.0% -> 18.0%     fidelity      0.0% -> 64.7%
+    detection_recall   61.3% -> 71.9%     subject       41.3% -> 55.7%
+    silence_negatives  75.0% -> 90.0%     false pos        10 -> 4
+    predicate           0.0% ->  0.0%     deliberate - see below
+
+    detection_people   55.0% -> 95.0%     detection_temporal  44.0% -> 64.0%
+
+Recall rose and false positives FELL over the same change. Recall bought by
+admitting more junk is not an improvement, so both are reported side by side.
+
+Third-person subjects were the blind spot: 58.9% for the speaker against 18.1%
+for named third parties. Tier 2 of the solo-proper-noun pass demanded a copula,
+so every person who DOES something was invisible ("Dev reports to me", "Rahul
+joined the billing team"). A subject is followed by a FINITE VERB, now tested
+morphologically rather than by keyword.
 
 The negation line was the serious one. The old lane stored "I don't use
 Kubernetes" as an ASSERTED fact: the text kept the "don't", but nothing in the
@@ -91,6 +103,21 @@ Predicate stays 0.0% ON PURPOSE. Choosing `works_at` over `role_is` is a
 semantic judgement belonging to E5's schema. A test pins it at zero with the
 note that if it moves, the question is not "did it improve" but "did someone fit
 a vocabulary to the labels".
+
+## A bug in the gate itself
+
+eval:gate BLOCKED on `n_false_admits 17 -> 16` - it treated admitting less junk
+as a regression. The direction table was fine; the test guarding its
+COMPLETENESS scanned a hand-listed two baselines, so metrics in gate-core and
+capture-core were never checked. Widening it to every baseline immediately found
+`n_false_positives` in forensic-edited, undeclared - the gate would have waved
+through a DOUBLING of false positives there.
+
+Added a third category, DIAGNOSTIC. Route counts (`n_via_*`) move when an
+upstream lane improves: better entity extraction pushed `n_via_cue_proper_noun`
+45 -> 29 while `gate_recall` did not move at all. Gating that blocks the build
+for getting better; calling it STRUCTURAL would claim the dataset changed, which
+is a true statement about the wrong thing.
 
 ## Known-open, documented in-tree
 
@@ -107,8 +134,10 @@ a vocabulary to the labels".
 - 60-fact corpus. Lexical precision degrades with scale; these are upper bounds.
 - E6 remains unwired (zero production callers). Not addressable without an LLM
   provider and Postgres. Its bar moved: e6Shadow now requires it to beat 55.1%
-  fidelity rather than 0%, so a model pipeline that cannot outperform a regex on
-  negation and modality is not ready to replace one.
+  71.9% detection, 55.7% subject recall and 64.7% fidelity - all regexes. A
+  model pipeline that cannot outperform surface rules on negation and modality
+  has not earned the request path. Predicate stays 0.0%, so E6's gain THERE is
+  real rather than inherited.
 - A dense retrieval lane needs real embeddings. `src/embeddings/` exists and has
   a test-injection hook, but no model host is reachable from this environment, so
   a dense lane could not be honestly MEASURED here. Not attempted.

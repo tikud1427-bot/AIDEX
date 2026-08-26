@@ -67,7 +67,7 @@
  * same validators.
  */
 import { createEvidence, createFact } from '../../files/evidence.js';
-import { readFidelity, isRequest } from './claimFidelity.js';
+import { readFidelity, isRequest, isInformationRequest } from './claimFidelity.js';
 import { isAboutSpeakersWorld } from './selfDeclaration.js';
 
 /** Conversational claims never reach document-grade confidence. */
@@ -220,6 +220,22 @@ export function buildConversationFacts(args, opts) {
     // back to themselves using their own to-do list.
     if (isRequest(sentence)) { skippedRequests += 1; continue; }
 
+    // A WH-QUESTION HAS NO CLAIM IN IT; A POLAR QUESTION DOES.
+    //
+    // "Why did the deploy fail?" produced a stored fact. The thing being asked
+    // for is exactly the part that is missing — all that is left is a
+    // presupposition, and storing a presupposition as a fact is how a guess
+    // becomes knowledge the user never gave.
+    //
+    // "Do I still report to Priya?" is different in kind. It puts a specific
+    // proposition up for confirmation, and both the proposition and the fact
+    // that the user is unsure about it are worth keeping. It is captured with
+    // `modality: 'question'` — recorded, explicitly NOT asserted.
+    //
+    // Gating both cost 3.7 points of detection recall and bought no honesty.
+    const fid0 = readFidelity(sentence);
+    if (isInformationRequest(sentence)) { skippedRequests += 1; continue; }
+
     // One Evidence per sentence: the snippet IS the claim's source text, so
     // the checksum makes re-ingesting the same sentence a no-op at the store.
     const ev = createEvidence({
@@ -258,7 +274,7 @@ export function buildConversationFacts(args, opts) {
     // The PREDICATE is not: choosing `works_at` over `role_is` is a semantic
     // judgement belonging to the claim schema, and guessing it from surface
     // patterns would fit this corpus and transfer nowhere.
-    const fid = readFidelity(sentence);
+    const fid = fid0;
     fact.polarity = fid.polarity;
     fact.modality = fid.modality;
     fact.tense    = fid.tense;

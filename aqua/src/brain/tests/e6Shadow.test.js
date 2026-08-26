@@ -229,7 +229,18 @@ describe('the committed baseline is what E6 must beat', () => {
     assert.equal(BASELINE.predicate_accuracy, 0);
   });
 
-  test('detection recall is 61.3%, which is also the gate ceiling measured in PR-6', () => {
-    assert.ok(Math.abs(BASELINE.detection_recall - 0.6125) < 1e-6);
+  test('THE BAR MOVED AGAIN: detection recall is 71.9%, not 61.3%', () => {
+    // This pinned 61.3% as "the gate ceiling measured in PR-6". The ceiling was
+    // never the gate's — it was Tier 2 of the solo-proper-noun pass demanding a
+    // copula, which made every third-person subject who DOES something
+    // invisible. detection_people went 55.0% → 95.0% when that was relaxed.
+    //
+    // E6 now has to beat 71.9% detection and 55.7% subject recall on top of
+    // 64.7% fidelity. Each of those is a regex, and a model-backed pipeline
+    // that cannot clear a regex has not earned the request path.
+    assert.ok(BASELINE.detection_recall >= 0.71,
+      `detection ${BASELINE.detection_recall} — the bar regressed`);
+    assert.ok(BASELINE.subject_recall >= 0.55,
+      `subject ${BASELINE.subject_recall} — the bar regressed`);
   });
 });

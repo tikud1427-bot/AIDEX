@@ -169,6 +169,38 @@ export function readFidelity(sentence) {
 const REQUEST_VERB = /^\s*(please\s+)?(explain|describe|tell|show|give|list|write|draft|make|create|generate|build|find|search|look|check|fix|help|summari[sz]e|translate|convert|compare|analyse|analyze|review|remind|send|open|run|add|remove|delete|update|set|change)\b/i;
 const REQUEST_FRAME = /^\s*(can|could|would|will)\s+you\b|^\s*please\b|\bfor me\b\s*[.?!]?\s*$/i;
 
+/**
+ * A wh-question: the speaker is asking for a value they do not have.
+ *
+ * POLAR AND WH QUESTIONS ARE NOT THE SAME KIND OF THING, and treating them
+ * alike was a mistake worth writing down. Both were gated as "a question
+ * asserts nothing", which is true of the ASSERTION and false of the CONTENT:
+ *
+ *   "Do I still report to Priya?"     polar — puts a specific proposition
+ *                                     (SELF reports_to Priya) up for
+ *                                     confirmation. The proposition is right
+ *                                     there, and the fact that the user is
+ *                                     asking about it is itself worth knowing.
+ *
+ *   "Why did the deploy fail?"        wh — the thing being asked for is
+ *                                     exactly the part that is missing. There
+ *                                     is no candidate claim to capture, only a
+ *                                     presupposition, and storing a
+ *                                     presupposition as a fact is how a guess
+ *                                     becomes knowledge the user never gave.
+ *
+ * So a polar question keeps its claim under `modality: 'question'` — captured,
+ * and explicitly NOT asserted — while a wh-question yields nothing. Gating
+ * both cost 3.7 points of detection recall for no honesty gain.
+ */
+const WH_QUESTION = /^\s*(what|why|how|who|whom|whose|when|where|which)\b/i;
+
+export function isInformationRequest(sentence) {
+  const text = String(sentence ?? '').trim();
+  if (!text) return false;
+  return WH_QUESTION.test(text);
+}
+
 export function isRequest(sentence) {
   const text = String(sentence ?? '').trim();
   if (!text) return false;

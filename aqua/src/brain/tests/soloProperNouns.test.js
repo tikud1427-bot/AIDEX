@@ -67,11 +67,45 @@ test('ordinary nouns opening a sentence do NOT become entities', () => {
   }
 });
 
-test('a sentence-initial capital with no naming predicate is refused', () => {
-  // "Dev handles engineering" — a real name, deliberately NOT captured, because
-  // the same shape licenses "Work handles the rest". The stated cost of the
-  // conservative tier; recorded so it is a decision rather than a surprise.
-  assert.deepEqual(names('Dev handles engineering'), []);
+test('REVERSED: a sentence-initial capital before a FINITE VERB is now captured', () => {
+  // This test used to assert `names('Dev handles engineering') === []`, with
+  // the note that it was "the stated cost of the conservative tier; recorded so
+  // it is a decision rather than a surprise." The decision has been reversed
+  // deliberately, and the surprise is what it was costing.
+  //
+  // Tier 2 required a copula (`is/was/are/were/has/have/had`), so every person
+  // who DOES something was invisible: "Dev reports to me", "Rahul joined the
+  // billing team", "Maya introduced me to an investor". Measured on
+  // `extraction-core.v1`, subject recall split 58.9% for the speaker against
+  // 18.1% for named third parties — and other people ARE most of a user's
+  // world.
+  //
+  // A subject is followed by a finite verb, not specifically by a copula, and
+  // that is now tested morphologically (3rd-person `-s`, regular `-ed`, or the
+  // closed irregular class) rather than by a keyword list.
+  assert.deepEqual(names('Dev handles engineering'), ['Dev']);
+  assert.deepEqual(names('Rahul joined the billing team'), ['Rahul']);
+});
+
+test('the guard that replaced it: a common noun before a verb is still refused', () => {
+  // The old copula rule was doing double duty as a false-positive guard. That
+  // job now belongs entirely to COMMON_SUBJECT, which makes that list
+  // load-bearing rather than a second opinion — so it is tested directly.
+  //
+  // "Work handles the rest" was the original counter-example and it still must
+  // not mint an entity. A bad entity is worse than a missing one: it becomes a
+  // node other turns attach facts to.
+  assert.deepEqual(names('Work handles the rest'), []);
+  assert.deepEqual(names('Latency increased last week'), []);
+  assert.deepEqual(names('Onboarding slowed in March'), []);
+});
+
+test('interrogatives and SQL keywords never become entities', () => {
+  // Broadening the verb test began minting these: they are capitalised,
+  // sentence-initial, and followed by a finite verb.
+  assert.deepEqual(names('Why did the deploy fail?'), []);
+  assert.deepEqual(names('What are the trade-offs here?'), []);
+  assert.ok(!names('SELECT * FROM users WHERE id = 1;').includes('FROM'));
 });
 
 test('calendar words and contractions never become entities', () => {

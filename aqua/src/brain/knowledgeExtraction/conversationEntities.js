@@ -84,6 +84,12 @@ import { hasSpeakersWorld } from './selfDeclaration.js';
 
 /** Tokens that are never an entity on their own, whatever cue precedes them. */
 const BLOCK = new Set((
+  // SQL keywords. A pasted query is capitalised by convention rather than
+  // because it names anything, and its keywords land MID-sentence, where the
+  // sentence-initial COMMON_SUBJECT guard never runs — so
+  // "SELECT * FROM users WHERE id = 1" minted FROM and WHERE as entities.
+  'select,from,where,insert,into,update,delete,join,inner,outer,left,right,group,order,' +
+  'limit,offset,values,table,index,null,true,false,and_,or_,not_,count,sum,avg,max,min,' +
   'a,an,the,and,or,but,my,your,his,her,its,our,their,me,him,them,us,i,you,he,she,it,we,they,' +
   'this,that,these,those,here,there,now,then,very,really,quite,so,too,also,just,still,not,no,' +
   'good,bad,great,fine,okay,ok,nice,tired,busy,happy,sad,angry,sure,right,wrong,better,worse,' +
@@ -232,7 +238,14 @@ const COMMON_SUBJECT = new Set((
   'meeting,meetings,standup,sprint,roadmap,backlog,ticket,tickets,bug,bugs,issue,issues,' +
   'deadline,launch,release,version,feature,features,plan,plans,goal,goals,problem,problems,' +
   'question,questions,answer,answers,idea,ideas,thing,things,stuff,part,point,reason,' +
-  'everybody,most,some,many,few,both,either,neither,each,every,another,other,others'
+  'everybody,most,some,many,few,both,either,neither,each,every,another,other,others,' +
+  // Interrogatives. A closed function-word class, and never a name — but they
+  // are sentence-initial and capitalised, so broadening the Tier-2 verb test
+  // began minting "What" and "Why" as entities.
+  'what,why,how,who,whom,whose,when,where,which,whether,' +
+  // SQL keywords. A pasted query is capitalised by convention, not because it
+  // names anything: "SELECT * FROM users WHERE id = 1" yielded FROM and WHERE.
+  'select,from,where,insert,update,delete,join,group,order,limit,values,table,null,true,false'
 ).split(','));
 
 /** True when the character before `index` ends a sentence (or starts the text). */
@@ -248,6 +261,62 @@ function isSentenceInitial(text, index) {
 
 /** The sentence-initial naming predicate: "Razorpay is …", "Nummo's team was …". */
 const NAMING_PREDICATE = /^(?:['’]s\s+\w+\s+|['’]s\s+)?\s*(?:is|was|are|were|has|have|had)\b/i;
+
+/**
+ * Irregular past-tense and 3rd-person forms — a CLOSED CLASS in English.
+ *
+ * Listing them is not corpus-fitting the way a list of domain nouns would be:
+ * English has a finite, well-documented set of strong verbs and it has not
+ * grown in centuries. Regular forms are caught morphologically below.
+ */
+const IRREGULAR_VERB = new Set((
+  'said,told,met,left,built,wrote,sent,got,came,began,won,lost,kept,held,found,knew,' +
+  'thought,brought,bought,ran,led,grew,drew,spoke,chose,rose,fell,paid,sold,took,made,' +
+  'gave,went,did,saw,set,put,let,quit,cut,read,cost,hit,shut,split,spread,became,began'
+).split(','));
+
+/**
+ * Does a subject stand in front of this text?
+ *
+ * WHY THE COPULAR TEST ALONE WAS NOT ENOUGH
+ * -----------------------------------------
+ * Tier 2 admitted a sentence-initial capitalised word only when `is/was/are/
+ * were/has/have/had` followed it. That is a sound test for "Razorpay is our
+ * competitor" and it silently rejected every person who does something:
+ *
+ *     "Dev reports to me."                → `reports`    rejected
+ *     "Rahul joined the billing team."    → `joined`     rejected
+ *     "Maya introduced me to an investor."→ `introduced` rejected
+ *
+ * Measured on `extraction-core.v1`, subject recall for NAMED (third-person)
+ * subjects was 18.1% against 58.9% for the speaker. Colleagues, reports and
+ * counterparties are most of the user's world, and the lane could not see them
+ * unless the sentence happened to be copular.
+ *
+ * A subject is followed by a FINITE VERB, not specifically by a copula. This
+ * tests for one morphologically — 3rd-person `-s`, regular past `-ed`, or a
+ * member of the closed irregular class — which generalises to verbs nobody
+ * thought to list rather than to the ones present in a dataset.
+ *
+ * THE FALSE-POSITIVE RISK IS REAL AND IS HELD BY A DIFFERENT GUARD.
+ * "Latency increased last week" would mint `Latency` as a name. That is what
+ * COMMON_SUBJECT is for, and this change makes that list load-bearing rather
+ * than a second opinion — which is why the blocklist is extended alongside it
+ * and why `silence_on_negatives` is checked as carefully as recall. A bad
+ * entity is worse than a missing one: it becomes a node other turns attach
+ * facts to.
+ */
+function subjectPrecedes(rest) {
+  if (NAMING_PREDICATE.test(rest)) return true;
+  const m = rest.match(/^(?:['’]s)?\s+([a-z][a-z'’-]{1,})\b/i);
+  if (!m) return false;
+  const w = m[1].toLowerCase();
+  if (IRREGULAR_VERB.has(w)) return true;
+  // Regular finite forms. `-ing` is excluded: "Payments processing failed"
+  // has a participle after the candidate and no subject relation at all.
+  if (/(?:ed|es|s)$/.test(w) && w.length > 3 && !/(?:ss|us|is|ous)$/.test(w)) return true;
+  return false;
+}
 
 /**
  * Solo capitalised proper nouns the shared extractor discarded.
@@ -277,7 +346,7 @@ function soloProperNouns(text, covered) {
       // Tier 2 — capitalisation proves nothing here.
       if (COMMON_SUBJECT.has(lower)) continue;
       const rest = text.slice(m.index + raw.length);
-      if (!NAMING_PREDICATE.test(rest)) continue;
+      if (!subjectPrecedes(rest)) continue;
     }
 
     seen.add(lower);

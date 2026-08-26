@@ -10,38 +10,55 @@ code can do, not what a `.env` currently permits
 
 ```
                           before    after
-overall_strict_accuracy    15.0%    16.0%     all four levels must hold
+overall_strict_accuracy    15.0%    18.0%     all four levels must hold
 
-detection_recall           61.3%    61.3%     a claim-bearing sentence produced something
-subject_recall             41.3%    41.3%     the claim's subject was recognised
+detection_recall           61.3%    71.9%
+subject_recall             41.3%    55.7%
 predicate_accuracy          0.0%     0.0%     ← still structural, deliberately
-fidelity_accuracy           0.0%    55.1%     ← polarity · modality · time
+fidelity_accuracy           0.0%    64.7%     ← polarity · modality · time
 
-silence_on_negatives       75.0%    80.0%     false positives 10 → 8
+silence_on_negatives       75.0%    90.0%     false positives 10 → 4
 ```
+
+Recall rose and false positives FELL over the same change. That pairing is the
+claim worth making: recall bought by admitting more junk is not an improvement,
+and the two are reported side by side so the trade cannot hide.
+
+## Detection by category
+
+| category | before | after | reading |
+|---|--:|--:|---|
+| people | 55.0% | **95.0%** | the copula rule hid every third party who DOES something |
+| identity | 85.0% | 90.0% | first-person disclosure was always the lane's strength |
+| modality | 68.0% | 72.0% | the mood is stored now, not just the sentence |
+| temporal | 44.0% | 64.0% | |
+| task | 53.3% | 66.7% | |
+| negation | 45.0% | 50.0% | **and it is no longer stored positively** |
+| decision | 53.3% | 53.3% | unchanged — the remaining weak spot |
 
 ## One zero closed, one left standing on purpose
 
-They were both structural, and they were not the same kind of structural.
+`predicate_accuracy` and `fidelity_accuracy` were both 0.0%, and both were
+described as structural. They were not the same kind of structural.
 
 **Fidelity was reachable and is now read.** Polarity, modality and time are
 GRAMMATICAL properties of the sentence — `"I don't"`, `"I want to"`, `"if we"`,
-`"she said"`, `"last month"` are all marked in the surface form. Reading them is
-parsing, not inference, and it needed no schema. The lane now writes them onto
-the claim (`brain/knowledgeExtraction/claimFidelity.js`).
+`"she said"`, `"last month"` are marked in the surface form. Reading them is
+parsing, not inference, and it needed no schema. The lane writes them onto the
+claim (`brain/knowledgeExtraction/claimFidelity.js`).
 
 **Predicate is not, and no attempt was made.** A predicate is a relation drawn
 from a controlled vocabulary, and choosing `works_at` over `role_is` is a
 semantic judgement belonging to E5's schema and E6's model-backed pipeline.
 Surface rules guessing predicate names would score against *this* dataset and
-transfer nowhere. A test now pins it at zero with the note that if it moves, the
+transfer nowhere. A test pins it at zero with the note that if it moves, the
 question is not "did it improve" but "did someone fit a vocabulary to the
 labels".
 
 ## Why the negation line was the serious one
 
 The old baseline recorded `negation detection 45.0%` — **and every one captured
-was stored positively.** That is not a scoring artefact:
+was stored positively.** Not a scoring artefact:
 
 ```
 user said:   "I don't use Kubernetes."
@@ -54,67 +71,94 @@ polarity from prose — the retrieval gate did exactly that on every read — an
 two derivations of the same thing can disagree. The one that disagrees silently
 is the one that reaches the model.
 
-Polarity is now stored, and `statementPolarity` reads the stored field first,
+Polarity is stored now, and `statementPolarity` reads the stored field first,
 falling back to prose only for facts written before this landed and for the
 document lane, which does not run through it. Same tier ordering as
 `offeredKinds`: what the world model knows beats what a regex can guess.
 
+## Third-person subjects: 18.1% against 58.9%
+
+Splitting `subject_recall` by subject kind showed the lane was not uniformly
+weak — it was blind in one direction:
+
+```
+SELF  subjects   58.9%
+NAMED subjects   18.1%     ← colleagues, reports, counterparties
+```
+
+Tier 2 of the solo-proper-noun pass admitted a sentence-initial capitalised word
+only when a copula followed it. Sound for *"Razorpay is our competitor"*, and it
+rejected every person who DOES something:
+
+```
+"Dev reports to me."                  → `reports`    rejected
+"Rahul joined the billing team."      → `joined`     rejected
+"Maya introduced me to an investor."  → `introduced` rejected
+```
+
+Other people are most of a person's world, and the lane could not see them
+unless the sentence happened to be copular. A subject is followed by a FINITE
+VERB, not specifically by a copula, and that is now tested morphologically
+(3rd-person `-s`, regular `-ed`, or the closed irregular class) rather than by
+keyword — so it generalises to verbs nobody thought to list.
+
+The false-positive risk this creates is real and is now held entirely by
+`COMMON_SUBJECT`, which makes that list load-bearing rather than a second
+opinion. Broadening the test began minting `What`, `Why` and SQL keywords as
+entity names; both are closed function-word classes and are blocked directly.
+
+## Polar and wh questions are not the same kind of thing
+
+The first version of the question gate dropped every question, reasoning that
+"a question asserts nothing". True of the assertion, false of the content:
+
+```
+"Do I still report to Priya?"    polar — puts a specific proposition up for
+                                 confirmation. The proposition is right there,
+                                 and the user's uncertainty about it is itself
+                                 worth knowing.
+"Why did the deploy fail?"       wh — the thing being asked for is exactly the
+                                 part that is missing. Only a presupposition is
+                                 left, and storing one as a fact is how a guess
+                                 becomes knowledge the user never gave.
+```
+
+A polar question keeps its claim under `modality: 'question'` — captured,
+explicitly NOT asserted. Gating both cost 3.7 points of detection recall and
+bought no honesty, because every negative it caught was wh-shaped anyway.
+
 ## The request gate, and the asymmetry behind it
 
 `"Explain how OAuth works to me."` produced a stored fact, because OAuth reads
-as an entity and the lane had no notion of a request. Six of the ten false
-positives were that shape — the same failure class already fixed once at the
-self-declaration gate, with the general path only now catching up.
+as an entity and the lane had no notion of a request. The gate is narrow on
+purpose — a LEADING imperative, or an explicit please/can-you frame — because
+the costs are not symmetric. A missed claim is recoverable: the user says it
+again, or it arrives from another turn. An imperative stored as a fact is not.
+It sits in the world model and is retrieved later as though the user had told us
+something about themselves, which is how a system ends up describing a person
+back to themselves using their own to-do list.
 
-The gate is narrow on purpose (a LEADING imperative, or an explicit
-please/can-you frame) because the costs are not symmetric. A missed claim is
-recoverable: the user says it again, or it arrives from another turn. An
-imperative stored as a fact is not — it sits in the world model and is retrieved
-later as though the user had told us something about themselves, which is how a
-system ends up describing a person back to themselves using their own to-do
-list.
+## The gate was pointed backwards on three metrics
 
-Measured: false positives 10 → 8, and **`detection_recall` unchanged at 61.3%**
-— the gate removed only noise. That second number is the one that mattered; a
-silence improvement bought with real claims would have been a regression
-wearing a better score.
+Found while running the full battery, not by looking for it. `eval:gate`
+BLOCKED on `n_false_admits 17 → 16` — it treated **admitting less junk as a
+regression**.
 
-## What this did to E6's bar
+The direction table was fine; the test guarding its completeness was not. It
+scanned a hand-listed *two* baselines, so metrics living in `gate-core` and
+`capture-core` were never checked. A completeness test with a hand-maintained
+list of what to be complete over is not a completeness test. Widening it to
+every baseline on disk immediately turned up `n_false_positives` in
+`forensic-edited`, undeclared — the gate would have waved through a DOUBLING of
+false positives on that suite as an improvement.
 
-`e6Shadow.test.js` asserted `fidelity_accuracy === 0` for the old lane, with the
-note *"if these ever read non-zero, the comparison below has silently changed
-meaning."* It does, and the meaning has changed — deliberately.
-
-E6 no longer gets credit for emitting fidelity at all. It has to beat **55.1%**,
-and a model-backed pipeline that cannot outperform a regex on negation and
-modality is not ready to replace one. Predicate stays at zero, so E6's gain
-*there* is real.
-
-## Detection by category — where the misses are
-
-| category | detection | reading |
-|---|--:|---|
-| identity | **85.0%** | first-person disclosure is the lane's strength |
-| modality | 68.0% | captures the sentence, loses the mood entirely |
-| people | 55.0% | third-person subjects are missed about half the time |
-| decision | 53.3% | |
-| task | 53.3% | |
-| negation | 45.0% | **and every one that IS captured is stored positively** |
-| temporal | **44.0%** | weakest — the category the engine handles least |
-
-## Two findings, pinned as tests
-
-**A request containing a proper noun still produces a fact.** `"Explain how
-OAuth works to me."` emits one, because OAuth reads as an entity and the lane
-has no notion of a request. Same failure class as `"I need to check the logs"`
-— fixed once at the self-declaration gate, still live on the general path. Six
-of the ten false positives are this shape.
-
-**The speaker is recognised only when the sentence declares them.** `"I run
-product at Nummo."` yields a self entity; `"I moved to Bangalore last month."`
-does not. Self recognition rides the self-declaration grammar rather than the
-pronoun, so first-person subjects are missed on most sentence shapes — the
-direct cause of subject_recall sitting at 41%.
+A third category was missing too. Route counts (`n_via_*`) record which lane
+admitted a segment, and they move whenever an upstream lane gets better at its
+job: improving the entity extractor pushed `n_via_cue_proper_noun` 45 → 29
+while `gate_recall` did not move at all. Gating that blocks the build for
+getting better; calling it STRUCTURAL would claim the dataset had changed, which
+is worse — a true statement about the wrong thing. They are now DIAGNOSTIC:
+reported, compared, never gated.
 
 ## The adapter, and the trap it avoids
 
@@ -146,16 +190,28 @@ break the adapter (the 0%-baseline trap) → 3.
 
 ## What E6 has to beat
 
-| metric | today | E6 target (Blueprint Part 11) |
-|---|--:|--:|
-| detection_recall | 61.3% | ≥ 70% (recall) |
-| predicate_accuracy | 0.0% | ≥ 85% (precision) |
-| fidelity — negation | 0.0% | ≥ 95% |
-| silence_on_negatives | 75.0% | should not regress |
+**The bar moved, and that is the point of writing it down.** E6 was going to be
+compared against a lane that scored 0.0% on fidelity and 61.3% on detection.
+Three of those numbers are no longer zero or low, so E6 no longer gets credit
+for emitting fidelity *at all* — it has to be BETTER at it than a regex.
 
-`silence_on_negatives` is the one to watch during E6: an LLM extractor that
-fires on requests would trade a real gain in recall for a worse false-positive
-rate, and a single averaged accuracy figure would hide it.
+| metric | old bar | today | E6 target (Blueprint Part 11) |
+|---|--:|--:|--:|
+| detection_recall | 61.3% | **71.9%** | ≥ 70% — already cleared by the regex |
+| subject_recall | 41.3% | **55.7%** | must beat 55.7% |
+| fidelity_accuracy | 0.0% | **64.7%** | ≥ 95% on negation |
+| predicate_accuracy | 0.0% | 0.0% | ≥ 85% — **the one E6 gets for free** |
+| silence_on_negatives | 75.0% | **90.0%** | must not regress |
+
+A model-backed pipeline that cannot outperform surface rules on negation and
+modality has not earned the request path. Predicate is the honest exception: it
+needs the schema, no surface rule can reach it, and it stays at zero precisely
+so that E6's gain there is real rather than inherited.
+
+`silence_on_negatives` is still the one to watch. An LLM extractor that fires on
+requests would trade a real gain in recall for a worse false-positive rate, and
+a single averaged accuracy figure would hide it. It is now at 90.0%, so there is
+more to lose than there was.
 
 ## Regenerating
 

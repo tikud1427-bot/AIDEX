@@ -57,11 +57,17 @@ describe('candidate gate — each positive signal earns its place', () => {
     admittedVia('I usually do deep work in the mornings.', 'declarative-intent');
   });
 
-  test('cue: proper noun — the third-person gap', () => {
-    // The whole reason the cues exist. resolveDeclarativeIntent requires a
-    // first-person marker, so nothing in the pipeline asked whether the user
-    // was describing their WORLD rather than themselves.
-    admittedVia('Sam owns the mobile app.', 'cue:proper-noun');
+  test('third-person subject — now found by the extractor, not the cue fallback', () => {
+    // This asserted `cue:proper-noun`. It still admits, but by a BETTER route:
+    // the entity extractor now finds "Sam" directly, because Tier 2 tests for a
+    // finite verb rather than demanding a copula. The cue existed to paper over
+    // exactly that gap.
+    //
+    // The route matters, not just the admission. `cue:proper-noun` means "no
+    // entity was resolved but the shape looked like a claim"; `entity-extractor`
+    // means the subject is a real resolved node other turns can attach facts
+    // to. The second is what a world model needs.
+    admittedVia('Sam owns the mobile app.', 'entity-extractor');
   });
 
   // THE REMAINING CUES NEVER FIRE ON THE EVAL CORPUS, AND THAT IS THE CORPUS,

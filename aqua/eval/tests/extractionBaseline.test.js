@@ -191,12 +191,22 @@ describe('extraction baseline — the findings, pinned', () => {
       'predicate moved — verify a real schema landed, not a regex fitted to the labels');
   });
 
-  test('detection is well short of complete', () => {
-    assert.ok(BASELINE.metrics.detection_recall < 0.7,
-      'detection improved past the recorded baseline — update it deliberately');
+  test('detection improved, and NOT by trading away silence', () => {
+    // WAS 61.3%, now 71.9%. Tier 2 of the solo-proper-noun pass required a
+    // copula, so every third party who DOES something was invisible: "Dev
+    // reports to me", "Rahul joined the billing team". detection_people alone
+    // went 55.0% → 95.0%.
+    //
+    // The second assertion is the one that matters. Recall bought by admitting
+    // more junk is not an improvement, and the honest check is that BOTH
+    // directions moved: false positives 8 → 4 over the same change.
+    assert.ok(BASELINE.metrics.detection_recall >= 0.71,
+      `detection ${BASELINE.metrics.detection_recall} — regression against 0.719`);
+    assert.ok(BASELINE.metrics.silence_on_negatives >= 0.90,
+      'recall rose while silence fell — that is a trade, not a gain');
   });
 
-  test('temporal and negation are the weakest categories', () => {
+  test('temporal and negation remain the weakest categories', () => {
     const m = BASELINE.metrics;
     assert.ok(m.detection_temporal < m.detection_identity);
     assert.ok(m.detection_negation < m.detection_identity);

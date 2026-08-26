@@ -40,6 +40,7 @@ const ENTS = [
   { id: 'k', canonical: 'Kubernetes', type: 'name', aliases: [] },
   { id: 's', canonical: 'Stripe', type: 'name', aliases: [] },
   { id: 'self', canonical: 'You', type: 'person', aliases: [], isSelf: true },
+  { id: 'dev', canonical: 'Dev', type: 'person', aliases: [] },
 ];
 
 const build = text => buildConversationFacts(
@@ -171,5 +172,91 @@ describe('claim fidelity — one canonical polarity, read by retrieval', () => {
   test('a fact written by the lane round-trips through the reader', () => {
     const f = firstFact("I don't use Kubernetes.");
     assert.equal(statementPolarity(f), 'negated');
+  });
+});
+
+// ── Third-person subjects: the user's world is mostly other people ───────────
+//
+// Tier 2 of the solo-proper-noun pass admitted a sentence-initial capitalised
+// word only when a copula followed it (`is/was/are/were/has/have/had`). Sound
+// for "Razorpay is our competitor", and it silently rejected every person who
+// DOES something:
+//
+//     "Dev reports to me."                 → `reports`    rejected
+//     "Rahul joined the billing team."     → `joined`     rejected
+//     "Maya introduced me to an investor." → `introduced` rejected
+//
+// Measured on `extraction-core.v1`, subject recall split sharply by subject
+// kind: 58.9% for the speaker, 18.1% for named third parties. Colleagues,
+// reports and counterparties are most of a person's world and the lane could
+// not see them unless the sentence happened to be copular.
+//
+// AFTER, and both directions moved the right way at once:
+//     subject_recall        41.3% → 55.7%
+//     detection_recall      61.3% → 71.9%
+//     silence_on_negatives  80.0% → 87.5%
+//     false_positives           8 → 5
+//
+// BITE, MEASURED (revert the named change → count failures):
+//   morphological subject test        → 3 fail
+//   wh vs polar question split        → 3 fail
+//   interrogative + SQL blocklist     → 2 fail
+
+import { extractWithCurrentEngine, surfacesOf } from '../../../eval/adapters/currentExtractor.mjs';
+
+const subjects = text => surfacesOf(extractWithCurrentEngine(text));
+
+describe('third-person subjects — a subject is followed by a VERB, not a copula', () => {
+  test('a person who DOES something is recognised', () => {
+    assert.ok(subjects('Dev reports to me.').has('dev'));
+    assert.ok(subjects('Rahul joined the billing team in March.').has('rahul'));
+    assert.ok(subjects('Maya introduced me to our first investor.').has('maya'));
+  });
+
+  test('the copular case that already worked still works', () => {
+    assert.ok(subjects('Razorpay is our main competitor.').has('razorpay'));
+  });
+
+  test('a common noun opening a sentence is NOT minted as a name', () => {
+    // This is the risk the broadening creates, and COMMON_SUBJECT is what
+    // holds it. A bad entity is worse than a missing one: it becomes a node
+    // other turns attach facts to.
+    assert.ok(!subjects('Latency increased last week.').has('latency'));
+    assert.ok(!subjects('Onboarding slowed in March.').has('onboarding'));
+    assert.ok(!subjects('Payments are our biggest cost.').has('payments'));
+  });
+
+  test('interrogatives and SQL keywords are never names', () => {
+    // Broadening the verb test began minting these, because they are
+    // sentence-initial, capitalised, and followed by a finite verb.
+    assert.ok(!subjects('Why did the deploy fail?').has('why'));
+    assert.ok(!subjects('What are the trade-offs here?').has('what'));
+    assert.ok(!subjects('SELECT * FROM users WHERE id = 1;').has('from'));
+  });
+});
+
+describe('questions — polar carries a claim, wh does not', () => {
+  test('a WH-question yields no stored fact', () => {
+    // The thing being asked for is exactly the part that is missing. What is
+    // left is a presupposition, and storing a presupposition as a fact is how
+    // a guess becomes knowledge the user never gave.
+    assert.equal(build('Why did the deploy fail?').facts.length, 0);
+    assert.equal(build('What are the trade-offs here?').facts.length, 0);
+    assert.equal(build('How do I set up Kubernetes locally?').facts.length, 0);
+  });
+
+  test('a POLAR question keeps its claim, marked as a question', () => {
+    // "Do I still report to Priya?" puts a specific proposition up for
+    // confirmation. Both the proposition and the fact that the user is unsure
+    // about it are worth keeping — recorded, and explicitly NOT asserted.
+    const f = firstFact('Are we still using Stripe?');
+    assert.ok(f, 'a polar question was dropped entirely');
+    assert.equal(f.modality, 'question', 'a queried proposition was stored as asserted');
+  });
+
+  test('gating BOTH kinds was measurably worse', () => {
+    // Blanket question-gating cost 3.7 points of detection recall and bought
+    // no honesty, because the negatives it caught were all wh-shaped anyway.
+    assert.ok(build('Should I make Dev the tech lead?').facts.length > 0);
   });
 });
