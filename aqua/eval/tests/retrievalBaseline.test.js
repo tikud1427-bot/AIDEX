@@ -141,16 +141,39 @@ describe('retrieval baseline — the findings, pinned', () => {
     assert.ok(m.recall_superseded >= 0.6, `superseded recall ${m.recall_superseded} — regression against 0.60`);
   });
 
-  test('OPEN: negation recall is limited by REACH, not ranking', () => {
-    // WAS 0.20, now 0.30. Polarity is now read on both the question and the
-    // statement, which fixed the PRECISION half — an affirmative fact no longer
-    // answers a negated question. Recall stays low for a different reason:
-    // "What did we turn down?" and "We rejected the Bangalore relocation" share
-    // no vocabulary, as do "paused"/"on hold" and "database"/"Postgres". No
-    // surface rule reaches those; the dense lane (E7) does. A synonym table
-    // tuned to this corpus would score well here and teach the engine nothing.
-    assert.ok(m.recall_negation >= 0.3, `negation recall ${m.recall_negation} — regression against 0.30`);
-    assert.ok(m.recall_negation < 0.6, 'negation solved without a dense lane — verify this is real, not fitted');
+  test('CLOSED: negation is reached by a CLAIM-ATTRIBUTE lane, not a dense one', () => {
+    // WAS 0.20, then 0.30, now 0.80.
+    //
+    // THIS TEST FIRED AS DESIGNED AND ITS PREMISE WAS WRONG. It asserted
+    // `recall_negation < 0.6` with the message "negation solved without a dense
+    // lane — verify this is real, not fitted", on the reasoning that "What did
+    // we turn down?" and "We rejected the Bangalore relocation" share no
+    // vocabulary, so only a dense lane could bridge them and any surface fix
+    // would be a synonym table fitted to this corpus.
+    //
+    // A THIRD OPTION EXISTED: retrieve on the claim's POLARITY instead of on
+    // its words. The question's negation was already parsed and the store
+    // already knew which facts were negated; no lane connected them, because
+    // every lane proposed candidates either lexically or by graph adjacency.
+    // Lane 5 (`retrievalIntelligence.js`) is that connection. It is not a
+    // synonym table and does not know this corpus.
+    //
+    // THE ANTI-FITTING EVIDENCE THE OLD ASSERTION ASKED FOR:
+    //   · noise_lines and unknown_honesty did NOT move. A lane fitted to the
+    //     labels buys recall with noise; this one bought none.
+    //   · The two remaining misses (q128, q135) both need "chose Postgres over
+    //     Mongo", where negation attaches to the OBJECT. Deliberately not
+    //     fixed — that genuinely needs E6 typed claims, and adding `over` as a
+    //     cue would have moved this number dishonestly.
+    //   · `blocked` and `lost` were considered for the cue list and excluded on
+    //     a general-English test, not a scoreboard test. `blocked` would have
+    //     flipped "Priya is blocked on the design tokens" to negated and
+    //     demoted the affirmative question that asks for it.
+    //
+    // The ceiling below is kept, pointed at the two object-level cases: if
+    // negation reaches 1.0 without E6 landing, something WAS fitted.
+    assert.ok(m.recall_negation >= 0.8, `negation recall ${m.recall_negation} — regression against 0.80`);
+    assert.ok(m.recall_negation < 1, 'object-level negation solved without E6 typed claims — verify this is real, not fitted');
   });
 
   test('NARROWED: the category/instance gap is bridged but not closed', () => {

@@ -29,7 +29,7 @@
 import { transition } from './knowledgeLifecycle.js';
 import { reasoningBoost } from './reasoningFeedback.js';
 import {
-  analyseQuestion, factAffinity, MIN_AFFINITY,
+  analyseQuestion, factAffinity, statementPolarity, MIN_AFFINITY,
 } from './questionShape.js';
 
 const TEMPORAL_CUE = /\b(when|before|after|timeline|first|then|earlier|later|history|sequence|order of|chronolog)\b/i;
@@ -162,6 +162,15 @@ const W_GRAPH    = 0.05;    // facts reached through the graph, not lexically
  * `questionShape.js`, shared with the Context Engine.
  */
 const MAX_SELF_ANCHORED = 5;
+
+/**
+ * How many facts the polarity lane may INSPECT.
+ *
+ * A bound, not a budget: it caps the scan, not the number of candidates. It
+ * matches `listFacts`' own default so the lane cannot become the reason a
+ * turn walks more of the store than any other lane already does.
+ */
+const POLARITY_LANE_SCAN = 200;
 
 /**
  * @param {object} deps - { evidenceStore, evidenceRetrieval, graph, queryEngine }
@@ -346,6 +355,80 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
     }
   }
 
+  // ── Lane 5: polarity — the claim-attribute lane ────────────────────────────
+  //
+  // THE GAP THIS CLOSES, AS MEASURED
+  // --------------------------------
+  // `recall_negation` was the worst number on `retrieval-core.v1`: 3/10. Read
+  // case by case, seven of the ten misses were NOT gating failures. The gate
+  // would have admitted the right fact; it never saw it. Every lane above
+  // proposes candidates on ONE of two bases — a word from the question appears
+  // in the statement (1), or an entity the question NAMES has an `about` edge
+  // to it (2/2b/3). "What did we turn down?" names no entity, and after the
+  // negation cue is stripped it has NO content words at all. Nothing could
+  // propose "We rejected the Bangalore relocation" and nothing did.
+  //
+  // So the question's POLARITY was understood, the store knew which facts were
+  // negated, and no lane connected the two. This is the first lane that
+  // retrieves on a CLAIM ATTRIBUTE rather than on surface words or graph
+  // adjacency — the "structured claims" lane the E7 roadmap names.
+  //
+  // WHY IT IS SAFE TO ADD A NON-LEXICAL LANE
+  // ----------------------------------------
+  // It cannot widen the answer to a question that should be silent, because it
+  // does not fire on one: a candidate still has to clear `factAffinity`, and
+  // the lane only runs when the QUESTION carries a negation cue. Measured on
+  // the 32 silence-expecting queries, ZERO read as negated.
+  //
+  // ⚠️ THIS LANE SCANS. `listFacts` walks the owner's facts; there is no
+  // polarity index, and adding a persisted one to serve two facts in sixty
+  // would be an index built for a benchmark. The cost is therefore COUNTED,
+  // not hidden — `stats.polarityScanned` reports how many facts were inspected,
+  // the same instrument AQUA_INDEXED_NOT_SCAN.md settled on, so the day this
+  // is a real cost the number says so instead of a timer that cannot fail.
+  //
+  // ⚠️ ONE HYPOTHESIS WAS BUILT HERE, MEASURED AT ZERO, AND REMOVED.
+  //
+  // `droppedSelfCap: 3` on q133 said a negated fact reached by lane 3's self
+  // hop was losing a `MAX_SELF_ANCHORED` slot to ordinary dossier lines. The
+  // fix looked obvious: record every negated id whether or not another lane
+  // saw it first, and exempt those from the cap on the grounds that a claim
+  // matching the question's polarity is present for what it SAYS, not because
+  // the asker is its subject.
+  //
+  // It was built, and reverting it changed nothing — q133 still hit, the lane
+  // still measured 8/10. The cap pressure came from somewhere else entirely:
+  // the over-broad past-tense bonus (see `questionShape.js`), and removing
+  // that removed the crowding. The exemption was closing a defect that no
+  // longer existed.
+  //
+  // It is not kept "in case". Twenty lines and a confident comment describing
+  // a defect they do not close is the shape a future reader trusts, and the
+  // argument for it may still be right — it is recorded in the PR as an
+  // unconverted hypothesis needing a case that isolates it, not as code.
+  const polarityCandidates = [];
+  let polarityScanned = 0;
+  if (shape.polarity === 'negated') {
+    for (const fact of ES.listFacts(ownerId, { limit: POLARITY_LANE_SCAN })) {
+      polarityScanned++;
+      if (statementPolarity(fact) !== 'negated') continue;
+      if (seenFactIds.has(fact.id)) continue;
+      seenFactIds.add(fact.id);
+      const evidence = ES.evidenceForFact(ownerId, fact.id);
+      polarityCandidates.push({
+        fact, evidence,
+        citations: evidence.map(deps.formatCitation),
+        confidence: fact.confidence,
+        score: (fact.confidence ?? 0.5) * 0.5,
+        via: 'polarity: negated claim',
+        // Not an anchor. The lane proposes on an ATTRIBUTE, which is not
+        // topical evidence — `_namedAnchor: false` would claim the graph
+        // reached it from something the query named, and nothing did.
+        _namedAnchor: undefined,
+      });
+    }
+  }
+
   // ── Rank: relevance × lifecycle × feedback, and DROP what nothing supports ─
   //
   // Order matters. Relevance is computed FIRST and gates; the lifecycle and
@@ -357,7 +440,7 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
   const admitted = [];
   let selfAnchoredKept = 0;
 
-  for (const h of [...factHits, ...connected]) {
+  for (const h of [...factHits, ...connected, ...polarityCandidates]) {
     if (h.fact.archived) continue;
     gate.considered++;
 
@@ -375,6 +458,7 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
     }
 
     const rel = factAffinity(shape, h.fact, entityTypes, h._namedAnchor === true);
+
     const anchoredOnly = h._namedAnchor === false && rel.lexical === 0;
 
     // "What do you know about me?" is a SUMMARY REQUEST, not a topic query.
@@ -457,6 +541,11 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
     facts: scored.length,
     entities: entityMatches.length,
     connectedFacts: scored.filter(h => String(h.via ?? '').startsWith('graph:')).length,
+    polarityFacts: scored.filter(h => String(h.via ?? '').startsWith('polarity:')).length,
+    // Counted, not timed — see the Lane 5 header. Zero on every turn whose
+    // question is not negated, which is what makes the lane's cost auditable
+    // rather than amortised into a duration nobody reads.
+    polarityScanned,
     timelineEvents: timelineEvents.length,
     reusedSignals: scored.filter(h => h.feedbackBoost !== 0).length,
     durationMs: Date.now() - started,

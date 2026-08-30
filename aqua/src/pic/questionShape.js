@@ -108,7 +108,30 @@ const WH_EXPECTS = Object.freeze({
  * extraction got the polarity right — a negated statement ranked against an
  * affirmative question inverts its meaning on the way into the prompt.
  */
-const NEGATION_CUE = /\b(not|never|no longer|nobody|none|cannot|can't|won't|don't|doesn't|didn't|isn't|aren't|wasn't|stopped|dropped|rejected|declined|against|instead of|turned down|turn down|ruled out|passed on|gave up|no more)\b/i;
+const NEGATION_CUE = /\b(not|never|no longer|nobody|none|cannot|can't|won't|don't|doesn't|didn't|isn't|aren't|wasn't|stopped|dropped|rejected|declined|against|instead of|turned down|turn down|ruled out|passed on|gave up|no more|paused|pausing|on hold|suspended|shelved|cancelled|canceled|called off|abandoned|scrapped|refused|opted out|backed out|withdrew|withdrawn|vetoed|walked away)\b/i;
+// The second half of that list COMPLETES A CLASS the first half already
+// contains. `stopped`, `dropped`, `gave up` and `no more` were there from the
+// start; `paused`, `on hold`, `suspended`, `shelved`, `cancelled`, `abandoned`
+// are the same predicate in different words, and their absence was why "What
+// is paused?" could not reach "The parser rewrite is on hold." — one clause
+// negating the other with no word in common.
+//
+// TWO WORDS WERE CONSIDERED AND DELIBERATELY LEFT OUT.
+//
+//   `blocked`  "Priya is blocked on the design tokens" is a STATUS REPORT, not
+//              a negation. Adding it flips that fact to negated, which puts it
+//              in polarity conflict with the affirmative question that asks
+//              for it ("What is blocking design?") and demotes the one right
+//              answer by 0.3×. A cessation word and an obstacle word are not
+//              the same word.
+//
+//   `lost`     "We lost the deal" negates; "Which option lost?" asks about a
+//              comparison; "I lost my keys" is neither. Too polysemous to
+//              decide from surface grammar, so it stays out and the question
+//              that needs it stays a measured miss.
+//
+// The test is whether a word means THIS STOPPED in general English, not
+// whether adding it moves a number on this dataset.
 
 /** Present-tense / currency cues: the asker wants today's answer. */
 const CURRENT_CUE = /\b(now|currently|current|today|these days|right now|still|at the moment|nowadays|present)\b/i;
@@ -531,8 +554,31 @@ export function factAffinity(shape, fact, entityTypes = null, anchored = false) 
 
   // Currency. A question about now should not be answered by what stopped
   // being true; a question about the past should prefer exactly that.
+  //
+  // 🔴 EXCEPT WHEN THE QUESTION IS NEGATED, WHERE THE TWO SIGNALS ARE ONE.
+  //
+  // "What is not my responsibility now?" is present-tense AND negated, and
+  // the fact that answers it — "I no longer own the parser" — is BOTH. It
+  // took the current-vs-past penalty (×0.5) on top of a score the polarity
+  // bonus had just lifted to 0.2, landed at 0.1, and fell under the floor.
+  // The engine dropped the only fact in the store that answers the question.
+  //
+  // The penalty was written for AFFIRMATIVE asks, where "what is true now"
+  // and "what stopped being true" are genuinely different questions. Under a
+  // negation they are the same question: the cessation IS the present state
+  // being asked about. Penalising it charges the fact twice for one property.
+  //
+  // NEUTRAL, NOT REWARDED. The first version of this exemption gave the past
+  // fact the same +0.2 the explicit past-tense ask gives, and that was wrong
+  // in a way the measurement caught immediately: every one of the owner's past
+  // facts — "I moved to the Bangalore office", "I switched from Python to Go"
+  // — got the bonus on ANY negated question and crowded the real answer out of
+  // the self-anchor cap. Asking "what is not X" is not asking about the past.
+  // It is asking about now, and a past fact must not be penalised for being
+  // the form the answer takes. Removing a penalty is the whole correction.
   const past = statementIsPast(fact);
-  if (past && shape.currency === 'current') score *= 0.5;
+  const negatedAsk = shape.polarity === 'negated';
+  if (past && shape.currency === 'current' && !negatedAsk) score *= 0.5;
   else if (past && shape.currency === 'past') score += 0.2;
 
   // A DEMOTION IS NOT AN EXCLUSION.

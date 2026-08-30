@@ -4,7 +4,7 @@
   "node": "v22.22.2",
   "suiteFingerprint": "ce5b0decb21c4ef9",
   "caseCount": 200,
-  "note": "Baseline for gate-core.",
+  "note": "Baseline for gate-core: the production candidate gate over the 200 labelled segments in extraction-core.v1 (160 claim-bearing, 40 not), asking only whether a segment is ADMITTED \u2014 not whether the extractor then reads it correctly.\n\nNOTE RESTORED. This file carried the generic 'Baseline for gate-core.' placeholder. Figures were not re-measured; only the note was written.\n\ngate_recall 0.99375 is the metric that matters: it is a HARD CEILING on E6, because a rejected segment reaches no extractor at all. gate_precision 0.9034 is the extraction bill, not a quality score, and the two are never combined. n_claims_never_sent is 1 \u2014 that single segment is the whole of the recall gap.\n\n\u26a0\ufe0f THIS BASELINE IS STALE AGAINST THE CODE. Every run reports gate_precision 0.9034 -> 0.9086 and n_false_admits 17 -> 16, an improvement that predates the session which added this note and whose cause has not been traced. It is left unregenerated deliberately: rolling another change's drift into an unrelated PR is misattribution. Trace it, then update.\n\nThe n_via_* counts are DIAGNOSTIC route counts, not quality metrics \u2014 they move whenever an upstream lane changes and are gated as such. Regenerate with: npm run eval:gate -- gate-core --update",
   "coverage": {
     "total": 200,
     "executed": 200,

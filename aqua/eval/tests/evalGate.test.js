@@ -41,6 +41,11 @@ const run = (metrics, over = {}) => ({
 
 // ── It passes what it should ─────────────────────────────────────────────────
 
+/** Every committed baseline on disk. Data-driven on purpose: a completeness
+ *  check with a hand-maintained list of what to be complete over is not a
+ *  completeness check. */
+const allBaselines = () => readdirSync(path.join(HERE, '../baselines')).filter(f => f.endsWith('.json'));
+
 describe('gate — passes a clean run', () => {
   test('identical metrics pass with every row unchanged', () => {
     const r = compareToBaseline(baseline, run({ recall: 0.6, noise_lines: 10, positives: 160 }));
@@ -141,7 +146,8 @@ describe('gate — direction and structure are declared, not guessed', () => {
    * A completeness test with a hand-maintained list of what to be complete
    * over is not a completeness test.
    */
-  const allBaselines = () => readdirSync(path.join(HERE, '../baselines')).filter(f => f.endsWith('.json'));
+  // (hoisted to module scope — see `allBaselines` above. A second describe
+  //  block needs it, and a per-block copy is how two lists drift apart.)
 
   test('every lower-is-better metric in EVERY baseline is declared', () => {
     // Catches the case where a future suite adds a "wrongness" metric and
@@ -283,10 +289,30 @@ describe('gate — a baseline note survives regeneration', () => {
     assert.match(rt.note, /retrieveKnowledge/);
   });
 
+  test('NO baseline carries the generic placeholder note', () => {
+    // The two assertions above are hand-listed, so a THIRD suite's baseline is
+    // invisible to them — `context-core.v1` was, on the day it was added. The
+    // completeness tests above already settled this argument for metric
+    // direction: "a completeness test with a hand-maintained list of what to be
+    // complete over is not a completeness test". Same rule, applied to notes.
+    //
+    // It cannot assert WHAT each note says — that is the hand-written part. It
+    // asserts the note was written at all, which is exactly what `--update`
+    // destroyed.
+    const generic = [];
+    for (const f of allBaselines()) {
+      if (NOT_GATED.has(f.replace(/\.v1\.json$/, ''))) continue;
+      const note = load(f).note ?? '';
+      if (/^Baseline for \S+\.$/.test(note.trim()) || note.trim().length < 40) generic.push(f);
+    }
+    assert.deepEqual(generic, [], 'these baselines carry no hand-written note');
+  });
+
   test('the notes name how to regenerate that ONE suite', () => {
-    for (const f of ['extraction-core.v1.json', 'retrieval-core.v1.json']) {
+    for (const f of allBaselines()) {
+      if (NOT_GATED.has(f.replace(/\.v1\.json$/, ''))) continue;
       assert.match(load(f).note, /eval:gate -- \S+ --update/,
-        'the note should show the per-suite form, not the whole-tree one');
+        `${f}: the note should show the per-suite form, not the whole-tree one`);
     }
   });
 });
