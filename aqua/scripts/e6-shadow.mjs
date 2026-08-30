@@ -25,6 +25,7 @@
  *   node scripts/e6-shadow.mjs                      # all 200 cases
  *   node scripts/e6-shadow.mjs --limit 20           # a cheap smoke run first
  *   node scripts/e6-shadow.mjs --model <model-id>   # pin, strongly advised
+ *   node scripts/e6-shadow.mjs --provider groq      # groq or openrouter (default)
  *   node scripts/e6-shadow.mjs --json out.json      # machine record
  *
  * COST. One provider call per admitted segment, cached by content hash within
@@ -49,6 +50,7 @@ import suite from '../eval/suites/extraction-core.suite.mjs';
 import { extractWithCurrentEngine, surfacesOf } from '../eval/adapters/currentExtractor.mjs';
 import { extractE6 } from '../eval/adapters/e6Extractor.mjs';
 import { generateOpenRouter } from '../src/providers/openrouter.js';
+import { generateGroq } from '../src/providers/groq.js';
 import { buildExtractionPrompt } from '../src/brain/understanding/extractionPrompt.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -113,9 +115,36 @@ async function main() {
   const cases = dataset.cases.slice(0, limit);
   const modelPin = flag('--model', null);
 
-  /** The transport. One segment per call — never several, see PR-5's header. */
+  /**
+   * The transport. One segment per call — never several, see PR-5's header.
+   *
+   * ⚠️ PROVIDER IS SELECTABLE, AND OPENROUTER IS NO LONGER THE OBVIOUS CHOICE.
+   *
+   * This script was hardwired to OpenRouter, whose registry entry
+   * `openai/gpt-oss-120b:free` is now deprecated — OpenRouter itself answers the
+   * 404 with "the paid version is available now — use openai/gpt-oss-120b".
+   *
+   * The registry ALREADY lists that exact slug under groq (modelRegistry.js:90).
+   * So the same model this run wants is reachable on a provider the project is
+   * already configured for, without a paid OpenRouter route.
+   *
+   * There is a measurement reason to prefer it, not just a billing one. Free
+   * OpenRouter routes are rate-limited (commonly ~50/day) and the roster rotates
+   * weekly; a full pass is ~176 calls. A run that half-completes, or that gets
+   * silently rerouted to whatever is free that week, measures the model rather
+   * than E6 — which is the exact ambiguity the NOT PUBLISHABLE guard below
+   * exists to catch. Both signatures are identical, so this is a binding
+   * choice, not a rewrite.
+   */
+  const providerName = String(flag('--provider', 'openrouter')).toLowerCase();
+  const generate = providerName === 'groq' ? generateGroq : generateOpenRouter;
+  if (!['groq', 'openrouter'].includes(providerName)) {
+    console.error(`\n✗ Unknown --provider "${providerName}" — expected groq or openrouter.\n`);
+    process.exit(1);
+  }
+
   const callModel = async ({ system, user, temperature, model }) => {
-    const res = await generateOpenRouter(system, [{ role: 'user', content: user }],
+    const res = await generate(system, [{ role: 'user', content: user }],
       undefined, 1024, { model: model ?? modelPin ?? undefined, temperature });
     return { text: res.text, model: res.model ?? null };
   };
@@ -126,7 +155,13 @@ async function main() {
     await callModel({ system: probe.system, user: probe.user, temperature: 0, model: modelPin });
   } catch (err) {
     console.error(`\n✗ No usable provider: ${err?.message ?? err}`);
-    console.error('  This script needs the same key the app uses. Nothing was measured —');
+    console.error(`  Provider: ${providerName}. This script needs the same key the app uses.`);
+    console.error('  If a model 404s as deprecated, the registry entry is stale — list the');
+    console.error('  live ones first, then pin one:');
+    console.error('    curl -s https://openrouter.ai/api/v1/models | jq -r \'.data[]|select(.pricing.prompt=="0")|.id\'');
+    console.error('  Or use the provider the registry already has this model on:');
+    console.error('    node scripts/e6-shadow.mjs --provider groq --model openai/gpt-oss-120b --limit 20');
+    console.error('  Nothing was measured —');
     console.error('  a run with no transport emits no claims and would score 0.0% detection,');
     console.error('  which is indistinguishable from a catastrophically bad extractor.\n');
     process.exit(1);

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "recordedAt": "2026-08-26T06:46:01.982Z",
-  "node": "v22.22.2",
+  "recordedAt": "2026-08-30T18:11:16.372Z",
+  "node": "v24.19.0",
   "suiteFingerprint": "4e309d66891fbcf4",
   "caseCount": 200,
   "note": "Baseline of the CURRENT regex extraction lane, all understanding flags ON. The number E6 must beat. Regenerate with: npm run eval:gate -- extraction-core --update",

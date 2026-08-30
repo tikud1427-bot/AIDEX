@@ -42,6 +42,17 @@ export const LOWER_IS_BETTER = new Set([
   // so the gate would have waved through a DOUBLING of false positives on that
   // suite as an improvement.
   'n_false_positives',
+  // Same lesson, found the same way — by breaking the rule on purpose and
+  // watching the gate. `forensic-report` counts what the whole rule EMITS over
+  // a fixed corpus with fixed labels. Deleting the cross-file condition, so
+  // that ordinary table rows inside one document are accused of tampering,
+  // took it 17 -> 20 and the gate called that an improvement and passed.
+  //
+  // This is the FINDING-2 failure mode exactly: 90 accusations from 20 rows.
+  // On a fixed corpus more accusations is worse, and a genuine recall win that
+  // raises it should have to say so in a baseline update rather than arrive
+  // unremarked.
+  'n_report_findings',
 ]);
 
 /**

@@ -16,7 +16,7 @@
     "build:aqua": "cd aqua-frontend && npm ci --include=dev && NODE_OPTIONS=--max-old-space-size=450 npm run build",
     "build": "npm run build:aqua",
     "test:account": "node --test tests/account/*.test.js",
-    "test:aqua": "cd aqua && npm run test:edit && npm run test:upload && npm run test:identity && npm run test:search && npm run test:account",
+    "test:aqua": "cd aqua && npm test",
     "test": "npm run test:platform && npm run test:account && npm run test:aqua",
     "test:platform": "node --test tests/platform/*.test.js"
   },

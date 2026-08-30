@@ -92,7 +92,7 @@ test('AQUA_PIC=off silences the whole FI-2 surface', () => {
   process.env.AQUA_PIC = 'on';
 });
 
-test('perf: the FI-2 pass is SUPERLINEAR in fact count — measured, and pinned', async () => {
+test('perf: the FI-2 pass has no runaway ceiling — the shape itself is counted elsewhere', async () => {
   // 🔴 I NEARLY RETRACTED A CORRECT FINDING ON ONE MEASUREMENT.
   //
   // FLAKE-1 reported this pass as quadratic at 3.96×. Investigating today, a
@@ -166,11 +166,35 @@ test('perf: the FI-2 pass is SUPERLINEAR in fact count — measured, and pinned'
   // contradictionCost.test.js. This assertion covers the rest of the pass,
   // where no counter exists yet, and should be replaced by one when the next
   // superlinear stage is identified.
-  const r = await assertScalesLinearly(workload, {
-    n: 600, samples: 1, maxRatio: 8, reset, label: 'FI-2 pass',
+  // ✅ THE LOWER BOUND IS GONE. IT WAS REPLACED BY A COUNTER, AS PLANNED ABOVE.
+  //
+  // The paragraph above asked for exactly this: "should be replaced by [a
+  // counter] when the next superlinear stage is identified." It has been.
+  // Timing each stage separately at 600 and 1200 facts:
+  //
+  //     rebuildGraph  1.19×      consensus   1.19×
+  //     forensics     4.60×      gaps        1.74×
+  //                              whatCaused  1.61×
+  //
+  // The superlinearity is the `edited_number` rule in `forensicEngine.js`,
+  // whose number-masking collapses a table's rows into one group and then
+  // compares them every-pair. It is now counted EXACTLY — 11,175 / 44,850 /
+  // 179,700 comparisons at 150 / 300 / 600 facts, precisely n(n−1)/2 — and
+  // pinned in `editedNumberCost.test.js`.
+  //
+  // THE FINDING SURVIVED; THE INSTRUMENT DID NOT. Nine readings of the old
+  // `ratio > 2.4` assertion spread 2.08–2.90× and did not converge in the
+  // sample count: `samples: 3` read LOWER than `samples: 1`, `samples: 5`
+  // higher. The threshold sat inside its own noise band, so it flaked about
+  // one run in six and could not tell a regression from a busy CPU.
+  //
+  // THE CEILING STAYS. An upper bound is the robust direction — a slow slice
+  // can only push a ratio UP, so `maxRatio` fails loudly on a real worsening
+  // and never on a quiet one. `samples: 3` restores the helper's own best-of
+  // default, which the previous `samples: 1` defeated, in a test whose header
+  // says "one reading is not a measurement".
+  await assertScalesLinearly(workload, {
+    n: 600, samples: 3, maxRatio: 8, reset, label: 'FI-2 pass',
   });
-  assert.ok(r.skipped || r.ratio > 2.4,
-    `FI-2 now scales at ${r.ratio?.toFixed(2)}× — better than superlinear, so someone fixed it. ` +
-    'Tighten this toward 2.0 and rename the test.');
 });
 

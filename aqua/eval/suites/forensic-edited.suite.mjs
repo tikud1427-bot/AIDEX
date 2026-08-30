@@ -28,6 +28,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { _looksEditedForTests } from '../../src/files/forensicEngine.js';
+// One scorer, two lanes. `forensic-report` grades the SAME pairs through the
+// full rule, and a copied scorer would make the two incomparable in exactly
+// the dimension they exist to isolate.
+import { scorePair, aggregatePairs } from './forensicEditedScoring.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DS = JSON.parse(readFileSync(path.join(HERE, '../datasets/forensic-edited.v1.json'), 'utf8'));
@@ -54,36 +58,10 @@ export default {
   },
 
   score(testCase, actual) {
-    const shouldFire = testCase.label === 'edited';
-    return { correct: actual.fired === shouldFire, cat: testCase.cat, shouldFire, fired: actual.fired };
+    return scorePair(testCase, actual.fired);
   },
 
   metrics(scored) {
-    const ratio = (a, b) => (b ? a / b : 0);
-    const tp = scored.filter(s => s.shouldFire && s.fired).length;
-    const fp = scored.filter(s => !s.shouldFire && s.fired).length;
-    const fn = scored.filter(s => s.shouldFire && !s.fired).length;
-
-    const byCat = {};
-    for (const s of scored.filter(x => !x.shouldFire)) {
-      byCat[s.cat] ??= { n: 0, fired: 0 };
-      byCat[s.cat].n++;
-      if (s.fired) byCat[s.cat].fired++;
-    }
-
-    const precision = ratio(tp, tp + fp);
-    const recall = ratio(tp, tp + fn);
-    return {
-      precision,
-      recall,
-      f1: precision + recall ? (2 * precision * recall) / (precision + recall) : 0,
-      n_true_positives: tp,
-      n_false_positives: fp,
-      n_false_negatives: fn,
-      ...Object.fromEntries(Object.entries(byCat).sort()
-        .map(([cat, v]) => [`false_fire_${cat.replace(/-/g, '_')}`, ratio(v.fired, v.n)])),
-      n_edited_pairs: scored.filter(s => s.shouldFire).length,
-      n_ordinary_pairs: scored.filter(s => !s.shouldFire).length,
-    };
+    return aggregatePairs(scored);
   },
 };
