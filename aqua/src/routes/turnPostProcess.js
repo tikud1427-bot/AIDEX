@@ -59,6 +59,10 @@ const REAL_DEPS = Object.freeze({
   // to the shutdown drain. The injectable seam was already here, which is why
   // this is a one-line change rather than new plumbing.
   defer: fn => defer('post-turn', fn),
+  // E6 — semantic understanding. Injected so the seam is testable without a
+  // provider; see the note at the deferred block below.
+  understandTurn: Brain.understandTurn,
+  e6Enabled: Brain.e6Enabled,
   reflectEvery: REFLECT_EVERY_TURNS,
   consolidate,
   consolidateEnabled,
@@ -139,6 +143,35 @@ export function runPostTurn({
       // output would be a closed loop that manufactures its own evidence.
       d.observeTwin({ ownerId, userMessage, conversationId });
     } catch { /* fail-open */ }
+  });
+
+  // ── E6 — SEMANTIC UNDERSTANDING, ON THE REAL TURN PATH AT LAST ─────────────
+  //
+  // Blueprint §8 calls this non-negotiable: "Do not leave the new understanding
+  // system as beautiful code + unit tests + zero production consumers." It has
+  // had zero for its entire life. `grep runUnderstandingPipeline src/ routes/`
+  // returned nothing but its own module and its tests.
+  //
+  // 🔴 WIRED, NOT PROMOTED. E6 does not pass its own gate — negation detection
+  // reads 85% against a 95% bar on both valid full shadow runs. What it does
+  // clear is everything else, measured over 200 labelled cases: overall strict
+  // accuracy 0.18 → 0.495, predicate accuracy 0.00 → 0.473, silence on
+  // negatives 0.90 → 0.975. Wiring it OFF by default makes it reachable for a
+  // shadow run against real traffic without asserting it is ready.
+  //
+  // HERE, and not on the response path, for two reasons. It costs one provider
+  // call per segment, which the user must never wait on. And this is where
+  // `observeConversationTurn` already absorbs the turn, so E6 reads the same
+  // text the world model does rather than a second, subtly different copy.
+  //
+  // Deferred, fail-open and flag-gated exactly like its three siblings above:
+  // an extractor that throws must not cost the user their reply. The flag is
+  // read per call, not captured at import, so a rollback is a restart.
+  d.defer(() => {
+    if (!d.e6Enabled()) return;
+    Promise.resolve()
+      .then(() => d.understandTurn({ ownerId, conversationId, userMessage }))
+      .catch(() => { /* fail-open: understanding must never affect the turn */ });
   });
 
   // Brain Reflection V2 (B5) — on the Mind's reflection cadence, compute a

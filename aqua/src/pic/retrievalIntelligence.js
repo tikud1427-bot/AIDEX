@@ -173,6 +173,51 @@ const MAX_SELF_ANCHORED = 5;
 const POLARITY_LANE_SCAN = 200;
 
 /**
+ * Cosine below which the dense lane will not even propose a candidate.
+ *
+ * Deliberately BELOW `SEMANTIC_TOPIC_FLOOR`: proposing is cheap and the gate
+ * decides. Set at the floor of the measured answerable range (0.570) so a real
+ * answer is never withheld from the gate by this lane's own filter.
+ */
+const DENSE_LANE_FLOOR = 0.55;
+
+/** Proposals per turn. The gate still has to admit each one. */
+const DENSE_LANE_MAX = 12;
+
+/**
+ * How far the best match must stand above the corpus median to be believed.
+ *
+ * Read off the measured distributions: silence-expecting queries have a p90
+ * margin of 0.105, answerable ones a p10 of 0.092.
+ *
+ * 0.15 rather than 0.11 because it is the PARETO point — swept 0.11 / 0.15 /
+ * 0.20 / 0.25 / 0.30:
+ *
+ *              recall@8  category  superseded  noise  honesty
+ *   lexical      0.7560    0.4688      0.6000     16   0.7188
+ *   m=0.11       0.8393    0.6562      0.8000     34   0.6562   ← recall bought
+ *   m=0.15       0.7976    0.5938      0.7000     16   0.7188   ← nothing bought
+ *   m=0.20       0.7738    0.5312      0.7000     16   0.7188
+ *   m=0.25       0.7560    0.4688      0.7000     16   0.7188   ← dense inert
+ *
+ * At 0.15 `noise_lines` and `unknown_honesty` are UNCHANGED from lexical while
+ * recall@8 gains 4.2 and recall_category 12.5. 0.11 gains more and pays 18
+ * noise lines for it — a real trade, and not one to make silently inside a
+ * constant. Above 0.25 the lane stops firing at all.
+ */
+const DENSE_MARGIN_FLOOR = 0.15;
+
+/**
+ * Facts a store must hold before the dense lane is trusted.
+ *
+ * The floor above was swept at 60 and the margin statistic grows with corpus
+ * size, so below this the threshold is an extrapolation. Set AT the calibration
+ * point, not below it: the honest bound is the one we measured, and moving it
+ * down is a claim that needs its own labelled corpus.
+ */
+const DENSE_MIN_CORPUS = 60;
+
+/**
  * @param {object} deps - { evidenceStore, evidenceRetrieval, graph, queryEngine }
  * @param {string} ownerId
  * @param {string} query
@@ -181,7 +226,7 @@ const POLARITY_LANE_SCAN = 200;
  * @param {number} [opts.charBudget=1600] hard cap on the rendered block
  * @returns {{ items: Array, block: string, stats: object }}
  */
-export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget = 1600 } = {}) {
+export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget = 1600, semanticScores: semanticScoresIn = null } = {}) {
   const { evidenceStore: ES, evidenceRetrieval: ER, graph: G, queryEngine: QE } = deps;
   const started = Date.now();
   const empty = { items: [], block: '', stats: { facts: 0, entities: 0, connectedFacts: 0, timelineEvents: 0, reusedSignals: 0, durationMs: 0 } };
@@ -429,6 +474,116 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
     }
   }
 
+  // ── Lane 6: dense — retrieval on MEANING rather than on words ──────────────
+  //
+  // `recall_category` has been the worst honest metric on both retrieval lanes
+  // since it was first measured: 0.4688. Its misses are semantic, not lexical —
+  // "educational background" → "I studied physics before this", "go-to-market
+  // metric" → "we measure success by weekly active teams". No lane above can
+  // reach those, and a synonym table that could would be fitted to this dataset,
+  // which this module's own header forbids.
+  //
+  // `semanticScores` is Map<factId, cosine>, supplied by the CALLER — from the
+  // committed fixture in eval, from a live query embedding in production. The
+  // lane does not embed anything itself, so retrieval stays synchronous and
+  // provider-free, and a caller with no vectors simply passes nothing.
+  //
+  // Keyed by evidence-store fact id, which is the point: E7/PR-1 found the
+  // long-term-memory embedding path keying vectors by LTM fact key while
+  // retrieval identifies facts by evidence-store id — blueprint §10's
+  // "embedding key ≠ retrieval identity". This lane cannot inherit that,
+  // because it looks facts up by the same id it proposes them under.
+  // ── THE DENSE SIGNAL IS ONLY TRUSTED WHEN SOMETHING STANDS OUT ─────────────
+  //
+  // Absolute cosine cannot tell an answerable query from an unanswerable one:
+  // top-cosine runs 0.570–0.939 for answerable and 0.461–0.767 for the 32
+  // silence-expecting queries. Admitting on it cost `noise_lines` 16 → 138 and
+  // `unknown_honesty` 0.7188 → 0.1875 — the textbook dense failure, measured.
+  //
+  // The MARGIN does separate. Top cosine minus the corpus median, per query:
+  //     answerable   p10 0.092   median 0.191
+  //     silence      median 0.084   p90 0.105
+  //
+  // Because that is what "I have nothing for this" looks like in a vector
+  // space: every fact is equally unrelated, so the best one is not much better
+  // than the middle one. "What is my partner's birthday?" has a nearest
+  // neighbour; it does not have a STANDOUT one.
+  //
+  // Below the floor the lane withdraws entirely — no proposals, no semantic
+  // topic support — and retrieval behaves exactly as it did before dense
+  // existed. An answerable query that falls below still has every lexical lane;
+  // it loses a boost, not its answer.
+  const rawSemantic = semanticScoresIn instanceof Map ? semanticScoresIn : null;
+  let semanticScores = null;
+  let semanticMargin = null;
+  // ⚠️ THE MARGIN FLOOR NEEDS A CORPUS BIG ENOUGH TO ESTIMATE A BASELINE.
+  //
+  // 🔴 AN EARLIER VERSION OF THIS COMMENT HAD THE REASON BACKWARDS. It claimed
+  // answerable margins grow with corpus size while silence stays flat. That came
+  // from SUBSAMPLING the 60-fact corpus, which was confounded — deleting facts
+  // leaves the queries still asking for them, so those worlds describe a
+  // deletion, not a small store. A real 20-fact corpus with its own labels
+  // (`retrieval-small.v1`) says the opposite:
+  //
+  //                    answerable p10 / median      silence median / p90
+  //     N=60  core          0.092 / 0.191               0.084 / 0.105
+  //     N=20  small         0.092 / 0.206               0.169 / 0.265
+  //
+  // ANSWERABLE IS FLAT — 0.092 at both sizes. What moves is SILENCE, and it
+  // moves the other way: at 20 facts an unanswerable query's best match stands
+  // 0.265 above the median, well ABOVE the typical answerable query. There is
+  // no floor to place. Swept on the real small corpus:
+  //
+  //     margin   recall@8   category   noise
+  //     lexical    0.6304     0.1000      17
+  //     0.15       0.6957     0.2000      49
+  //     0.20       0.6522     0.2000      27
+  //     0.27       0.6304     0.1000      21
+  //     0.32       0.6304     0.1000      17   ← free, and worthless
+  //
+  // Every floor that buys recall buys noise; the one that costs nothing does
+  // nothing. At N=60, 0.15 was strictly free. Five statistics were tried —
+  // top−median, top−p75, top−p90, top−2nd, top/median — and NONE separates at
+  // N=20 (answerable p25 minus silence p90 runs −0.098 to −0.306).
+  //
+  // The cause is sampling, which is why the bound is principled rather than
+  // arbitrary: the margin measures a signal against the unrelated mass, and 20
+  // samples estimate that mass badly. More facts means a better baseline, so
+  // dense gets SAFER as a store grows — the right direction for a product where
+  // stores only accumulate.
+  if (rawSemantic && rawSemantic.size > 0 && rawSemantic.size < DENSE_MIN_CORPUS) {
+    // Explicitly nothing: no proposals, no semantic credit, lexical unchanged.
+  } else if (rawSemantic?.size) {
+    const sorted = [...rawSemantic.values()].sort((a, b) => b - a);
+    semanticMargin = sorted[0] - sorted[Math.floor(sorted.length / 2)];
+    if (semanticMargin >= DENSE_MARGIN_FLOOR) semanticScores = rawSemantic;
+  }
+  const denseCandidates = [];
+  if (semanticScores) {
+    const ranked = [...semanticScores.entries()]
+      .filter(([, sim]) => sim >= DENSE_LANE_FLOOR)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, DENSE_LANE_MAX);
+    for (const [factId, sim] of ranked) {
+      if (seenFactIds.has(factId)) continue;
+      const fact = ES.getFact(ownerId, factId);
+      if (!fact) continue;
+      seenFactIds.add(factId);
+      const evidence = ES.evidenceForFact(ownerId, factId);
+      denseCandidates.push({
+        fact, evidence,
+        citations: evidence.map(deps.formatCitation),
+        confidence: fact.confidence,
+        score: sim,
+        via: `dense: ${sim.toFixed(2)}`,
+        // Not an anchor, for the same reason lane 5 is not: similarity is an
+        // attribute of the pair, not evidence that the graph reached it from
+        // something the query named.
+        _namedAnchor: undefined,
+      });
+    }
+  }
+
   // ── Rank: relevance × lifecycle × feedback, and DROP what nothing supports ─
   //
   // Order matters. Relevance is computed FIRST and gates; the lifecycle and
@@ -440,7 +595,7 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
   const admitted = [];
   let selfAnchoredKept = 0;
 
-  for (const h of [...factHits, ...connected, ...polarityCandidates]) {
+  for (const h of [...factHits, ...connected, ...polarityCandidates, ...denseCandidates]) {
     if (h.fact.archived) continue;
     gate.considered++;
 
@@ -457,7 +612,8 @@ export function retrieveKnowledge(deps, ownerId, query, { limit = 8, charBudget 
       continue;
     }
 
-    const rel = factAffinity(shape, h.fact, entityTypes, h._namedAnchor === true);
+    const rel = factAffinity(shape, h.fact, entityTypes, h._namedAnchor === true,
+      semanticScores?.get(h.fact.id) ?? null);
 
     const anchoredOnly = h._namedAnchor === false && rel.lexical === 0;
 

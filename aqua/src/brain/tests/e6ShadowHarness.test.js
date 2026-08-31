@@ -398,3 +398,51 @@ describe('the harness waits out a cooldown instead of scoring silence', () => {
     assert.match(advice, /DAILY quota/, 'the advice must name the actual constraint');
   });
 });
+
+// ── A score you cannot explain ───────────────────────────────────────────────
+
+describe('the run records what happened per case, not just the totals', () => {
+  /**
+   * `detection_negation` read exactly 85.0% on both valid full runs — 17 of 20,
+   * the same three cases missing, while every other metric moved by up to 16
+   * points. Two explanations were checkable offline and both came back
+   * negative:
+   *
+   *   · prompt rule 2 covers negation explicitly — "Never drop a negation.
+   *     'Dev is not on the team' is polarity 'negated', not an omission."
+   *   · every labelled negation predicate IS in the registry (31 registered,
+   *     zero unregistered across all seven categories)
+   *
+   * What remained was whether the model returned [] or a gate rejected the
+   * claim — and `discardedByGate` is summed across all 200 cases, so it cannot
+   * attribute a discard to a case. One number, two suspects, no way to separate
+   * them. Three sessions of "negation is 85%" with no path to why.
+   */
+  test('per-case records are captured and written to the JSON', () => {
+    const src = readFileSync(path.join(HERE, '../../../scripts/e6-shadow.mjs'), 'utf8');
+    assert.match(src, /perCase\.push\(\{/, 'no per-case record is captured');
+    assert.match(src, /perCase: reported\.perCase/, 'the record never reaches the JSON');
+  });
+
+  test('each record can separate "model returned []" from "a gate dropped it"', () => {
+    // The whole point. Without both fields the two causes stay indistinguishable.
+    const src = readFileSync(path.join(HERE, '../../../scripts/e6-shadow.mjs'), 'utf8');
+    assert.match(src, /e6Emitted: e6\.facts\.length/);
+    assert.match(src, /e6DiscardedBy: e6\.stats\.byGate/);
+  });
+
+  test('records come from the REPORTED pass, not an arbitrary one', () => {
+    // Same rule the metrics follow. Records from a discarded pass would
+    // describe a run whose numbers were thrown away.
+    const src = readFileSync(path.join(HERE, '../../../scripts/e6-shadow.mjs'), 'utf8');
+    assert.match(src, /perCase: reported\.perCase/);
+    assert.ok(!/perCase: passes\[/.test(src), 'records must not be taken from all passes');
+  });
+
+  test('the console names the cases that emitted nothing', () => {
+    const src = readFileSync(path.join(HERE, '../../../scripts/e6-shadow.mjs'), 'utf8');
+    assert.match(src, /EMITTED NOTHING/);
+    assert.match(src, /model returned \[\] — no gate involved/,
+      'a miss with no gate entry must say so explicitly rather than showing an empty list');
+  });
+});

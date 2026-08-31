@@ -162,9 +162,20 @@ test('only the Mind post-turn runs synchronously; the rest is deferred', () => {
   // macrotask lets the event loop serve other requests in between. Pinned
   // deliberately: if a future stage is quietly folded into an existing tick,
   // that is a latency change and this assertion should be the thing that says so.
-  assert.equal(deferred.length, 3, 'ingest+twin, reflection, consolidation');
+  //
+  // FOUR SINCE E6 (blueprint §8). This assertion did its job: adding the
+  // understanding seam was a latency change and it refused to pass silently.
+  // The justification for a separate tick rather than folding it into the
+  // ingest one is ISOLATION, not weight — E6's deferred body only kicks off a
+  // promise and returns, so it costs one macrotask scheduling and nothing else.
+  // Sharing ingest's tick would put a synchronous throw during E6 setup in
+  // front of the twin observation that follows it in the same callback.
+  assert.equal(deferred.length, 4, 'ingest+twin, reflection, consolidation, E6');
 
   for (const fn of deferred) fn();
+  // E6 is ABSENT from this list on purpose: AQUA_E6 defaults to off, so its
+  // tick runs and does nothing. That is the production default, and the whole
+  // safety argument for wiring an extractor that fails its own negation gate.
   assert.deepEqual(names(), ['memoryAfterTurn', 'ingest', 'twin', 'reflect']);
 });
 

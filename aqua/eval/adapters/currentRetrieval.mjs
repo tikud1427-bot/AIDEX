@@ -128,9 +128,13 @@ export async function seedWorld(ownerId, corpus) {
 }
 
 /** Ask the same question the chat spine would ask. */
-export async function retrieveWithCurrentEngine(ownerId, query, { limit = 8 } = {}) {
+export async function retrieveWithCurrentEngine(ownerId, query, { limit = 8, semanticScores = null } = {}) {
   const { pic } = await loadEngine();
-  const out = pic.retrieveKnowledge(ownerId, query, { limit });
+  // `semanticScores` is Map<factId, cosine>, supplied by the caller. In eval it
+  // comes from the committed fixture, keyed by evidence-store fact id — the
+  // same identity the retrieval pool uses. Absent, the dense lane is inert and
+  // this behaves exactly as it did before it existed.
+  const out = pic.retrieveKnowledge(ownerId, query, { limit, semanticScores });
   return {
     items: out.items ?? [],
     stats: out.stats ?? {},

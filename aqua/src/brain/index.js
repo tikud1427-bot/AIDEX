@@ -362,6 +362,40 @@ export function assembleContext(ownerId, query, floorRetrieve, opts = {}) {
 
 export function contextV2Active() { return contextV2Enabled(); }
 
+// ── E6 — semantic understanding on the turn path ─────────────────────────────
+
+/**
+ * Is E6 turned on?
+ *
+ * OFF unless explicitly enabled, and read per call rather than captured at
+ * import, so turning it off is a restart and not a redeploy. E6 does not pass
+ * its own promotion gate — negation detection sits at 85% against a 95% bar on
+ * both valid full shadow runs — so the default is the honest one.
+ */
+export function e6Enabled() {
+  return String(process.env.AQUA_E6 ?? 'off').toLowerCase() === 'on';
+}
+
+/**
+ * Run one turn through the E6 understanding pipeline.
+ *
+ * Closes blueprint §8's non-negotiable: until this existed,
+ * `runUnderstandingPipeline` had zero production consumers — the exact
+ * "beautiful code + unit tests + nobody calls it" shape §8 names.
+ *
+ * ⚠️ IT EXTRACTS AND RETURNS; IT DOES NOT COMMIT. The claim substrate is a
+ * separate wiring decision with its own correctness bar, and an extractor that
+ * fails its own negation gate must not be writing into the world model on the
+ * way to being evaluated. Shadow first, commit second. `stats` comes back so a
+ * caller can log what the pipeline saw without the pipeline deciding anything.
+ */
+export async function understandTurn({ ownerId, conversationId, userMessage } = {}) {
+  if (!e6Enabled()) return null;
+  if (!ownerId || !userMessage) return null;
+  const { runUnderstandingPipeline } = await import('./understanding/pipeline.js');
+  return runUnderstandingPipeline(userMessage, { ownerId, conversationId });
+}
+
 // ── Conversation ingest (B3) ─────────────────────────────────────────────────
 
 /**

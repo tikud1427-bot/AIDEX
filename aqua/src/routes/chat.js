@@ -587,7 +587,32 @@ export async function prepareTurn({ userMessage, workspaceId, conversationId, us
     const knowledge = Brain.contextV2Active()
       ? Brain.assembleContext(memoryOwner, userMessage, floorRetrieve, {
           limit: 8, plan: cognition.plan, formatCitation,
-          semanticScores: await semanticScoresP.catch(() => null),
+          // 🔴 NULL ON PURPOSE — THE MAP HANDED HERE COULD NEVER MATCH.
+          //
+          // `semanticScoresP` is `semanticFactScores`, which embeds LONG-TERM
+          // MEMORY facts: `factText()` builds "key: value" strings and keys the
+          // vectors by the LTM mind fact key — `workplace`, `cofounder`,
+          // `custom_biggest_constraint`.
+          //
+          // The Context Engine ranks EVIDENCE-STORE facts and looks the score up
+          // with `ctx.semanticScores.get(candidate.semanticId)`, where
+          // `semanticId` is an evidence-store fact id. Two stores, two
+          // namespaces, no overlap by construction — every lookup missed.
+          //
+          // Blueprint §10: "A semantic embedding is useless if embedding key ≠
+          // retrieval identity." This is that defect, and it survived because a
+          // miss falls through to token Jaccard, so `semantic_similarity` — the
+          // second-heaviest dimension at 0.20 — has been reporting lexical
+          // overlap under an embedding's name since it was added.
+          //
+          // Passing null is BEHAVIOURALLY IDENTICAL: a map whose every lookup
+          // misses and no map at all both reach the same fallback line. What
+          // changes is that the code now says what is true. Claim-keyed vectors
+          // arrive in E7/PR-3; until then this dimension is lexical and admits it.
+          //
+          // The OTHER consumer is correct and untouched: line ~505 passes the
+          // same map to `memoryRetrieve`, which ranks LTM facts by LTM key.
+          semanticScores: null,
           activeProjectId: workspaceId ?? null,
         })
       : floorRetrieve(memoryOwner, userMessage, { limit: 8 });

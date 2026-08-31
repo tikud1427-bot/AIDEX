@@ -461,6 +461,9 @@ export const MIN_AFFINITY = 0.18;
 /** A kind match with no lexical support is worth this much on its own. */
 const KIND_CREDIT = 0.5;
 
+/** Capped below KIND_CREDIT — see the note at the `sem` term in factAffinity. */
+const SEMANTIC_CREDIT = 0.45;
+
 
 /** Polarity disagreement: a negated statement does not answer a positive ask. */
 const POLARITY_MISMATCH = 0.3;
@@ -523,7 +526,7 @@ const ANCHOR_CREDIT = 0.6;
  *
  * @returns {{ score:number, lexical:number, kind:boolean, polarityConflict:boolean }}
  */
-export function factAffinity(shape, fact, entityTypes = null, anchored = false) {
+export function factAffinity(shape, fact, entityTypes = null, anchored = false, semantic = null) {
   const hay = ` ${String(fact?.statement ?? '')} ${(fact?.entities ?? []).join(' ')} `.toLowerCase();
   const lexical = shape.terms.length
     ? shape.terms.filter(t => hasTerm(hay, t)).length / shape.terms.length
@@ -535,6 +538,29 @@ export function factAffinity(shape, fact, entityTypes = null, anchored = false) 
   // question with an unmatched topic noun ("who is my dentist") describes
   // something the store does not hold, and answering it with the nearest thing
   // of the right shape is the confident-wrong-line L11 forbids.
+  // ── DENSE SIMILARITY, MEASURED INSTEAD OF SPELLED ──────────────────────────
+  //
+  // `recall_category` failures are semantic, not lexical: "What is my
+  // educational background?" and "I studied physics before this" share no word,
+  // so `topicSupported` reads the topic as unaccounted for and the right answer
+  // scores zero. A cosine over committed vectors measures that property
+  // directly.
+  //
+  // 🔴 AN EARLIER VERSION ALSO GRANTED `topicSupported` ON A COSINE FLOOR.
+  // It was removed because it was measured INERT: sweeping the floor across
+  // 0.10, 0.60 and 0.99 produced byte-identical results on all 200 queries.
+  // The `Math.max(score, SEMANTIC_CREDIT * sem)` line below already carries the
+  // signal, so the topic grant was a second path to the same place — twenty
+  // lines and a confident comment that changed nothing. `SEMANTIC_CREDIT` is
+  // not inert: at 0.00 recall@8 is 0.7738, at 0.45 it is 0.7976.
+  //
+  // It stays capped BELOW `KIND_CREDIT`: a cosine is evidence a fact is
+  // on-topic, not that it answers the question, and a lane that outranks a
+  // typed match on similarity alone is the dense failure this codebase spends
+  // its gates avoiding. 0.90 buys 0.6 points of recall@8 and breaks that rule,
+  // so it was measured and declined.
+  const sem = typeof semantic === 'number' ? semantic : null;
+
   const topicSupported = shape.topicTerms.length === 0
     || shape.topicTerms.some(t => hasTerm(hay, t));
   const kindStrength = shape.typed && topicSupported ? (kinds.get(shape.expects) ?? 0) : 0;
@@ -542,6 +568,7 @@ export function factAffinity(shape, fact, entityTypes = null, anchored = false) 
 
   let score = lexical;
   if (kind) score = Math.max(score, KIND_CREDIT * kindStrength) + 0.15 * lexical;
+  if (sem != null) score = Math.max(score, SEMANTIC_CREDIT * sem);
   if (anchored) score = Math.max(score, ANCHOR_CREDIT);
 
   // Polarity. Losing negation at RETRIEVAL inverts meaning just as surely as

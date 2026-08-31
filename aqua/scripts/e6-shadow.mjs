@@ -362,6 +362,7 @@ async function main() {
     if (pass > 0) { __clearExtractionCache(); process.stderr.write(`\n  ── pass ${pass + 1}/${repeat} ──\n`); }
 
     const scoredE6 = [];
+    const perCase = [];
     let passErrors = 0, consecutiveErrors = 0, aborted = false;
 
     for (const [i, c] of cases.entries()) {
@@ -390,7 +391,37 @@ async function main() {
         }
       }
 
-      scoredE6.push(suite.score(c, { facts: e6.facts, surfaces: e6.surfaces }));
+      const sc = suite.score(c, { facts: e6.facts, surfaces: e6.surfaces });
+      scoredE6.push(sc);
+
+      // ── PER-CASE RECORD ────────────────────────────────────────────────────
+      //
+      // 🔴 WITHOUT THIS, A CLEAN RUN STILL CANNOT ANSWER "WHY".
+      //
+      // `detection_negation` has read exactly 85.0% on both valid full runs —
+      // 17 of 20, three cases missed, and the same three every time while every
+      // other metric moved. Two explanations were checkable offline and both
+      // came back negative: prompt rule 2 covers negation explicitly ("Never
+      // drop a negation … polarity 'negated', not an omission"), and every
+      // labelled negation predicate IS in the registry.
+      //
+      // What remains is whether the model returned [] or a gate rejected the
+      // claim, and `discardedByGate` is aggregated across all 200 cases, so it
+      // cannot say. One number, three suspects, no way to tell them apart.
+      //
+      // The scored metrics stay exactly as they were — this is a record of what
+      // happened per case, not a new measurement.
+      perCase.push({
+        id: c.id, cat: c.cat,
+        labelledClaims: (c.claims ?? []).length,
+        e6Emitted: e6.facts.length,
+        e6DiscardedBy: e6.stats.byGate ?? {},
+        e6Errors: e6.stats.errors ?? 0,
+        subjectHits: sc.subjectHits ?? 0,
+        predicateHits: sc.predicateHits ?? 0,
+        fidelityHits: sc.fidelityHits ?? 0,
+        correct: !!sc.correct,
+      });
 
       const errs = e6.stats.errors ?? 0;
       passErrors += errs;
@@ -427,7 +458,7 @@ async function main() {
     // An invalid pass is kept for the record and excluded from every number.
     const errorRate = cases.length ? passErrors / cases.length : 1;
     const valid = !aborted && errorRate <= MAX_PASS_ERROR_RATE;
-    passes.push({ metrics: suite.metrics(scoredE6), valid, passErrors, errorRate, aborted, index: pass + 1 });
+    passes.push({ metrics: suite.metrics(scoredE6), perCase, valid, passErrors, errorRate, aborted, index: pass + 1 });
     if (!valid) {
       console.error(`  ⚠️  pass ${pass + 1} INVALID — ${passErrors} transport errors ` +
         `(${(errorRate * 100).toFixed(1)}% of cases). Excluded from results.`);
@@ -524,6 +555,23 @@ async function main() {
     console.log('    means nothing. Use --repeat 3 before acting on any near-threshold number.');
   }
 
+  // ── What actually missed, by category ────────────────────────────────────
+  const missed = reported.perCase.filter(r => r.labelledClaims > 0 && r.e6Emitted === 0);
+  if (missed.length) {
+    const byCat = {};
+    for (const r of missed) (byCat[r.cat] ??= []).push(r);
+    console.log(`\nEMITTED NOTHING — ${missed.length} case(s) with labelled claims`);
+    for (const [cat, rows] of Object.entries(byCat).sort()) {
+      const gates = {};
+      for (const r of rows) for (const [g, n] of Object.entries(r.e6DiscardedBy)) gates[g] = (gates[g] ?? 0) + n;
+      const why = Object.keys(gates).length
+        ? Object.entries(gates).map(([g, n]) => `${g}×${n}`).join(', ')
+        : 'model returned [] — no gate involved';
+      console.log(`  ${cat.padEnd(10)} ${String(rows.length).padStart(2)}  ${why}`);
+      for (const r of rows.slice(0, 3)) console.log(`               ${r.id}`);
+    }
+  }
+
   const attributable = e6Stats.models.size > 0;
   if (!attributable) {
     console.log('\n⚠️  NOT PUBLISHABLE — no model id was reported for any call.');
@@ -544,6 +592,13 @@ async function main() {
     writeFileSync(p, JSON.stringify({
       cases: cases.length, baseline, current: mCur, e6: mE6, verdict,
       attributable, models: [...e6Stats.models], stats: { ...e6Stats, models: [...e6Stats.models] },
+      reportedPass: reported.index, validPasses: good.length, totalPasses: passes.length,
+      // Per case, from the REPORTED pass. This is what turns a score into a
+      // diagnosis: which case missed, whether anything was emitted at all, and
+      // which gate dropped it. The aggregate `discardedByGate` above cannot
+      // attribute a discard to a case, so "detection_negation 85%" has been
+      // unexplainable across three sessions.
+      perCase: reported.perCase,
     }, null, 2));
     console.log(`→ ${p}\n`);
   }
