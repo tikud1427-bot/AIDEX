@@ -87,6 +87,24 @@ export async function extractE6(text, opts = {}) {
 
   const facts = [];
   const surfaces = new Set();
+  // 🔴 THE SAME MISMATCH AS `__self__`, ONE LINE FURTHER DOWN.
+  //
+  // The suite matches a named subject with `surfaces.has(claim.s.toLowerCase())`
+  // — the label is ALWAYS lowered before the lookup. `currentExtractor.mjs`
+  // lowers everything it adds (`out.add(String(s).toLowerCase())`). This adapter
+  // added `claim.subject` at whatever casing the model produced, so "Priya"
+  // never matched "priya".
+  //
+  // 49 of the 167 labelled claims have a capitalised named subject — Priya,
+  // Dev, Aquiplex, Chhanda — which is 29% of the corpus that could not score
+  // however well the model read it. Fixing `__self__` last session exposed this
+  // one: subject_recall moved 0.0% → 43.7%, still below the regex lane's 55.7%,
+  // and this is why.
+  //
+  // Same normalisation as the regex lane, in one helper, so a third call site
+  // cannot reintroduce it.
+  const add = v => { if (v != null && String(v).trim()) surfaces.add(String(v).toLowerCase()); };
+
   for (const claim of run.claims) {
     facts.push(toFact(claim));
 
@@ -115,8 +133,8 @@ export async function extractE6(text, opts = {}) {
     if (claim.subject === 'self') {
       surfaces.add('__self__');
       for (const t of ['self', 'I', 'me', 'my', 'we', 'our']) surfaces.add(t);
-    } else surfaces.add(claim.subject);
-    if (claim.objectKind === 'entity' && claim.object?.entity) surfaces.add(claim.object.entity);
+    } else add(claim.subject);
+    if (claim.objectKind === 'entity' && claim.object?.entity) add(claim.object.entity);
   }
 
   return { available: true, facts, surfaces: [...surfaces], stats: run.stats };

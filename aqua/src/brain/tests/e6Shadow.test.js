@@ -87,9 +87,15 @@ describe('the E6 adapter emits the shape extraction-core scores', () => {
     }
   });
 
-  test('entity objects reach surfaces too', async () => {
+  test('entity objects reach surfaces too, LOWERED', async () => {
+    // This asserted `includes('Nummo')` — the model's raw casing — and so it
+    // pinned the defect rather than the contract. `extraction-core.suite.mjs`
+    // looks a subject up with `surfaces.has(claim.s.toLowerCase())` and the
+    // regex lane lowers everything it adds, so raw casing can never match:
+    // 49 of 167 labelled claims have a capitalised named subject.
     const r = await extractE6('I work at Nummo.', { callModel: stub([worksAt]) });
-    assert.ok(r.surfaces.includes('Nummo'));
+    assert.ok(r.surfaces.includes('nummo'), `surfaces were [${r.surfaces.join(', ')}]`);
+    assert.ok(!r.surfaces.includes('Nummo'), 'raw casing must not survive — it cannot match the lookup');
   });
 
   test('the temporal anchor is FIXED — a re-run on another day is identical', async () => {

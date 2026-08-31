@@ -26,6 +26,8 @@
  *   node scripts/e6-shadow.mjs --limit 20           # a cheap smoke run first
  *   node scripts/e6-shadow.mjs --model <model-id>   # pin, strongly advised
  *   node scripts/e6-shadow.mjs --provider groq      # groq or openrouter (default)
+ *   node scripts/e6-shadow.mjs --repeat 3           # measure run-to-run noise
+ *   node scripts/e6-shadow.mjs --pace 1200          # ms between calls (default 350)
  *   node scripts/e6-shadow.mjs --json out.json      # machine record
  *
  * COST. One provider call per admitted segment, cached by content hash within
@@ -50,8 +52,9 @@ import suite from '../eval/suites/extraction-core.suite.mjs';
 import { extractWithCurrentEngine, surfacesOf } from '../eval/adapters/currentExtractor.mjs';
 import { extractE6 } from '../eval/adapters/e6Extractor.mjs';
 import { generateOpenRouter } from '../src/providers/openrouter.js';
-import { generateGroq } from '../src/providers/groq.js';
+import { generateGroq, msUntilAnyKeyFree } from '../src/providers/groq.js';
 import { buildExtractionPrompt } from '../src/brain/understanding/extractionPrompt.js';
+import { __clearExtractionCache } from '../src/brain/understanding/extractionClient.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..');
@@ -62,6 +65,33 @@ const flag = (name, dflt = null) => {
 };
 
 /** The blueprint's exit criteria for E6. Not negotiable, and not invented here. */
+/**
+ * A pass is discarded if the transport failed on more than this share of cases.
+ * Not a tuning knob: anything above a couple of stragglers means the numbers
+ * describe the provider's availability, not the extractor.
+ */
+export const MAX_PASS_ERROR_RATE = 0.02;
+
+/** Consecutive failures that mean the provider is gone, not flaky. */
+export const ABORT_AFTER_CONSECUTIVE_ERRORS = 10;
+
+/**
+ * How long the harness will sleep waiting for a rate-limited key, per stall.
+ *
+ * 🔴 A RATE LIMIT IS A WAIT, NOT A FAILURE, AND THE HARNESS DID NOT KNOW THAT.
+ *
+ * A `--repeat 3 --limit 60` run aborted all three passes after 33 calls, 31 of
+ * them errors, while the provider was reporting cooldowns of 106s, 151s, 580s
+ * and 830s. Every one was a known, finite wait that the run marched through and
+ * scored as a dead transport. The abort added last session was right about the
+ * SYMPTOM and wrong about the cause.
+ *
+ * `msUntilAnyKeyFree()` gives the figure exactly. Above this ceiling the daily
+ * quota is binding rather than the per-minute one, and sleeping through that is
+ * worse than stopping and saying so.
+ */
+export const MAX_STALL_WAIT_MS = 15 * 60 * 1000;
+
 export const PROMOTION_GATE = Object.freeze({
   precision: 0.85,
   recall: 0.70,
@@ -75,7 +105,7 @@ export const PROMOTION_GATE = Object.freeze({
  * numbers need a key, the DECISION about them does not, and a promotion rule
  * that only runs on the day you want to promote has never been exercised.
  */
-export function evaluatePromotion(metrics, baseline, { comparable = true } = {}) {
+export function evaluatePromotion(metrics, baseline, { comparable = true, noise = {} } = {}) {
   // 🔴 0/0 IS NOT 0.0, AND THE GATE USED TO FAIL ON IT.
   //
   // The first shadow run reported `negation 0% — FAIL` and returned DO NOT
@@ -117,12 +147,27 @@ export function evaluatePromotion(metrics, baseline, { comparable = true } = {})
   // baseline with 40 negatives against a 20-case slice with none. That is not
   // a regression, it is two different populations. On a partial run the
   // comparison is refused outright rather than reported wrongly.
+  //
+  // ⚠️ AND ONLY WHEN THE DROP EXCEEDS THE MEASURED NOISE. Run 2 blocked
+  // promotion on `fidelity_accuracy 64.7% → 64.1%` — 0.6 points — while two
+  // identical runs of the same pinned model differed by 16 points on
+  // `detection_modality`. Comparing to nine decimal places against a provider
+  // that is not reproducible manufactures regressions.
+  //
+  // With `--repeat`, a drop must clear the observed range for that metric.
+  // Without it there is no estimate, so the drop is reported as UNVERIFIED
+  // rather than asserted — it still blocks promotion, because an unverified
+  // drop is not a cleared one, but it no longer claims to be a finding.
   const regressions = [];
   if (comparable) {
     for (const k of ['detection_recall', 'subject_recall', 'predicate_accuracy',
       'fidelity_accuracy', 'silence_on_negatives']) {
       const before = baseline?.[k] ?? 0, after = metrics?.[k] ?? 0;
-      if (after < before - 1e-9) regressions.push({ metric: k, before, after });
+      if (!(after < before - 1e-9)) continue;
+      const range = noise?.[k]?.range ?? null;
+      const real = isRealRegression(before, after, range);
+      if (real === false) continue;                     // inside the noise floor
+      regressions.push({ metric: k, before, after, noiseRange: range, verified: real === true });
     }
   }
 
@@ -168,6 +213,56 @@ export function stratify(cases, limit) {
   const chosen = new Set(out.map(c => c.id));
   return cases.filter(c => chosen.has(c.id));
 }
+
+/**
+ * Spread of one metric across repeat runs.
+ *
+ * 🔴 WHY THIS EXISTS: TWO IDENTICAL RUNS DISAGREED BY 16 POINTS.
+ *
+ * `--provider groq --model openai/gpt-oss-120b` was run twice over the same 200
+ * cases at REQUESTED_TEMPERATURE 0. Between them, only the eval adapter's
+ * surface casing changed — and `surfaces` feeds `subjectHits` and nothing else,
+ * so `subject_recall` and `overall_strict_accuracy` were the only two metrics
+ * that change could touch. Everything else moved anyway:
+ *
+ *   detection_modality   52.0% → 68.0%   (+16.0)
+ *   fidelity_accuracy    66.5% → 64.1%   (− 2.4)
+ *   predicate_accuracy   49.1% → 47.3%   (− 1.8)
+ *   detection_recall     82.5% → 83.8%   (+ 1.3)
+ *
+ * Temperature 0 is requested and passed. The provider does not honour it as
+ * determinism — batched MoE inference varies run to run. Asking harder will not
+ * fix it, so the harness measures it instead.
+ *
+ * This matters because the second run BLOCKED PROMOTION on
+ * `fidelity_accuracy 64.7% → 64.1%`, a 0.6-point gap, while carrying 16 points
+ * of unmeasured noise. A single run cannot support that decision.
+ */
+export function spread(values) {
+  const v = values.filter(x => typeof x === 'number');
+  if (!v.length) return null;
+  const mean = v.reduce((a, b) => a + b, 0) / v.length;
+  return { mean, min: Math.min(...v), max: Math.max(...v), range: Math.max(...v) - Math.min(...v), n: v.length };
+}
+
+/**
+ * Is a drop against the baseline larger than the run-to-run noise?
+ *
+ * With one run there is no noise estimate, so nothing can be called a
+ * regression honestly — the caller is told to repeat rather than given a
+ * verdict built on a single sample.
+ */
+export function isRealRegression(before, after, noiseRange) {
+  if (!(after < before)) return false;
+  if (noiseRange == null) return null;      // unmeasured — not a verdict
+  return (before - after) > noiseRange;
+}
+
+/** Metrics that are counts, not rates — rendering these as percentages produced
+ *  a "false_positives 0.0% – 300.0%" line at the top of the first noise table. */
+const IS_COUNT = /^(n_|false_positives$|positives$|negatives$|labelled_claims$)/;
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 const pct = n => `${(n * 100).toFixed(1)}%`;
 const arrow = (a, b) => (b > a ? '▲' : b < a ? '▼' : '=');
@@ -251,28 +346,121 @@ async function main() {
     process.exit(1);
   }
 
-  const scoredCurrent = [], scoredE6 = [];
+  const repeat = Math.max(1, Number(flag('--repeat', 1)));
+  const paceMs = Math.max(0, Number(flag('--pace', 350)));
+  const scoredCurrent = [];
   const e6Stats = { called: 0, cached: 0, errors: 0, models: new Set(), discardedByGate: {} };
+  const passes = [];
 
-  for (const [i, c] of cases.entries()) {
-    const cur = extractWithCurrentEngine(c.text);
-    scoredCurrent.push(suite.score(c, { facts: cur.facts ?? [], surfaces: surfacesOf(cur) }));
+  for (let pass = 0; pass < repeat; pass++) {
+    // ⚠️ THE CACHE MUST GO BETWEEN PASSES OR THE VARIANCE IS ALWAYS ZERO.
+    //
+    // `extractionClient` memoises on a content hash, which is what makes a
+    // single run reproducible. Repeating inside one process without clearing it
+    // would replay pass 1 and report a spread of 0.000 — a confident, wrong
+    // answer to the exact question `--repeat` exists to ask.
+    if (pass > 0) { __clearExtractionCache(); process.stderr.write(`\n  ── pass ${pass + 1}/${repeat} ──\n`); }
 
-    const e6 = await extractE6(c.text, { callModel, modelPin });
-    scoredE6.push(suite.score(c, { facts: e6.facts, surfaces: e6.surfaces }));
+    const scoredE6 = [];
+    let passErrors = 0, consecutiveErrors = 0, aborted = false;
 
-    e6Stats.called += e6.stats.called ?? 0;
-    e6Stats.cached += e6.stats.cached ?? 0;
-    e6Stats.errors += e6.stats.errors ?? 0;
-    for (const m of e6.stats.models ?? []) e6Stats.models.add(m);
-    for (const [g, n] of Object.entries(e6.stats.byGate ?? {})) {
-      e6Stats.discardedByGate[g] = (e6Stats.discardedByGate[g] ?? 0) + n;
+    for (const [i, c] of cases.entries()) {
+      if (pass === 0) {
+        const cur = extractWithCurrentEngine(c.text);
+        scoredCurrent.push(suite.score(c, { facts: cur.facts ?? [], surfaces: surfacesOf(cur) }));
+      }
+
+      // Pace, so the per-minute limit is not walked into at full speed. The
+      // earlier run issued 175 calls back to back and cooled every key.
+      if (paceMs > 0 && !(pass === 0 && i === 0)) await sleep(paceMs);
+
+      let e6 = await extractE6(c.text, { callModel, modelPin });
+
+      // A stall is waitable when the provider says when it ends. Retry the SAME
+      // case once after sleeping; the alternative is scoring an empty
+      // extraction, which reads as a confident 0% rather than as a pause.
+      if ((e6.stats.errors ?? 0) > 0 && providerName === 'groq') {
+        const wait = msUntilAnyKeyFree();
+        if (wait != null && wait > 0 && wait <= MAX_STALL_WAIT_MS) {
+          process.stderr.write(`\n  ⏸  all keys cooling — sleeping ${Math.ceil(wait / 1000)}s, retrying case ${i + 1}\n`);
+          await sleep(wait + 1000);
+          e6 = await extractE6(c.text, { callModel, modelPin });
+        } else if (wait != null && wait > MAX_STALL_WAIT_MS) {
+          process.stderr.write(`\n  ✗ cooldown is ${Math.ceil(wait / 60000)} min — that is the DAILY quota, not the per-minute one.\n`);
+        }
+      }
+
+      scoredE6.push(suite.score(c, { facts: e6.facts, surfaces: e6.surfaces }));
+
+      const errs = e6.stats.errors ?? 0;
+      passErrors += errs;
+      consecutiveErrors = errs > 0 ? consecutiveErrors + 1 : 0;
+
+      e6Stats.called += e6.stats.called ?? 0;
+      e6Stats.cached += e6.stats.cached ?? 0;
+      e6Stats.errors += errs;
+      for (const m of e6.stats.models ?? []) e6Stats.models.add(m);
+      for (const [g, n] of Object.entries(e6.stats.byGate ?? {})) {
+        e6Stats.discardedByGate[g] = (e6Stats.discardedByGate[g] ?? 0) + n;
+      }
+
+      // 🔴 STOP WHEN THE TRANSPORT DIES, RATHER THAN SCORING THE SILENCE.
+      //
+      // The pre-flight probe catches a provider that is dead at the START. It
+      // cannot catch one that dies at case 130, which is what happened: all
+      // four Groq keys hit rate limits mid-pass-2 (cooldowns of 186s to 657s),
+      // pass 2 finished blind, and pass 3 made ZERO successful calls. Every
+      // case scored an empty extraction — and empty scores 0% detection and
+      // 100% silence_on_negatives, exactly the shape this file's own header
+      // warns is "indistinguishable from a catastrophically bad extractor".
+      if (consecutiveErrors >= ABORT_AFTER_CONSECUTIVE_ERRORS) {
+        aborted = true;
+        process.stderr.write(
+          `\n  ✗ pass ${pass + 1} ABORTED at case ${i + 1}: ` +
+          `${consecutiveErrors} consecutive transport errors. Not scoring silence as data.\n`);
+        break;
+      }
+      if ((i + 1) % 20 === 0) process.stderr.write(`  … ${i + 1}/${cases.length}\n`);
     }
-    if ((i + 1) % 20 === 0) process.stderr.write(`  … ${i + 1}/${cases.length}\n`);
+
+    // A pass is VALID only if the transport answered for essentially all of it.
+    // An invalid pass is kept for the record and excluded from every number.
+    const errorRate = cases.length ? passErrors / cases.length : 1;
+    const valid = !aborted && errorRate <= MAX_PASS_ERROR_RATE;
+    passes.push({ metrics: suite.metrics(scoredE6), valid, passErrors, errorRate, aborted, index: pass + 1 });
+    if (!valid) {
+      console.error(`  ⚠️  pass ${pass + 1} INVALID — ${passErrors} transport errors ` +
+        `(${(errorRate * 100).toFixed(1)}% of cases). Excluded from results.`);
+    }
   }
 
   const mCur = suite.metrics(scoredCurrent);
-  const mE6 = suite.metrics(scoredE6);
+
+  // Only VALID passes are data. The previous version reported
+  // `passes[passes.length - 1]` unconditionally and picked a pass in which the
+  // provider had answered nothing — publishing 0.0% detection as a measurement.
+  const good = passes.filter(p => p.valid);
+  if (!good.length) {
+    console.error(`\n✗ NOTHING WAS MEASURED — all ${passes.length} pass(es) failed on transport.`);
+    console.error(`  ${e6Stats.errors} errors across ${e6Stats.called} calls.`);
+    console.error('  Cooldowns of this length are the DAILY quota, not the per-minute one —');
+    console.error('  pacing and waiting cannot get past it. The keys have to reset.');
+    console.error('  Once they have: --repeat 3 --limit 40 --pace 1200   (~105 calls).');
+    process.exit(1);
+  }
+
+  // The last VALID pass, not an average — averaging invents a run that never
+  // happened and cannot be reproduced from any single command.
+  const reported = good[good.length - 1];
+  const mE6 = reported.metrics;
+
+  const noise = {};
+  if (good.length > 1) {
+    for (const k of Object.keys(mE6)) {
+      const sp = spread(good.map(p => p.metrics[k]));
+      if (sp && sp.range > 0) noise[k] = sp;
+    }
+  }
 
   console.log(`\nE6 SHADOW RUN · ${cases.length} cases · ${e6Stats.called} calls, ${e6Stats.cached} cache hits`);
   console.log(`models seen: ${[...e6Stats.models].join(', ') || '(none reported)'}\n`);
@@ -287,7 +475,7 @@ async function main() {
   // A partial run is not comparable to a full-set baseline, and the script now
   // says so rather than printing a difference between two populations.
   const fullRun = cases.length === dataset.cases.length;
-  const verdict = evaluatePromotion(mE6, baseline, { comparable: fullRun });
+  const verdict = evaluatePromotion(mE6, baseline, { comparable: fullRun, noise });
   if (!fullRun) {
     console.log(`\n⚠️  PARTIAL RUN — ${cases.length} of ${dataset.cases.length} cases.`);
     console.log('   Baseline comparison and promotion are DISABLED: the committed baseline');
@@ -305,7 +493,35 @@ async function main() {
   }
   if (verdict.regressions.length) {
     console.log('\n  REGRESSIONS vs the committed baseline:');
-    for (const r of verdict.regressions) console.log(`    ${r.metric}: ${pct(r.before)} → ${pct(r.after)}`);
+    for (const r of verdict.regressions) {
+      const tag = r.verified ? `exceeds noise ±${pct(r.noiseRange)}`
+        : 'UNVERIFIED — no noise estimate, re-run with --repeat 3';
+      console.log(`    ${r.metric}: ${pct(r.before)} → ${pct(r.after)}  (${tag})`);
+    }
+  }
+
+  console.log(`\nreported: pass ${reported.index} of ${passes.length}` +
+    (passes.length > good.length ? `  (${passes.length - good.length} INVALID, excluded)` : '') +
+    `  ·  ${e6Stats.errors} transport error(s)`);
+
+  if (good.length > 1) {
+    const noisy = Object.entries(noise).sort((a, b) => b[1].range - a[1].range);
+    console.log(`\nRUN-TO-RUN NOISE over ${good.length} valid passes (same model, temperature 0)`);
+    if (!noisy.length) console.log('  none — every metric was identical across passes');
+    for (const [k, sp] of noisy.slice(0, 8)) {
+      // ⚠️ NOT EVERY METRIC IS A RATE. `false_positives` is a COUNT, and the
+      // first noise report rendered 3 of them as "300.0%" — a number that is
+      // not wrong so much as meaningless, sitting at the top of the table
+      // because it sorted highest. Counts print as counts.
+      const fmt = IS_COUNT.test(k) ? (v => v.toFixed(0)) : pct;
+      console.log(`  ${k.padEnd(26)} ${String(fmt(sp.min)).padStart(7)} – ${String(fmt(sp.max)).padStart(7)}   range ${fmt(sp.range)}`);
+    }
+  } else if (repeat > 1) {
+    console.log(`\n⚠️  NOISE NOT MEASURED — only ${good.length} of ${repeat} passes were valid.`);
+  } else {
+    console.log('\n⚠️  NOISE NOT MEASURED — single pass. Two identical runs of this model have');
+    console.log('    differed by 16 points on detection_modality, so a small movement here');
+    console.log('    means nothing. Use --repeat 3 before acting on any near-threshold number.');
   }
 
   const attributable = e6Stats.models.size > 0;

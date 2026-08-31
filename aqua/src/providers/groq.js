@@ -51,6 +51,27 @@ function onCooldown(key) {
   return until ? Date.now() < until : false;
 }
 
+/**
+ * Milliseconds until at least one key is usable again.
+ *
+ * 0 when a key is free now, null when none are configured. Exposed for the E6
+ * shadow harness: a rate limit is a WAIT, not a failure — the provider states
+ * exactly how long — and the harness was treating the two the same, losing a
+ * whole run to cooldowns it could have slept through.
+ */
+export function msUntilAnyKeyFree() {
+  const keys = getKeys();
+  if (!keys.length) return null;
+  let soonest = Infinity;
+  for (const k of keys) {
+    const until = keyCooldowns.get(k) ?? 0;
+    const wait = Math.max(0, until - Date.now());
+    if (wait === 0) return 0;
+    if (wait < soonest) soonest = wait;
+  }
+  return Number.isFinite(soonest) ? soonest : 0;
+}
+
 function applyCooldown(key, ms) {
   keyCooldowns.set(key, Date.now() + ms);
 }
