@@ -137,6 +137,16 @@ export default {
       ...Object.fromEntries(Object.entries(byCat).sort()
         .map(([cat, v]) => [`detection_${cat}`, ratio(v.detected, v.n)])),
 
+      // ── Denominators, so a 0/0 is distinguishable from a measured 0.0 ──
+      //
+      // `ratio()` returns 0 when the denominator is 0, which is right for a
+      // metric but wrong for a DECISION. The E6 promotion gate read
+      // `detection_negation: 0` on a slice containing no negation cases and
+      // returned DO NOT PROMOTE. Publishing the counts alongside the rates
+      // lets a caller tell "scored zero" from "was never asked".
+      ...Object.fromEntries(Object.entries(byCat).sort()
+        .map(([cat, v]) => [`n_cases_${cat}`, v.n])),
+
       positives: pos.length,
       negatives: neg.length,
       labelled_claims: claims,

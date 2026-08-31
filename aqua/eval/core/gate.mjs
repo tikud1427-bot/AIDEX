@@ -74,6 +74,17 @@ export const STRUCTURAL = new Set([
 ]);
 
 /**
+ * Per-category case counts published by `extraction-core`.
+ *
+ * They exist so a caller can tell a scored 0.0 from a 0/0 — the E6 promotion
+ * gate failed on `negation 0%` when no negation case had been sent. They
+ * describe the DATASET, so they are structural: a change means the corpus
+ * changed, which is never an improvement or a regression, and grading them
+ * would turn a deliberate dataset edit into a blocked build.
+ */
+export const STRUCTURAL_PREFIXES = ['n_cases_'];
+
+/**
  * DIAGNOSTIC — reported, compared, and never gated in either direction.
  *
  * STRUCTURAL was the wrong home for these and the distinction is worth keeping
@@ -157,7 +168,7 @@ export function compareToBaseline(baseline, report) {
     const now = metrics[name];
     const delta = now - was;
 
-    if (STRUCTURAL.has(name)) {
+    if (STRUCTURAL.has(name) || STRUCTURAL_PREFIXES.some(pre => name.startsWith(pre))) {
       const same = Math.abs(delta) < EPSILON;
       rows.push({ name, was, now, delta, verdict: same ? VERDICT.PASS : VERDICT.STRUCTURAL_CHANGE });
       if (!same) {

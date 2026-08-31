@@ -90,14 +90,32 @@ export async function extractE6(text, opts = {}) {
   for (const claim of run.claims) {
     facts.push(toFact(claim));
 
-    // The suite matches labelled subjects against SURFACE FORMS. `self` is the
-    // pipeline's internal token for the speaker and appears in no corpus, so
-    // it expands to the first-person forms the labels use — otherwise every
-    // self-claim scores a subject miss for a reason unrelated to extraction
-    // quality. This is an eval-shape concern, which is why it lives here and
-    // not in the pipeline.
-    if (claim.subject === 'self') { for (const t of ['self', 'I', 'me', 'my', 'we', 'our']) surfaces.add(t); }
-    else surfaces.add(claim.subject);
+    // 🔴 THE SUITE CHECKS ONE SENTINEL, AND THIS EMITTED SIX OF THE WRONG THING.
+    //
+    // `extraction-core.suite.mjs` scores a self-subject with exactly:
+    //
+    //     if (claim.s === 'SELF') return surfaces.has('__self__');
+    //
+    // The previous version of this block expanded `self` into first-person
+    // SURFACE forms — 'I', 'me', 'my', 'we', 'our' — reasoning that the labels
+    // use those. They do not: the label is the literal string `SELF` and the
+    // suite translates it to the sentinel `__self__`, which is what
+    // `currentExtractor.mjs` has always emitted (`if (e.isSelf) out.add('__self__')`).
+    //
+    // So every self-claim missed. Measured on the first shadow run: 20 of 20
+    // claims in the identity slice are SELF-subject, and `subject_recall` came
+    // back 0.00 against the regex lane's 0.55 on the SAME cases — while
+    // detection sat at 0.90 and predicate accuracy at 0.65. An extractor
+    // finding 90% of claims and reading 65% of predicates correctly was never
+    // getting 0% of subjects; the shape of that number was the tell.
+    //
+    // The comment this replaces described the right problem and shipped the
+    // wrong token. The first-person forms are kept ALONGSIDE the sentinel: they
+    // cost nothing, and a label that names a surface form directly still matches.
+    if (claim.subject === 'self') {
+      surfaces.add('__self__');
+      for (const t of ['self', 'I', 'me', 'my', 'we', 'our']) surfaces.add(t);
+    } else surfaces.add(claim.subject);
     if (claim.objectKind === 'entity' && claim.object?.entity) surfaces.add(claim.object.entity);
   }
 

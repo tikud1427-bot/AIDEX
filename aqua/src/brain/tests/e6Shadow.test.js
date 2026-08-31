@@ -117,7 +117,15 @@ describe('the E6 adapter runs every stage, and says which one dropped a claim', 
     const r = await extractE6('I work at Nummo.', { callModel: stub([paraphrase]) });
     assert.equal(r.facts.length, 0);
     assert.equal(r.stats.discarded, 1);
-    assert.equal(r.stats.byGate['1'], 1, 'gate ① — the quote is not verbatim');
+    // Keyed `gate:reason` since the first live shadow run reported
+    // `{"2": 2}` — gate 2 covers both `object-missing` and
+    // `object-not-in-quote`, opposite defects in one bucket. The gate number
+    // is still the prefix, so this still pins WHICH stage dropped it, and now
+    // also pins why.
+    const key = Object.keys(r.stats.byGate).find(k => k.startsWith('1:'));
+    assert.ok(key, `expected a gate-1 discard, got ${JSON.stringify(r.stats.byGate)}`);
+    assert.equal(r.stats.byGate[key], 1, 'gate ① — the quote is not verbatim');
+    assert.match(key, /^1:quote-not-verbatim$/, 'the reason must be named, not just the stage');
   });
 
   test('an invented predicate is PROPOSED, not discarded and not emitted', async () => {
@@ -149,6 +157,11 @@ describe('the promotion rule', () => {
     detection_recall: 0.95, subject_recall: 0.9, predicate_accuracy: 0.9,
     fidelity_accuracy: 0.9, silence_on_negatives: 0.95,
     detection_negation: 0.97, false_positives: 2, negatives: 40,
+    // The DENOMINATORS the real suite always emits. Without them every rate
+    // here is 0/0 and unmeasurable — which is the whole point of the change
+    // these were added for, and a fixture that omits them is not the shape
+    // `suite.metrics()` actually returns.
+    positives: 160, labelled_claims: 167, n_cases_negation: 20,
   };
 
   test('the gate is the blueprint\'s, not one invented here', () => {

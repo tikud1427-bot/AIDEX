@@ -157,7 +157,7 @@ export async function runUnderstandingPipeline(text, opts = {}) {
         proposals.push({ predicate: r.raw?.predicate, quote: r.raw?.statementText, segment: seg.text });
       } else {
         stats.discarded++;
-        stats.byGate.contract = (stats.byGate.contract ?? 0) + 1;
+        stats.byGate['?:contract'] = (stats.byGate['?:contract'] ?? 0) + 1;
       }
     }
 
@@ -174,7 +174,22 @@ export async function runUnderstandingPipeline(text, opts = {}) {
       }
       if (v.outcome !== OUTCOME.ADMIT) {
         stats.discarded++;
-        stats.byGate[v.gate] = (stats.byGate[v.gate] ?? 0) + 1;
+        // 🔴 KEYED BY REASON, NOT BY GATE NUMBER.
+        //
+        // `claimValidator.fail(gate, reason)` carries BOTH — a numeric stage id
+        // and the human-readable cause — and this line kept only the number.
+        // The first E6 shadow run reported `discardedByGate: {"2": 2}`, which
+        // says a claim died at stage 2 and nothing about why. Gate 2 alone
+        // covers `object-missing` AND `object-not-in-quote`: one is the model
+        // omitting a field, the other is it inventing content not in the quote.
+        // Opposite defects, same bucket, and the bucket was the only record.
+        //
+        // Both are kept, gate first so the output still sorts by pipeline
+        // stage. `?? 'unknown'` because the contract path below sets a reason
+        // with no gate number, and a discard with no label at all is the thing
+        // this is fixing.
+        const key = `${v.gate ?? '?'}:${v.reason ?? 'unknown'}`;
+        stats.byGate[key] = (stats.byGate[key] ?? 0) + 1;
         continue;
       }
       stats.admitted++;

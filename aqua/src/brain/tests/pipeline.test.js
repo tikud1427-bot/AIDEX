@@ -54,6 +54,16 @@ const store = (names = []) => {
 
 beforeEach(() => __clearExtractionCache());
 
+/**
+ * Discards are keyed `gate:reason` — the gate number alone lost the cause.
+ * The first live E6 shadow run reported `{"2": 2}`, and gate 2 covers both
+ * `object-missing` and `object-not-in-quote`: one is the model omitting a
+ * field, the other inventing content. This finds the entry by stage prefix so
+ * these tests keep pinning the stage while the reason rides along.
+ */
+const gateKey = (r, gate) =>
+  Object.keys(r.stats.byGate).find(k => k === gate || k.startsWith(`${gate}:`)) ?? gate;
+
 describe('S0 — secrets never reach the provider', () => {
   test('an API key in the message is REDACTED before transmission', async () => {
     // Before this module nothing between the user's text and a third-party
@@ -185,7 +195,7 @@ describe('the pipeline runs the stages in blueprint order', () => {
     const r = await runUnderstandingPipeline('I work at Nummo.', {
       callModel: spy([{ ...worksAt, statementText: 'The user is employed at Nummo' }]) });
     assert.equal(r.claims.length, 0);
-    assert.equal(r.stats.byGate['1'], 1, 'gate ① — the quote is not verbatim');
+    assert.equal(r.stats.byGate[gateKey(r, '1')], 1, 'gate ① — the quote is not verbatim');
   });
 
   test('an unregistered predicate becomes a PROPOSAL, carrying its quote', async () => {

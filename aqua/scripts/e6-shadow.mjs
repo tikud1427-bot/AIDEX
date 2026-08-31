@@ -75,33 +75,98 @@ export const PROMOTION_GATE = Object.freeze({
  * numbers need a key, the DECISION about them does not, and a promotion rule
  * that only runs on the day you want to promote has never been exercised.
  */
-export function evaluatePromotion(metrics, baseline) {
-  const precision = 1 - (metrics.false_positives ?? 0) / Math.max(1, metrics.negatives ?? 40);
-  const recall = metrics.detection_recall ?? 0;
-  const negation = metrics.detection_negation ?? 0;
+export function evaluatePromotion(metrics, baseline, { comparable = true } = {}) {
+  // 🔴 0/0 IS NOT 0.0, AND THE GATE USED TO FAIL ON IT.
+  //
+  // The first shadow run reported `negation 0% — FAIL` and returned DO NOT
+  // PROMOTE. No negation case had been sent: `--limit 20` took a prefix of a
+  // category-ordered dataset and the first negative is at index 160. The
+  // aggregator divided zero by zero, got 0, and the gate read it as a
+  // catastrophic score. The regex control scored the identical 0.0 on the same
+  // slice, which is what proved it was arithmetic rather than extraction.
+  //
+  // An unmeasured metric now reports `null` and is SKIPPED, not failed. It also
+  // blocks promotion — untested is not passed — but it is reported as
+  // "not measured" so nobody re-diagnoses a working extractor.
+  const negatives = metrics.negatives ?? 0;
+  const measured = {
+    precision: negatives > 0 ? 1 - (metrics.false_positives ?? 0) / negatives : null,
+    // `positives` is the TRUE denominator of detection_recall
+    // (pos.filter(emitted).length / pos.length), so it is the right thing to
+    // ask whether anything was measured.
+    recall: (metrics.positives ?? 0) > 0 ? (metrics.detection_recall ?? 0) : null,
+    // `n_cases_negation` is published by the suite precisely so this can tell
+    // "the extractor scored zero" from "no negation case was sent".
+    negation: (metrics.n_cases_negation ?? 0) > 0 ? (metrics.detection_negation ?? 0) : null,
+  };
 
   const checks = [
-    ['precision', precision, PROMOTION_GATE.precision],
-    ['recall', recall, PROMOTION_GATE.recall],
-    ['negation', negation, PROMOTION_GATE.negation],
-  ].map(([name, got, need]) => ({ name, got, need, pass: got >= need }));
+    ['precision', measured.precision, PROMOTION_GATE.precision],
+    ['recall', measured.recall, PROMOTION_GATE.recall],
+    ['negation', measured.negation, PROMOTION_GATE.negation],
+  ].map(([name, got, need]) => (got == null
+    ? { name, got: null, need, pass: false, measured: false }
+    : { name, got, need, pass: got >= need, measured: true }));
 
   // Beating the gate is necessary but not sufficient: a new extractor that
   // met every threshold while scoring BELOW the committed baseline on some
   // dimension would be a regression wearing a passing grade.
+  //
+  // ⚠️ ONLY WHEN THE TWO NUMBERS DESCRIBE THE SAME CASES. The first run listed
+  // `silence_on_negatives 0.9 → 0` as a regression, comparing a 200-case
+  // baseline with 40 negatives against a 20-case slice with none. That is not
+  // a regression, it is two different populations. On a partial run the
+  // comparison is refused outright rather than reported wrongly.
   const regressions = [];
-  for (const k of ['detection_recall', 'subject_recall', 'predicate_accuracy',
-    'fidelity_accuracy', 'silence_on_negatives']) {
-    const before = baseline?.[k] ?? 0, after = metrics?.[k] ?? 0;
-    if (after < before - 1e-9) regressions.push({ metric: k, before, after });
+  if (comparable) {
+    for (const k of ['detection_recall', 'subject_recall', 'predicate_accuracy',
+      'fidelity_accuracy', 'silence_on_negatives']) {
+      const before = baseline?.[k] ?? 0, after = metrics?.[k] ?? 0;
+      if (after < before - 1e-9) regressions.push({ metric: k, before, after });
+    }
   }
 
   return {
+    comparable,
     checks,
     regressions,
     gatePassed: checks.every(c => c.pass),
-    promote: checks.every(c => c.pass) && regressions.length === 0,
+    // A partial run can never promote, however good it looks. The baseline it
+    // would be promoted against describes cases it did not run.
+    promote: comparable && checks.every(c => c.pass) && regressions.length === 0,
   };
+}
+
+/**
+ * Round-robin over categories, order-stable within each.
+ *
+ * A prefix slice of a grouped dataset is not a sample of it. This keeps the
+ * per-category proportions as even as the budget allows and is fully
+ * deterministic, so `--limit 40` twice is the same forty cases.
+ */
+export function stratify(cases, limit) {
+  if (!Number.isFinite(limit) || limit >= cases.length) return cases;
+  const buckets = new Map();
+  for (const c of cases) {
+    const k = c.cat ?? 'uncategorised';
+    if (!buckets.has(k)) buckets.set(k, []);
+    buckets.get(k).push(c);
+  }
+  const queues = [...buckets.values()];
+  const out = [];
+  for (let round = 0; out.length < limit; round++) {
+    let took = false;
+    for (const q of queues) {
+      if (round >= q.length) continue;
+      out.push(q[round]);
+      took = true;
+      if (out.length >= limit) break;
+    }
+    if (!took) break;
+  }
+  // Restore dataset order so output reads naturally and is reproducible.
+  const chosen = new Set(out.map(c => c.id));
+  return cases.filter(c => chosen.has(c.id));
 }
 
 const pct = n => `${(n * 100).toFixed(1)}%`;
@@ -112,7 +177,26 @@ async function main() {
   const baseline = JSON.parse(readFileSync(path.join(ROOT, 'eval/baselines/extraction-core.v1.json'), 'utf8')).metrics;
 
   const limit = Number(flag('--limit', dataset.cases.length));
-  const cases = dataset.cases.slice(0, limit);
+
+  /**
+   * 🔴 `--limit` TOOK A PREFIX OF A CATEGORY-ORDERED DATASET.
+   *
+   * `extraction-core.v1` is grouped by category: cases 0-19 are all `identity`
+   * and the first NEGATIVE case is at index 160. So `--limit 20` measured
+   * twenty identity sentences, zero negatives, and nothing from decision,
+   * modality, people, task or temporal — then printed those numbers beside a
+   * baseline computed over all 200.
+   *
+   * The first shadow run failed the promotion gate on `negation 0%` when no
+   * negation case had been sent, and listed `silence_on_negatives 0.9 → 0` as a
+   * regression when the denominator was zero. Both came from here.
+   *
+   * Round-robin across categories instead. Deterministic — no RNG, so two runs
+   * of the same --limit send the same cases and their numbers are comparable —
+   * and it takes from every category before taking a second from any, so a
+   * small budget still touches negatives.
+   */
+  const cases = stratify(dataset.cases, limit);
   const modelPin = flag('--model', null);
 
   /**
@@ -200,10 +284,24 @@ async function main() {
     console.log(`${k.padEnd(26)} ${pct(b).padStart(7)}  ${pct(c).padStart(8)}  ${pct(e).padStart(8)} ${arrow(c, e)}`);
   }
 
-  const verdict = evaluatePromotion(mE6, baseline);
+  // A partial run is not comparable to a full-set baseline, and the script now
+  // says so rather than printing a difference between two populations.
+  const fullRun = cases.length === dataset.cases.length;
+  const verdict = evaluatePromotion(mE6, baseline, { comparable: fullRun });
+  if (!fullRun) {
+    console.log(`\n⚠️  PARTIAL RUN — ${cases.length} of ${dataset.cases.length} cases.`);
+    console.log('   Baseline comparison and promotion are DISABLED: the committed baseline');
+    console.log('   describes all 200 cases and this run did not send them. The current-vs-E6');
+    console.log('   columns above are still valid — both lanes saw exactly these cases.');
+  }
   console.log('\nPROMOTION GATE');
   for (const c of verdict.checks) {
-    console.log(`  ${c.name.padEnd(10)} ${pct(c.got).padStart(7)} need ≥ ${pct(c.need)}  ${c.pass ? 'PASS' : 'FAIL'}`);
+    // An unmeasured check prints NOT MEASURED, never 0.0% FAIL. It still
+    // blocks promotion — untested is not passed — but it no longer looks like
+    // a catastrophic score and send someone diagnosing a working extractor.
+    const got = c.measured === false ? '    n/a' : pct(c.got).padStart(7);
+    const status = c.measured === false ? 'NOT MEASURED (no cases in this run)' : (c.pass ? 'PASS' : 'FAIL');
+    console.log(`  ${c.name.padEnd(10)} ${got} need ≥ ${pct(c.need)}  ${status}`);
   }
   if (verdict.regressions.length) {
     console.log('\n  REGRESSIONS vs the committed baseline:');
