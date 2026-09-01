@@ -73,6 +73,89 @@ export function recordMemoryRetrieval({ latencyMs = 0, nonEmpty = false, lanes =
   }
 }
 
+// ── E6 — the understanding pipeline's only observable output ─────────────────
+//
+// 🔴 WHY THIS EXISTS: `AQUA_E6=on` used to buy one provider call per segment
+// and emit NOTHING. `turnPostProcess` called `understandTurn` and discarded the
+// return value, so a run that admitted zero claims was byte-identical to a run
+// whose transport threw — no line, no counter, no difference. That is the exact
+// failure `e6-shadow.mjs` refuses to publish ("segments 1 · gated 1 · called 1
+// · errors 1 · admitted 0"), reintroduced in production, with a bill attached.
+//
+// L13: a stage that spends money must say what it did. G5: it must say how long
+// it took. G6: every counter here is a scalar, so the shape is bounded no matter
+// how many turns run — `byGate` is deliberately NOT accumulated, because its key
+// space is open (gate × reason) and an unbounded map on a hot path is a leak.
+// It rides the per-turn line instead, where it is diagnostic and disposable.
+const e6 = {
+  turns: 0,        // deferred blocks that actually ran (flag on, input present)
+  failures: 0,     // understandTurn threw or rejected — NOT a zero-claim turn
+  skipped: 0,      // ran, returned null (no owner / no message)
+  emptyTurns: 0,   // completed cleanly and admitted nothing
+  segments: 0, gated: 0, called: 0, cached: 0, errors: 0,
+  parsed: 0, admitted: 0, proposed: 0, discarded: 0,
+  totalMs: 0,
+};
+
+/**
+ * Record and announce one E6 turn. The ONLY thing that makes the stage visible.
+ *
+ * Never throws: the caller is a fail-open deferred block, and an observability
+ * bug must not become the thing that breaks the seam it observes.
+ *
+ * @param {object}  args
+ * @param {object?} args.result   what `understandTurn` returned (null if it refused)
+ * @param {Error?}  args.error    what it threw, if it threw
+ */
+export function logE6Turn({ ownerId = null, conversationId = null, result = null, error = null, ms = 0 } = {}) {
+  try {
+    const at = `owner=${ownerId ?? '?'} conv=${conversationId ?? '?'} ms=${Math.round(ms)}`;
+
+    // A FAILURE IS A DIFFERENT LINE, NOT A MISSING ONE. Distinguishing "found
+    // nothing" from "never got to look" is the whole point of this function.
+    if (error) {
+      e6.turns += 1; e6.failures += 1; e6.totalMs += ms;
+      console.warn(`[E6] ${at} FAILED reason=${error?.message ?? String(error)}`);
+      return;
+    }
+    if (!result) {
+      e6.turns += 1; e6.skipped += 1; e6.totalMs += ms;
+      console.log(`[E6] ${at} skipped=no-input`);
+      return;
+    }
+
+    const s = result.stats ?? {};
+    e6.turns += 1;
+    e6.totalMs += ms;
+    for (const k of ['segments', 'gated', 'called', 'cached', 'errors',
+      'parsed', 'admitted', 'proposed', 'discarded']) {
+      e6[k] += Number(s[k] ?? 0);
+    }
+    if (!Number(s.admitted ?? 0)) e6.emptyTurns += 1;
+
+    const byGate = Object.keys(s.byGate ?? {}).length ? ` byGate=${JSON.stringify(s.byGate)}` : '';
+    const models = (s.models ?? []).length ? ` models=${s.models.join(',')}` : '';
+    // S6 rides the line only when it RAN. An `s6=…` field printed on every turn
+    // — zeros included — would make an unrun stage look like a stage that
+    // resolved nothing, which is the 0/0-as-0.0 confusion one layer up.
+    const s6 = s.s6
+      ? ` s6.ready=${s.s6.ready} s6.ambiguous=${s.s6.ambiguous} s6.provisional=${s.s6.provisional}`
+        + ` s6.byTier=${JSON.stringify(s.s6.byTier ?? {})}`
+      : '';
+    console.log(
+      `[E6] ${at} segments=${s.segments ?? 0} gated=${s.gated ?? 0} called=${s.called ?? 0} `
+      + `cached=${s.cached ?? 0} errors=${s.errors ?? 0} parsed=${s.parsed ?? 0} `
+      + `admitted=${s.admitted ?? 0} proposed=${s.proposed ?? 0} discarded=${s.discarded ?? 0} `
+      + `stages=${(result.stagesRun ?? []).join(',') || 'none'} `
+      + `entities=${result.entityResolution ?? '?'}${s6}${models}${byGate}`);
+  } catch { /* observability must never break the stage it observes */ }
+}
+
+/** Test seam — module-level counters need a reset between assertions. */
+export function _resetE6Metrics() {
+  for (const k of Object.keys(e6)) e6[k] = 0;
+}
+
 function ensureProvider(p) {
   if (!metrics.byProvider[p])
     metrics.byProvider[p] = { requests: 0, successes: 0, failures: 0, totalLatencyMs: 0 };
@@ -555,6 +638,11 @@ export function getMetrics() {
 
   return {
     memoryRetrieval,
+    // E6 — visible at /provider-health so a running instance can be asked what
+    // the understanding pipeline has actually done, rather than only what its
+    // flag is set to. `turns` is the denominator: turns > 0 with admitted = 0
+    // is a measured silence; turns = 0 is a stage that never ran.
+    e6: { ...e6, avgMs: e6.turns ? +(e6.totalMs / e6.turns).toFixed(2) : 0 },
     totalRequests:  metrics.totalRequests,
     totalSuccesses: metrics.totalSuccesses,
     totalFailures:  metrics.totalFailures,

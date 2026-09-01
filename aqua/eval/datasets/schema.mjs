@@ -139,6 +139,38 @@ export function validateDataset(ds) {
     }
     for (const claim of c.claims) validateClaim(id, claim, c.text);
   }
+
+  // ── Class completeness — the E6 smoke defect, made structural ──────────────
+  //
+  // Every rule above judges a case in isolation, and a dataset can satisfy all
+  // of them and still be unmeasurable. Delete every negation case and the file
+  // is still perfectly well formed — but `detection_negation` becomes 0/0, and
+  // `ratio()` renders 0/0 as 0.0. The E6 promotion gate read exactly that
+  // number off exactly that kind of slice and returned DO NOT PROMOTE: a
+  // verdict about a missing class, delivered as a verdict about the extractor.
+  //
+  // Publishing `n_cases_*` next to the rates (extraction-core.suite.mjs) makes
+  // that emptiness READABLE. This makes it IMPOSSIBLE. No dataset reaches a
+  // scorer carrying a declared category it cannot measure.
+  //
+  // One rule covers every denominator in the suite: each per-category rate
+  // divides by its own category count, `silence_on_negatives` divides by the
+  // negatives, and the three claim-level rates divide by the labelled claims —
+  // which cannot be zero once a non-negative category is non-empty, because a
+  // non-negative case with no claims is already refused above.
+  //
+  // The registry is the contract. A dataset that genuinely should not carry a
+  // category shrinks CATEGORIES — an edit a reviewer sees — rather than
+  // omitting it quietly.
+  const counts = census(ds);
+  const empty = CATEGORIES.filter(c => counts[c] === 0);
+  if (empty.length) {
+    throw new DatasetError(
+      `${ds.id}: no cases in category ${empty.map(c => `"${c}"`).join(', ')} — `
+      + 'every metric over that category would be 0/0 rendered as 0.0. Add cases, '
+      + 'or remove the category from CATEGORIES on purpose.');
+  }
+
   return true;
 }
 

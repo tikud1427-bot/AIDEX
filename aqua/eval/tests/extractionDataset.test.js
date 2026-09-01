@@ -190,3 +190,47 @@ describe('extraction dataset — the validator refuses bad labels', () => {
       'I use Go'), /must record the expression/);
   });
 });
+
+// ── The validator refuses an UNMEASURABLE dataset ────────────────────────────
+//
+// Distinct from every test above, which asks whether a case is well formed.
+// These ask whether the SET can be scored. A dataset can be flawless case by
+// case and still turn a metric into 0/0 — that is the defect the E6 smoke slice
+// shipped, and reading it as 0.0 is what made it invisible.
+
+describe('extraction dataset — a class-incomplete dataset is refused', () => {
+  const without = cat => ({ ...DS, cases: DS.cases.filter(c => c.cat !== cat) });
+
+  test('dropping the negation cases is refused, not scored as 0.0', () => {
+    // THE ORIGINAL DEFECT, reproduced. Every surviving case is valid; the file
+    // parses; only the denominator is gone.
+    assert.throws(() => validateDataset(without('negation')),
+      /no cases in category "negation"/);
+  });
+
+  test('dropping the negatives is refused — precision would be unmeasurable', () => {
+    assert.throws(() => validateDataset(without('negative')),
+      /no cases in category "negative"/);
+  });
+
+  test('EVERY declared category is load-bearing, not just the two we remembered', () => {
+    // A hand-maintained list of "the categories that matter" is the same
+    // failure one level up. The rule is derived from CATEGORIES, so a category
+    // added tomorrow is covered without an edit here.
+    for (const cat of CATEGORIES) {
+      assert.throws(() => validateDataset(without(cat)),
+        new RegExp(`no cases in category "${cat}"`),
+        `dropping "${cat}" was accepted — the completeness rule does not cover it`);
+    }
+  });
+
+  test('the error names the consequence, not just the rule', () => {
+    // "invalid dataset" sends someone to the schema. Naming 0/0 sends them to
+    // the metric that is about to lie to them.
+    assert.throws(() => validateDataset(without('temporal')), /0\/0/);
+  });
+
+  test('the intact dataset still validates — the rule is not merely strict', () => {
+    assert.equal(validateDataset(DS), true);
+  });
+});

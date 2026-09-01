@@ -45,6 +45,7 @@ import { getConversation } from '../memory/conversationStore.js';
 import { REFLECT_EVERY_TURNS } from '../mind/reflectionEngine.js';
 import { consolidate, consolidateEnabled, CONSOLIDATE_EVERY_TURNS } from '../pic/core.js';
 import { peekMind } from '../mind/mindStore.js';
+import { logE6Turn } from '../core/observability.js';
 
 /** Real wiring. Overridable so the seam is testable without a live turn. */
 const REAL_DEPS = Object.freeze({
@@ -63,6 +64,11 @@ const REAL_DEPS = Object.freeze({
   // provider; see the note at the deferred block below.
   understandTurn: Brain.understandTurn,
   e6Enabled: Brain.e6Enabled,
+  // E6 observability — the seam's ONLY output. Injected alongside
+  // `understandTurn` so a wiring test can assert what was reported without a
+  // provider, and so the production default is the real reporter rather than a
+  // no-op that a test would never notice.
+  reportE6: logE6Turn,
   reflectEvery: REFLECT_EVERY_TURNS,
   consolidate,
   consolidateEnabled,
@@ -167,10 +173,40 @@ export function runPostTurn({
   // Deferred, fail-open and flag-gated exactly like its three siblings above:
   // an extractor that throws must not cost the user their reply. The flag is
   // read per call, not captured at import, so a rollback is a restart.
+  //
+  // 🔴 THE RESULT IS BOUND, AND THAT IS A FIX, NOT A FEATURE.
+  //
+  // This block read `.then(() => d.understandTurn(...))` — an arrow taking no
+  // parameter. The pipeline ran, cost one provider call per segment, and its
+  // return value was unreachable. Nothing counted it, nothing logged it, and a
+  // turn that admitted zero claims was indistinguishable from a turn whose
+  // transport threw. `e6-shadow.mjs` refuses to publish exactly that ambiguity
+  // — `segments 1 · gated 1 · called 1 · errors 1 · admitted 0` is the shape it
+  // guards against — and production carried it by default. Per L13 that is a
+  // dark stage with a bill. Unflagged, per L15.
+  //
+  // TWO-ARGUMENT `.then`, NOT `.then().catch()`. A trailing catch would also
+  // swallow a throw from the REPORTER and re-report it as an extractor failure,
+  // turning one observability bug into a false FAILED line on every turn. The
+  // outer `.catch` is the fail-open floor for a reporter that throws, and it
+  // stays silent: a stage whose only output channel is broken must not try to
+  // announce that on the same channel.
+  //
+  // RETURNS THE PROMISE. `jobRegistry.defer` does `await fn()`, so a block that
+  // returns undefined tells the SIGTERM drain the job finished the instant it
+  // started — while the pipeline is still in flight. E4/PR-1 exists because 3
+  // of 3 outstanding post-turn jobs were lost on shutdown and nothing knew;
+  // this block was quietly reintroducing that for the one stage that costs
+  // money. Returning the chain is also what makes it awaitable in a test.
   d.defer(() => {
-    if (!d.e6Enabled()) return;
-    Promise.resolve()
+    if (!d.e6Enabled()) return undefined;
+    const started = Date.now();
+    return Promise.resolve()
       .then(() => d.understandTurn({ ownerId, conversationId, userMessage }))
+      .then(
+        result => d.reportE6({ ownerId, conversationId, result, ms: Date.now() - started }),
+        error => d.reportE6({ ownerId, conversationId, error, ms: Date.now() - started }),
+      )
       .catch(() => { /* fail-open: understanding must never affect the turn */ });
   });
 
