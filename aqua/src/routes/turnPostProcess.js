@@ -46,6 +46,25 @@ import { REFLECT_EVERY_TURNS } from '../mind/reflectionEngine.js';
 import { consolidate, consolidateEnabled, CONSOLIDATE_EVERY_TURNS } from '../pic/core.js';
 import { peekMind } from '../mind/mindStore.js';
 import { logE6Turn } from '../core/observability.js';
+import { resolveClaimShadowMode } from '../core/claims/shadowMode.js';
+
+/**
+ * Resolve the mode, then project — or say why not.
+ *
+ * The mode check lives HERE rather than inside the projector so the projector
+ * stays a pure "given these facts, produce claims and a report" unit that a
+ * test can drive without an environment. The cost is one wrapper; the benefit
+ * is that the thing doing the writing has no opinion about whether it should.
+ */
+async function runClaimShadowProjection({ ownerId, factIds }) {
+  const mode = await resolveClaimShadowMode();
+  if (mode.mode !== 'shadow') return null;
+  const { projectTurnFacts, claimParityLine } = await import('../core/claims/shadowProjector.js');
+  const report = await projectTurnFacts({ ownerId, factIds });
+  const line = claimParityLine(report);
+  if (line) console.log(line);
+  return report;
+}
 
 /** Real wiring. Overridable so the seam is testable without a live turn. */
 const REAL_DEPS = Object.freeze({
@@ -64,6 +83,10 @@ const REAL_DEPS = Object.freeze({
   // provider; see the note at the deferred block below.
   understandTurn: Brain.understandTurn,
   e6Enabled: Brain.e6Enabled,
+  // E5/PR-6 — the claim shadow projection. Injected so a wiring test can prove
+  // the production default rather than a fixture, and so the mode check and the
+  // projection stay one seam instead of two things a caller must remember.
+  projectClaimsShadow: runClaimShadowProjection,
   // E6 observability — the seam's ONLY output. Injected alongside
   // `understandTurn` so a wiring test can assert what was reported without a
   // provider, and so the production default is the real reporter rather than a
@@ -132,8 +155,9 @@ export function runPostTurn({
   // this is inert until turned on. Deferred to the next tick so it never
   // adds a millisecond to the response the user is waiting on.
   d.defer(() => {
+    let ingest = null;
     try {
-      d.observeConversationTurn({
+      ingest = d.observeConversationTurn({
         ownerId,
         conversationId,
         turn: d.getConversation(conversationId).length,
@@ -141,6 +165,27 @@ export function runPostTurn({
         assistantMessage,
       });
     } catch { /* fail-open: world-model enrichment must never affect the turn */ }
+
+    // E5/PR-6 — project THIS turn's facts into the claim substrate, in shadow.
+    //
+    // The JSON evidence store stays authoritative: nothing reads claims back,
+    // retrieval and the UI are untouched, and every claim is derived from a
+    // fact that already exists. What this buys is the PARITY REPORT — the
+    // per-turn difference between what the authoritative store holds and what
+    // the claim substrate managed to represent. Flipping claims authoritative
+    // later should be justified by that number having been boring for a long
+    // time, not by the blueprint saying claims are the atom.
+    //
+    // Doubly gated and it stays that way: AQUA_CLAIMS_SHADOW off by default,
+    // and `resolveClaimShadowMode` degrades to off with a stated reason when
+    // there is no DATABASE_URL. Not awaited, never throws — a shadow write must
+    // not be able to cost a user their reply.
+    const factIds = ingest?.factIds ?? [];
+    if (factIds.length) {
+      Promise.resolve()
+        .then(() => d.projectClaimsShadow({ ownerId, factIds }))
+        .catch(() => { /* fail-open: the projector already swallows its own */ });
+    }
     try {
       // Digital Twin (B6) — the six inferred patterns the Mind does not yet
       // cover. Signals route through the Mind's ONE belief writer, so they

@@ -29,6 +29,7 @@ import { createPgBlobAdapter, storeKeyFor, TABLE } from '../storage/pgBlobAdapte
 import { createJsonFileAdapter } from '../storage/jsonFileAdapter.js';
 import { assertAdapter, getAdapter, ADAPTER_FLAGS } from '../storage/index.js';
 import { isConfigured, closePool } from '../db/pool.js';
+import { runAdapterContract } from './helpers/adapterContract.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const LIVE = isConfigured();
@@ -201,11 +202,45 @@ describe('pg blob adapter — round trip against a real database', { skip }, () 
     await closePool();
   });
 
-  test('the shared contract passes against Postgres too', async () => {
-    // The same nine assertions the JSON adapter satisfies, unchanged. That is
-    // what makes "it works" mean the same thing for both.
-    const { runAdapterContract } = await import('./storageAdapter.test.js');
-    assert.equal(typeof runAdapterContract, 'function',
-      'the contract is not exported — PR-3 promised it would be reusable here');
-  });
+});
+
+// ── The shared contract, ACTUALLY RUN against Postgres ───────────────────────
+//
+// 🔴 THIS USED TO ASSERT THAT THE CONTRACT FUNCTION EXISTS.
+//
+//     const { runAdapterContract } = await import('./storageAdapter.test.js');
+//     assert.equal(typeof runAdapterContract, 'function');
+//
+// The comment above it promised "the same nine assertions the JSON adapter
+// satisfies, unchanged" — and asserted only that a function was exported. Nine
+// assertions were never executed against Postgres. The runtime import also
+// re-registered the whole json-file suite as a child of the running test, which
+// node cancelled, so the suite failed loudly the first time a live database
+// existed to run it against.
+//
+// Called at module scope now, gated by the same `skip`, so the contract runs
+// where it was always supposed to. The adapter is not hydrated first on
+// purpose: `write` is write-through to the cache, so the contract exercises the
+// same read path a caller gets before any hydrate — which is the state a fresh
+// process is actually in.
+runAdapterContract('pg-blob', createPgBlobAdapter, () => `/tmp/.aqua-contract-${Date.now()}-${Math.random()}.json`, {
+  skip,
+  // 🔴 A REAL DIVERGENCE, FOUND BY RUNNING THE CONTRACT FOR THE FIRST TIME.
+  //
+  // The JSON adapter serialises concurrent writes to one key and the last value
+  // wins. The Postgres adapter refuses them: its optimistic-concurrency guard
+  // fires on the instance's OWN in-flight writes, because each write checks a
+  // version the previous concurrent write has already moved. Reproduced both
+  // hydrated and unhydrated, so it is the adapter and not this invocation.
+  //
+  // Declared as `todo` rather than fixed or loosened. Fixing it is an E3
+  // decision about what optimistic concurrency should mean for a write-behind
+  // cache, and does not belong bolted onto a test repair. Loosening the
+  // assertion so both adapters pass would let "it works" mean two different
+  // things, which is what the shared contract exists to prevent. `todo` keeps
+  // the assertion exactly as written, still executed, and reported.
+  todo: {
+    'concurrent writes to one key all settle, last value wins':
+      'pg-blob rejects concurrent writes to one key (optimistic version guard) — E3, unfixed',
+  },
 });

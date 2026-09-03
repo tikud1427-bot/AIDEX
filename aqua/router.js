@@ -130,6 +130,29 @@ try {
   console.warn(`[UUS] flag report unavailable: ${err?.message ?? err}`);
 }
 
+// E4/PR-1 — the flag census. The subsystem lines above report 11 gates between
+// them; the code reads 42 variables. Everything else was decided at import time
+// by an environment variable and reported nowhere, which per L13 is a branch in
+// production that nobody can see. This line names the count and the OVERRIDES —
+// listing all 26 gates every boot would be read exactly as often as listing
+// none. Fail-open: a boot report that can break boot is worse than no report.
+try {
+  const { flagBootLine } = await import('./src/core/flags.js');
+  console.log(flagBootLine());
+} catch (err) {
+  console.warn(`[FLAGS] census unavailable: ${err?.message ?? err}`);
+}
+
+// E5/PR-5 — declare whether claim shadow writes are running. The requested-but-
+// unavailable case is the whole reason this line exists: it is the only way an
+// operator learns that the thing they switched on degraded to off, and why.
+try {
+  const { resolveClaimShadowMode, claimShadowBootLine } = await import('./src/core/claims/shadowMode.js');
+  console.log(claimShadowBootLine(await resolveClaimShadowMode()));
+} catch (err) {
+  console.warn(`[CLAIMS] shadow mode unavailable: ${err?.message ?? err}`);
+}
+
 // ── Durability self-check ────────────────────────────────────────────────────
 //
 // AQUA has two independent ways to survive a redeploy — the Mongo mirror, and

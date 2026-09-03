@@ -363,7 +363,26 @@ describe('claim repository — wiring', () => {
     assert.deepEqual(offenders, [], 'a second claim writer exists — that is how the audit found three stores');
   });
 
-  test('nothing CALLS the repository yet — E5/PR-4 is the extractor', () => {
+  test('only DECLARED callers touch the repository — no drift onto the writer', () => {
+    // This test was `nothing CALLS the repository yet` and it fired on E5/PR-6,
+    // which is exactly what it was for: the first caller became a deliberate
+    // edit rather than a change nobody reviewed. Rewritten rather than deleted,
+    // because the property worth keeping was never "zero callers" — it was
+    // "one writer, and a named list of who reaches it". That is what stops the
+    // three-stores problem the audit found from reassembling itself.
+    //
+    // Grows by DELIBERATE edit only. Each entry should cost a red battery first.
+    const DECLARED = [
+      // E5/PR-5 — mentions the repository only inside a guard asserting it does
+      // NOT call it. Reads no rows, writes none.
+      path.join('claims', 'shadowMode.js'),
+      // E5/PR-6 — the shadow projector's purge path and its composition over
+      // backfill. Projects only; retrieval still reads the JSON store.
+      path.join('claims', 'shadowProjector.js'),
+      // E5/PR-6 — account deletion must reach claim rows (G4). Found by running
+      // the purge gate, not by reading it.
+      path.join('account', 'accountPurge.js'),
+    ];
     const offenders = [];
     const walk = (dir) => {
       for (const name of fs.readdirSync(dir)) {
@@ -372,10 +391,12 @@ describe('claim repository — wiring', () => {
         if (fs.statSync(full).isDirectory()) { walk(full); continue; }
         if (!/\.(m?js|cjs)$/.test(name)) continue;
         if (full.endsWith(path.join('claims', 'claimRepository.js'))) continue;
+        if (DECLARED.some(x => full.endsWith(x))) continue;
         if (/claimRepository/.test(fs.readFileSync(full, 'utf8'))) offenders.push(path.relative(ROOT, full));
       }
     };
     walk(path.join(ROOT, 'src'));
-    assert.deepEqual(offenders, [], 'something now writes claims — make that deliberate');
+    assert.deepEqual(offenders, [],
+      'a new module reaches the claim writer — add it to DECLARED on purpose, or do not');
   });
 });

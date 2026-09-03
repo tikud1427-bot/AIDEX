@@ -25,6 +25,7 @@ import { fileURLToPath } from 'node:url';
 import { createJsonFileAdapter } from '../storage/jsonFileAdapter.js';
 import { getAdapter, setAdapter, resetAdapter, assertAdapter, ADAPTER_MEMBERS } from '../storage/index.js';
 import * as store from '../atomicStore.js';
+import { runAdapterContract } from './helpers/adapterContract.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const tmpDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'aqua-storage-'));
@@ -37,71 +38,6 @@ const stripComments = src => src
 afterEach(() => resetAdapter());
 
 // ── The contract ─────────────────────────────────────────────────────────────
-
-/**
- * Exported shape, reused by E3/PR-4. Anything claiming to be a storage adapter
- * must satisfy every assertion below.
- */
-export function runAdapterContract(name, makeAdapter, makeKey) {
-  describe(`storage contract — ${name}`, () => {
-    test('implements the whole interface', () => {
-      assert.equal(assertAdapter(makeAdapter()), true);
-    });
-
-    test('write then read returns exactly what was written', async () => {
-      const a = makeAdapter(); const key = makeKey();
-      await a.write(key, '{"hello":"world"}');
-      assert.equal(a.readSync(key), '{"hello":"world"}');
-    });
-
-    test('writeSync then read returns exactly what was written', () => {
-      const a = makeAdapter(); const key = makeKey();
-      a.writeSync(key, '{"n":1}');
-      assert.equal(a.readSync(key), '{"n":1}');
-    });
-
-    test('reading a key that was never written returns null, not a throw', () => {
-      // Every store treats "no file yet" as an empty store. Throwing here would
-      // turn a first boot into a crash.
-      assert.equal(makeAdapter().readSync(makeKey()), null);
-    });
-
-    test('existsSync is false before a write and true after', async () => {
-      const a = makeAdapter(); const key = makeKey();
-      assert.equal(a.existsSync(key), false);
-      await a.write(key, '{}');
-      assert.equal(a.existsSync(key), true);
-    });
-
-    test('a write REPLACES rather than appends', async () => {
-      const a = makeAdapter(); const key = makeKey();
-      await a.write(key, '{"v":1}');
-      await a.write(key, '{"v":2}');
-      assert.equal(a.readSync(key), '{"v":2}');
-    });
-
-    test('unicode survives a round trip', async () => {
-      const a = makeAdapter(); const key = makeKey();
-      const payload = JSON.stringify({ s: 'café ☕ 日本語 עברית' });
-      await a.write(key, payload);
-      assert.equal(a.readSync(key), payload);
-    });
-
-    test('copySync duplicates content without disturbing the source', async () => {
-      const a = makeAdapter(); const from = makeKey(); const to = `${from}.bak`;
-      await a.write(from, '{"x":1}');
-      a.copySync(from, to);
-      assert.equal(a.readSync(to), '{"x":1}');
-      assert.equal(a.readSync(from), '{"x":1}');
-    });
-
-    test('concurrent writes to one key all settle, last value wins', async () => {
-      const a = makeAdapter(); const key = makeKey();
-      await Promise.all([1, 2, 3, 4, 5].map(n => a.write(key, `{"n":${n}}`)));
-      assert.match(a.readSync(key), /^\{"n":[1-5]\}$/, 'a concurrent write produced garbage');
-    });
-  });
-}
 
 runAdapterContract('json-file', createJsonFileAdapter, () => path.join(tmpDir(), 'store.json'));
 
