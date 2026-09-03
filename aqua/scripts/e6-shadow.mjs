@@ -44,9 +44,35 @@
  * rather than a theoretical one. PR-5b added the pin and the model echo
  * precisely so this check can pass; if it fails, pass --model.
  */
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
+
+// ── Root .env, BEFORE any provider import ────────────────────────────────────
+//
+// 🔴 THE SCRIPT'S OWN ERROR MESSAGE PROMISED SOMETHING IT COULD NOT DELIVER.
+// "No Groq keys configured — this script needs the same key the app uses" is
+// accurate and useless: the app is `index.js`, which calls `dotenv.config()`,
+// and this script called nothing. So a correctly configured machine reported
+// no keys, and the operator's next move is to go looking for a key that was
+// already there.
+//
+// Same semantics as `index.js` and `evaluation/runners/aqua-standalone.mjs`,
+// which solved this first: existing process.env values are NEVER overridden,
+// so a shell export still wins over the file. `dotenv` is resolved from the
+// engine's own dependency tree — no new dependency.
+//
+// Silent when the file is absent: a CI runner passing keys as real environment
+// variables is a normal way to run this, not a misconfiguration.
+{
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const envPath = path.join(here, '..', '..', '.env');
+  if (existsSync(envPath)) {
+    createRequire(path.join(here, '..', 'package.json'))('dotenv')
+      .config({ path: envPath, quiet: true });
+  }
+}
 
 import suite from '../eval/suites/extraction-core.suite.mjs';
 import { extractWithCurrentEngine, surfacesOf } from '../eval/adapters/currentExtractor.mjs';
@@ -238,6 +264,40 @@ export function stratify(cases, limit) {
  * `fidelity_accuracy 64.7% → 64.1%`, a 0.6-point gap, while carrying 16 points
  * of unmeasured noise. A single run cannot support that decision.
  */
+/**
+ * Is this pass DATA, or a record of the provider not answering?
+ *
+ * Extracted so it can be graded by behaviour. It was previously inline in
+ * `main()` and covered only by `assert.match(src, /perCase\.push\(\{/)` — a
+ * test that the STRING exists in the file. That proves nothing about which
+ * pass gets reported, and the whole reason this logic exists is that an
+ * earlier version reported a pass in which the provider had answered nothing
+ * and published 0.0% detection as a measurement.
+ *
+ * @param {{aborted:boolean, passErrors:number}} pass
+ * @param {number} caseCount
+ */
+export function passIsValid(pass, caseCount) {
+  const errorRate = caseCount ? (pass.passErrors ?? 0) / caseCount : 1;
+  return { valid: !pass.aborted && errorRate <= MAX_PASS_ERROR_RATE, errorRate };
+}
+
+/**
+ * Which pass do we report?
+ *
+ * THE LAST VALID ONE — not an average, and not `passes[passes.length - 1]`.
+ * Averaging invents a run that never happened and cannot be reproduced from
+ * any single command. Taking the last pass unconditionally is what published
+ * a fully-errored pass as a result.
+ *
+ * Returns null when nothing was measured, so the caller must handle "no data"
+ * explicitly rather than receiving a plausible-looking empty pass.
+ */
+export function pickReportedPass(passes) {
+  const good = (passes ?? []).filter(p => p.valid);
+  return good.length ? good[good.length - 1] : null;
+}
+
 export function spread(values) {
   const v = values.filter(x => typeof x === 'number');
   if (!v.length) return null;
@@ -364,6 +424,7 @@ async function main() {
     const scoredE6 = [];
     const perCase = [];
     let passErrors = 0, consecutiveErrors = 0, aborted = false;
+    const unmeasured = [];   // cases the transport never answered
 
     for (const [i, c] of cases.entries()) {
       if (pass === 0) {
@@ -391,8 +452,34 @@ async function main() {
         }
       }
 
+      // ── A CASE THE TRANSPORT NEVER ANSWERED IS UNMEASURED, NOT A MISS ──────
+      //
+      // 🔴 THE RUN-LEVEL GUARD DID NOT REACH THE CASE LEVEL.
+      //
+      // The header of this script already refuses a run with no transport:
+      // "a run with no transport emits no claims and would score 0.0%
+      // detection, which is indistinguishable from a catastrophically bad
+      // extractor." That reasoning is exactly as true for ONE case as for two
+      // hundred, and this line scored every errored case as an extraction miss
+      // — `e6.facts` is empty because nothing was asked, and an empty answer
+      // grades identically to a wrong one.
+      //
+      // It bit immediately. In the first three-pass run all four transport
+      // errors landed in pass 3, `pickReportedPass` takes the last VALID pass,
+      // and 4/200 sits exactly on the 2% validity threshold — so the published
+      // numbers came from the only pass with errors in it. On a 20-case
+      // category a single unanswered case is five percentage points, and
+      // `detection_negation` was reported at 70% against 85% in both clean
+      // passes.
+      //
+      // Excluded from the scored set, so the denominator shrinks honestly
+      // rather than the numerator being punished. This is the same rule the
+      // suite already applies one level up: a metric with no cases is
+      // unmeasured, not zero.
+      const caseErrored = (e6.stats.errors ?? 0) > 0;
       const sc = suite.score(c, { facts: e6.facts, surfaces: e6.surfaces });
-      scoredE6.push(sc);
+      if (caseErrored) unmeasured.push({ id: c.id, cat: c.cat });
+      else scoredE6.push(sc);
 
       // ── PER-CASE RECORD ────────────────────────────────────────────────────
       //
@@ -456,9 +543,8 @@ async function main() {
 
     // A pass is VALID only if the transport answered for essentially all of it.
     // An invalid pass is kept for the record and excluded from every number.
-    const errorRate = cases.length ? passErrors / cases.length : 1;
-    const valid = !aborted && errorRate <= MAX_PASS_ERROR_RATE;
-    passes.push({ metrics: suite.metrics(scoredE6), perCase, valid, passErrors, errorRate, aborted, index: pass + 1 });
+    const { valid, errorRate } = passIsValid({ aborted, passErrors }, cases.length);
+    passes.push({ metrics: suite.metrics(scoredE6), perCase, unmeasured, valid, passErrors, errorRate, aborted, index: pass + 1 });
     if (!valid) {
       console.error(`  ⚠️  pass ${pass + 1} INVALID — ${passErrors} transport errors ` +
         `(${(errorRate * 100).toFixed(1)}% of cases). Excluded from results.`);
@@ -471,7 +557,7 @@ async function main() {
   // `passes[passes.length - 1]` unconditionally and picked a pass in which the
   // provider had answered nothing — publishing 0.0% detection as a measurement.
   const good = passes.filter(p => p.valid);
-  if (!good.length) {
+  if (!pickReportedPass(passes)) {
     console.error(`\n✗ NOTHING WAS MEASURED — all ${passes.length} pass(es) failed on transport.`);
     console.error(`  ${e6Stats.errors} errors across ${e6Stats.called} calls.`);
     console.error('  Cooldowns of this length are the DAILY quota, not the per-minute one —');
@@ -482,7 +568,7 @@ async function main() {
 
   // The last VALID pass, not an average — averaging invents a run that never
   // happened and cannot be reproduced from any single command.
-  const reported = good[good.length - 1];
+  const reported = pickReportedPass(passes);
   const mE6 = reported.metrics;
 
   const noise = {};
@@ -556,7 +642,10 @@ async function main() {
   }
 
   // ── What actually missed, by category ────────────────────────────────────
-  const missed = reported.perCase.filter(r => r.labelledClaims > 0 && r.e6Emitted === 0);
+  // Errored cases are excluded: they are not extraction failures, and listing
+  // them here sends someone reading the diagnosis to the prompt for a problem
+  // that was a timeout.
+  const missed = reported.perCase.filter(r => r.labelledClaims > 0 && r.e6Emitted === 0 && !r.e6Errors);
   if (missed.length) {
     const byCat = {};
     for (const r of missed) (byCat[r.cat] ??= []).push(r);
@@ -579,6 +668,14 @@ async function main() {
     console.log('    and nothing here distinguishes them. Re-run with --model <id>.');
   }
 
+  if (reported.unmeasured?.length) {
+    const byCat = {};
+    for (const u of reported.unmeasured) byCat[u.cat] = (byCat[u.cat] ?? 0) + 1;
+    console.log(`\nUNMEASURED — ${reported.unmeasured.length} case(s) the transport never answered, excluded from every metric`);
+    console.log(`  ${Object.entries(byCat).map(([c, n]) => `${c}×${n}`).join(', ')}`);
+    console.log(`  ${reported.unmeasured.map(u => u.id).join(', ')}`);
+  }
+
   console.log(`\nVERDICT: ${verdict.promote && attributable ? 'PROMOTE' : 'DO NOT PROMOTE'}`);
   if (verdict.gatePassed && verdict.regressions.length) {
     console.log('  (the gate passed but a committed metric went backwards — that is a regression wearing a passing grade)');
@@ -598,7 +695,7 @@ async function main() {
       // which gate dropped it. The aggregate `discardedByGate` above cannot
       // attribute a discard to a case, so "detection_negation 85%" has been
       // unexplainable across three sessions.
-      perCase: reported.perCase,
+      perCase: reported.perCase, unmeasured: reported.unmeasured ?? [],
     }, null, 2));
     console.log(`→ ${p}\n`);
   }

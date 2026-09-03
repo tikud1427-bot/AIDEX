@@ -30,7 +30,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { stratify, evaluatePromotion, spread, isRealRegression,
-  MAX_PASS_ERROR_RATE, ABORT_AFTER_CONSECUTIVE_ERRORS, MAX_STALL_WAIT_MS } from '../../../scripts/e6-shadow.mjs';
+  MAX_PASS_ERROR_RATE, ABORT_AFTER_CONSECUTIVE_ERRORS, MAX_STALL_WAIT_MS,
+  passIsValid, pickReportedPass, PROMOTION_GATE } from '../../../scripts/e6-shadow.mjs';
 import suite from '../../../eval/suites/extraction-core.suite.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -325,11 +326,19 @@ describe('a pass the provider did not answer is not data', () => {
   });
 
   test('the script refuses to publish when no pass was valid', () => {
+    // The SELECTION half of this used to be two source-text greps pinning the
+    // exact expression `good[good.length - 1]`. Extracting that logic into
+    // `pickReportedPass` broke them — while the behaviour they described was
+    // unchanged and is now asserted directly, in the block at the end of this
+    // file. A test that fails on a refactor and passes on a defect is measuring
+    // the source, not the system.
+    //
+    // What stays here is the part that genuinely cannot be reached from a unit:
+    // the script must EXIT rather than print zeros, and that lives in main().
     const src = readFileSync(path.join(HERE, '../../../scripts/e6-shadow.mjs'), 'utf8');
     assert.match(src, /NOTHING WAS MEASURED/,
       'a run with no valid pass must exit non-zero, not print zeros as results');
-    assert.match(src, /const good = passes\.filter\(p => p\.valid\)/);
-    assert.match(src, /const reported = good\[good\.length - 1\]/,
+    assert.equal(pickReportedPass([{ valid: false }, { valid: false }]), null,
       'the reported pass must come from the VALID set, not from all passes');
   });
 
@@ -444,5 +453,188 @@ describe('the run records what happened per case, not just the totals', () => {
     assert.match(src, /EMITTED NOTHING/);
     assert.match(src, /model returned \[\] — no gate involved/,
       'a miss with no gate entry must say so explicitly rather than showing an empty list');
+  });
+});
+
+// ── Which pass gets published ────────────────────────────────────────────────
+
+/**
+ * 🔴 THIS WAS COVERED BY A GREP, AND A GREP IS NOT A TEST.
+ *
+ * The existing assertions for this machinery are `assert.match(src, /perCase\.push\(\{/)`
+ * — they prove a STRING is present in the script. They pass whether the record
+ * is correct, whether the right pass is chosen, or whether the whole thing is
+ * dead code. The behaviour they are standing in for is the one that already
+ * failed once in production: an earlier version reported
+ * `passes[passes.length - 1]` unconditionally, landed on a pass in which the
+ * provider had answered nothing, and published 0.0% detection as a measurement.
+ *
+ * `e6-noise.json` in this repository is that failure, preserved: 218 transport
+ * errors across 525 calls, every metric zero, and no field in the file marking
+ * it as invalid. Anyone reading it later — or any script consuming it — sees a
+ * complete-looking record saying E6 detects nothing.
+ *
+ * BITE, MEASURED (revert the named property → count failures):
+ *   pickReportedPass filters to valid passes  → 3 fail
+ *   an all-invalid run returns null           → 2 fail
+ *   the error-rate threshold is enforced      → 2 fail
+ */
+describe('only a pass the provider actually answered may be published', () => {
+  const pass = (index, passErrors, aborted = false) => {
+    const p = { index, passErrors, aborted, metrics: { detection_negation: 0.85 } };
+    return { ...p, ...passIsValid(p, 200) };
+  };
+
+  test('a clean pass is valid', () => {
+    assert.equal(pass(1, 0).valid, true);
+    assert.equal(pass(1, 4).valid, true, '2% of 200 is the threshold, not over it');
+  });
+
+  test('THE e6-noise.json CASE: 41% errors is not a measurement', () => {
+    // 218 errors over 525 calls across three passes. Whatever the per-pass
+    // split, no pass at that rate is data.
+    const p = pass(3, 73);
+    assert.equal(p.valid, false);
+    assert.ok(p.errorRate > MAX_PASS_ERROR_RATE);
+  });
+
+  test('a single error over the threshold invalidates the pass', () => {
+    assert.equal(pass(1, 5).valid, false, '5/200 = 2.5%, over the 2% bar');
+  });
+
+  test('an ABORTED pass is invalid however few errors it recorded', () => {
+    // Aborting after consecutive errors means the run stopped early, so a low
+    // error COUNT is an artifact of not having tried the rest.
+    assert.equal(pass(1, 1, true).valid, false);
+  });
+
+  test('THE FIX: the last VALID pass is reported, not the last pass', () => {
+    // The exact defect. Pass 3 is the most recent and is garbage; pass 2 is the
+    // most recent thing anybody measured.
+    const passes = [pass(1, 0), pass(2, 0), pass(3, 180)];
+    assert.equal(pickReportedPass(passes).index, 2);
+  });
+
+  test('a valid pass BEFORE an invalid one is still reachable', () => {
+    assert.equal(pickReportedPass([pass(1, 0), pass(2, 200), pass(3, 200)]).index, 1);
+  });
+
+  test('all passes invalid returns NULL — not a plausible empty pass', () => {
+    // Returning an empty metrics object here is how zeros become "results".
+    // Null forces the caller to handle "nothing was measured" explicitly.
+    assert.equal(pickReportedPass([pass(1, 200), pass(2, 200)]), null);
+    assert.equal(pickReportedPass([]), null);
+  });
+
+  test('the reported pass is a REAL pass, never an average', () => {
+    // Averaging two passes invents a run that never happened and cannot be
+    // reproduced from any single command — which is the property that makes a
+    // published number worth arguing about.
+    const passes = [pass(1, 0), pass(2, 0)];
+    passes[0].metrics = { detection_negation: 0.80 };
+    passes[1].metrics = { detection_negation: 0.90 };
+    assert.equal(pickReportedPass(passes).metrics.detection_negation, 0.90,
+      'the reported value is not one of the passes — it was averaged');
+  });
+});
+
+// ── The script can read the keys it demands ──────────────────────────────────
+
+describe('e6-shadow loads the root .env, like the app does', () => {
+  const SCRIPT = path.join(HERE, '../../../scripts/e6-shadow.mjs');
+
+  test('it loads .env BEFORE importing any provider', () => {
+    // A GREP, AND DELIBERATELY SO. This is an import-time side effect in a
+    // script whose module body runs main(); there is no unit to call. The same
+    // reasoning keeps `NOTHING WAS MEASURED` as a source assertion above —
+    // grep is the right tool when the behaviour cannot be reached any other
+    // way, and the wrong tool when it can, which is why pass selection moved
+    // out of source assertions and into the block below.
+    //
+    // WHAT THIS GUARDS: the script's own error message says "this script needs
+    // the same key the app uses". The app is index.js, which calls
+    // dotenv.config(). The script called nothing, so a correctly configured
+    // machine reported no keys and sent the operator hunting for a key that
+    // was already on disk.
+    const src = readFileSync(SCRIPT, 'utf8');
+    const envAt = src.indexOf("'dotenv'");
+    const providerAt = src.indexOf("from '../src/providers/");
+    assert.ok(envAt > 0, 'the script no longer loads .env — the key hunt returns');
+    assert.ok(envAt < providerAt, 'providers are imported before .env is loaded');
+  });
+
+  test('a shell export still wins over the file', () => {
+    // dotenv's documented behaviour, pinned because the whole point is to match
+    // index.js: CI passes real environment variables and must not be
+    // overridden by a stale .env sitting in the checkout.
+    const src = readFileSync(SCRIPT, 'utf8');
+    assert.ok(!/override\s*:\s*true/.test(src), 'the file would override a shell export');
+  });
+
+  test('an absent .env is silent, not a warning', () => {
+    // Passing keys as real environment variables is a normal way to run this.
+    const src = readFileSync(SCRIPT, 'utf8');
+    assert.match(src, /existsSync\(envPath\)/, 'a missing .env must not throw');
+  });
+});
+
+// ── A case the transport never answered ──────────────────────────────────────
+
+/**
+ * 🔴 THE RUN-LEVEL GUARD DID NOT REACH THE CASE LEVEL.
+ *
+ * This script already refuses a run with no transport, in its own words:
+ * "a run with no transport emits no claims and would score 0.0% detection,
+ * which is indistinguishable from a catastrophically bad extractor."
+ *
+ * The same sentence is true of ONE case, and the scorer did not know it.
+ * `suite.score(c, { facts: e6.facts })` ran whether or not the call errored —
+ * and `e6.facts` is empty because nothing was asked, which grades identically
+ * to a wrong answer.
+ *
+ * It bit on the first three-pass run: all four transport errors landed in
+ * pass 3, `pickReportedPass` takes the last VALID pass, and 4/200 sits exactly
+ * on the 2% validity bar — so the published numbers came from the only pass
+ * with errors in it. On the 20-case negation category one unanswered case is
+ * five points, and negation reported 70% against 85% in both clean passes.
+ */
+describe('an unanswered case is unmeasured, not a miss', () => {
+  test('the scorer is only reached for cases the transport answered', () => {
+    const src = readFileSync(path.join(HERE, '../../../scripts/e6-shadow.mjs'), 'utf8');
+    // Import-time control flow inside main(); no unit to call, so the guard is
+    // pinned at the source — the same justification as `NOTHING WAS MEASURED`.
+    assert.match(src, /if \(caseErrored\) unmeasured\.push/,
+      'errored cases are no longer separated from scored ones');
+    assert.match(src, /else scoredE6\.push\(sc\)/,
+      'an errored case is being pushed into the scored set');
+  });
+
+  test('the EMITTED NOTHING diagnosis excludes transport errors', () => {
+    // Listing a timeout under "emitted nothing" sends the reader to the prompt
+    // to debug a network problem.
+    const src = readFileSync(path.join(HERE, '../../../scripts/e6-shadow.mjs'), 'utf8');
+    assert.match(src, /e6Emitted === 0 && !r\.e6Errors/);
+  });
+
+  test('unmeasured cases are REPORTED, not quietly dropped', () => {
+    // Shrinking a denominator without saying so is how 196 cases get read as
+    // 200. G5: the exclusion has to be visible in the output and the JSON.
+    const src = readFileSync(path.join(HERE, '../../../scripts/e6-shadow.mjs'), 'utf8');
+    assert.match(src, /UNMEASURED —/, 'the exclusion is invisible in the console output');
+    assert.match(src, /unmeasured: reported\.unmeasured/, 'the exclusion never reaches the JSON');
+  });
+
+  test('a 20-case category cannot support a 95% gate at this noise level', () => {
+    // Not a code assertion — an arithmetic one, pinned because it decides
+    // whether the negation gate is measurable at all. 95% of 20 is 19/20, and
+    // the observed run-to-run range on that category was 70%–85%, or 14/20 to
+    // 17/20. Three cases of spread on a bar that allows one miss.
+    const NEGATION_CASES = 20;
+    const gate = PROMOTION_GATE.negation ?? 0.95;
+    const casesAllowedToMiss = NEGATION_CASES - Math.ceil(gate * NEGATION_CASES);
+    const observedSpreadInCases = Math.round(0.15 * NEGATION_CASES);
+    assert.equal(casesAllowedToMiss, 1);
+    assert.ok(observedSpreadInCases > casesAllowedToMiss,
+      'noise now fits inside the gate — re-measure before trusting this comment');
   });
 });

@@ -258,3 +258,136 @@ flagproof 30/30 · eval:gate PASS
 
 This is a container egress allowlist, not a missing service. E6 promotion and
 all of E7 need one of those hosts allowlisted AND a key.
+
+## Increment 8 — E6 shadow: real data analysed, pass-selection made testable
+
+### YOUR RUNS (e6-full.json, e6-full-2.json), both 175 calls / 0 errors
+                             base    run1    run2   spread
+  detection_negation        0.500   0.850   0.850   0.000   <- STABLE, fails gate
+  silence_on_negatives      0.900   0.975   0.975   0.000
+  detection_temporal        0.640   0.960   0.960   0.000
+  detection_decision        0.533   0.867   0.867   0.000
+  predicate_accuracy        0.000   0.491   0.473   0.018
+  detection_recall          0.719   0.825   0.838   0.013
+  fidelity_accuracy         0.647   0.665   0.641   0.024
+  detection_identity        0.850   0.900   0.850   0.050   <- noisy
+  overall_strict_accuracy   0.180   0.385   0.495   0.110   <- noisy
+  detection_modality        0.720   0.520   0.680   0.160   <- noisy, REGRESSED
+  subject_recall            0.557   0.437   0.689   0.251   <- noisiest
+
+VERDICT: DO NOT PROMOTE — correct, and for the right reason.
+  negation 0.85 vs 0.95 gate, IDENTICAL across both runs. Not noise.
+
+BOTH REPORTED "REGRESSIONS" ARE NOISE:
+  run1 flagged subject_recall 0.557 -> 0.437. run2 got 0.689 (an improvement).
+       The spread (0.251) is twice the claimed regression (0.120).
+  run2 flagged fidelity 0.6467 -> 0.6407, a 0.006 move inside a 0.024 spread.
+Single-pass runs leave noiseRange unmeasured, so isRealRegression() returns
+null and the drop is reported unverified. The machinery is right; the runs
+were single-pass. Use --repeat 3.
+
+e6-noise.json IS NOT DATA: 218 errors / 525 calls. Produced by an older script
+before MAX_PASS_ERROR_RATE existed. Delete it or it will be read as a result.
+
+### Changed
+- `scripts/e6-shadow.mjs` — extracted `passIsValid()` and `pickReportedPass()`
+  from main(). Behaviour identical; call sites rewritten to use them.
+- `src/brain/tests/e6ShadowHarness.test.js` (+8 tests) — pass selection graded
+  by BEHAVIOUR. The previous coverage was `assert.match(src, /perCase\.push\(\{/)`
+  — a test that a string exists in the file. One such grep pinned the literal
+  expression `good[good.length - 1]` and broke on the extraction while the
+  behaviour was unchanged; replaced with the direct assertion.
+
+### Bite
+  report last pass regardless of validity -> 4 fail
+  drop the error-rate check               -> 5 fail
+  average the passes instead of picking   -> 2 fail
+
+State: 3078 tests · 394 suites · 3077 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate PASS · router boot OK
+
+## Increment 9 — e6-shadow could not read the keys it demanded
+
+scripts/e6-shadow.mjs never called dotenv. Only index.js does. So on a
+correctly configured machine the script printed:
+
+  ✗ No usable provider: No Groq keys configured
+    Provider: groq. This script needs the same key the app uses.
+
+— accurate and useless. The app loads .env; the script had no way to.
+
+### Changed
+- `scripts/e6-shadow.mjs` (+22) — loads the root .env BEFORE any provider
+  import, same semantics as index.js and evaluation/runners/aqua-standalone.mjs
+  (which solved this first): shell exports are never overridden, dotenv is
+  resolved from the engine's own dependency tree, absent .env is silent.
+- `src/brain/tests/e6ShadowHarness.test.js` (+3 tests)
+
+Verified by hand: with GROQ_API_KEY_1 in ../.env the script logs
+`[GROQ] model=openai/gpt-oss-120b key=...real` and proceeds to transport.
+Shell export confirmed to win over the file.
+
+### Bite
+  remove the dotenv block -> the suite fails to load entirely (1 fail)
+
+State: 3081 tests · 395 suites · 3080 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate PASS
+
+### Windows note
+PowerShell's line continuation is a backtick, not a backslash. Run on one line:
+  node --env-file=..\.env scripts/e6-shadow.mjs --provider groq --model openai/gpt-oss-120b --repeat 3 --pace 1200 --json e6-percase.json
+With this increment, --env-file is no longer required.
+
+## Increment 10 — an unanswered case was scored as an extraction miss
+
+### THE RUN FROM 3-PASS e6-percase
+  reported: pass 3 of 3 · 4 transport errors · negation 70.0% (gate 95%)
+  noise over 3 valid passes: detection_negation 70.0% – 85.0%  range 15.0%
+
+ALL FOUR transport errors landed in pass 3. pickReportedPass takes the last
+VALID pass, and 4/200 sits EXACTLY on the 2% validity bar — so the published
+numbers came from the only pass with errors in it. Passes 1 and 2 were clean
+and both read 85%.
+
+### THE DEFECT
+`suite.score(c, { facts: e6.facts })` ran whether or not the call errored.
+e6.facts is empty because nothing was ASKED, and an empty answer graded
+identically to a wrong one. The script's own header already refuses this at
+the RUN level — "a run with no transport emits no claims and would score 0.0%
+detection, which is indistinguishable from a catastrophically bad extractor" —
+and the same sentence is true of one case. The guard never reached case level.
+
+On a 20-case category one unanswered case is FIVE percentage points.
+
+### Changed
+- `scripts/e6-shadow.mjs` — errored cases excluded from the scored set
+  (denominator shrinks honestly rather than the numerator being punished),
+  collected in `unmeasured`, printed as an UNMEASURED block, carried in JSON.
+  EMITTED NOTHING no longer lists transport errors as extraction failures.
+- `src/brain/tests/e6ShadowHarness.test.js` (+4 tests)
+
+### Bite
+  score errored cases again              -> 1 fail
+  blame the transport on the extractor   -> 1 fail
+
+### THE GATE IS NOT MEASURABLE AT n=20
+negation gate 95% of 20 cases = 19/20, so ONE case may miss.
+Observed run-to-run spread on that category = 15% = 3 cases.
+The noise is three times the entire error budget. Even a perfect extractor
+would fail this gate on some runs. Pinned as a test.
+
+Also unstable at n=15..25: detection_task range 13.3%, detection_modality 8.0%,
+detection_temporal 8.0%, detection_decision 6.7%.
+
+### STILL TRUE AFTER THE FIX
+E6 beats the floor decisively on the stable metrics:
+  predicate_accuracy    0.0% -> 44.3%   (the floor cannot produce predicates)
+  overall_strict       18.0% -> 48.0%
+  silence_on_negatives 90.0% -> 100.0%
+  detection_temporal   64.0% -> 100.0%
+  subject_recall       55.7% ->  66.5%
+detection_modality REGRESSED 72.0% -> 52.0% and is the largest single loss:
+12 of the 35 empty-emission cases are modality.
+
+State: 3085 tests · 396 suites · 3084 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate PASS
