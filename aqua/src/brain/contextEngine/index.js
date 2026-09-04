@@ -30,11 +30,16 @@
  */
 import { assembleContext } from './assembler.js';
 import { tokensOf } from './scorer.js';
+import { analyseQuestion, factAffinity, MIN_AFFINITY } from '../../pic/questionShape.js';
 import { brainEnabled } from '../worldModel/schema.js';
 
 const metrics = {
   calls: 0, v2Assemblies: 0, floorFallbacks: 0, errors: 0,
   candidatesSeen: 0, itemsSelected: 0, lastDurationMs: 0,
+  // Facts this lane REACHED but did not admit. Reported, never silent: a
+  // gate that drops without counting is indistinguishable from a lane that
+  // never ran (L13).
+  reachGated: 0,
 };
 
 /** V2 assembly is opt-in on top of the read-side switch. */
@@ -132,7 +137,27 @@ function gatherCandidates(deps, ownerId, query, floor, opts) {
 
   // (b) World-model reach: entities the query names, and facts one hop out.
   //     Scored on distance, not given a flat bonus.
-  const focusEntities = findFocusEntities(G, ownerId, query);
+  //
+  //     GATED WITH THE SAME SCORER THE FLOOR USES. This lane hopped every
+  //     `about` edge and admitted whatever it found, which is the defect the
+  //     PIC gate closes — reimplemented one layer up, and therefore capable of
+  //     silently undoing it. Measured on the 32 silence-expecting queries of
+  //     `retrieval-core.v1`: the floor returned 16 noise lines and this lane
+  //     turned them back into 23.
+  //
+  //     The gate applies ONLY to facts this lane adds. Anything the floor
+  //     already admitted has passed the same test and is never re-judged here
+  //     — the assembler's job is to select from the pool, not to re-litigate
+  //     the floor. Reach is preserved: a fact the query has real affinity for
+  //     still arrives, it just has to be about the question.
+  const shape = analyseQuestion(query);
+  const entityTypes = new Map();
+  for (const n of G.nodesByType(ownerId, 'entity')) {
+    const t = n?.data?.entityType;
+    if (t && n?.label) entityTypes.set(String(n.label).toLowerCase(), String(t));
+  }
+
+  const focusEntities = findFocusEntities(G, ownerId, query, shape);
   for (const ent of focusEntities) {
     const ekey = `entity:${ent.id}`;
     if (!byId.has(ekey)) {
@@ -144,6 +169,9 @@ function gatherCandidates(deps, ownerId, query, floor, opts) {
     } else {
       byId.get(ekey).hops = 0;
     }
+    // A named entity is topical evidence; the self entity is not — "You"
+    // matches every first-person question whatever it is about.
+    const namedAnchor = ent.data?.entityType !== 'self';
     // one hop: facts about this entity
     if (ES) {
       for (const { node } of G.neighbors(ownerId, ent.id, { type: 'fact', edgeType: 'about' })) {
@@ -152,6 +180,9 @@ function gatherCandidates(deps, ownerId, query, floor, opts) {
         if (byId.has(key)) { byId.get(key).hops = Math.min(byId.get(key).hops ?? 9, 1); byId.get(key).entityIds.push(ent.id); continue; }
         const fact = ES.getFact(ownerId, factId);
         if (!fact) continue;
+        if (fact.archived) continue;
+        const rel = factAffinity(shape, fact, entityTypes, namedAnchor);
+        if (rel.score < MIN_AFFINITY) { metrics.reachGated += 1; continue; }
         const evidence = ES.evidenceForFact(ownerId, factId);
         byId.set(key, normFact(factId, fact.statement, {
           confidence: fact.confidence,
@@ -166,14 +197,57 @@ function gatherCandidates(deps, ownerId, query, floor, opts) {
   return [...byId.values()];
 }
 
-/** Entities whose label/alias overlaps the query tokens — the hop origins. */
-function findFocusEntities(G, ownerId, query) {
+/**
+ * Second-person pronouns, which address AQUA and not the user.
+ *
+ * "Can you run your tests for me?" is a question ABOUT THE ASSISTANT. The
+ * user's self entity is labelled "You" — from AQUA's point of view, writing
+ * about the user — so a literal token match reads "you" as naming the user and
+ * hops their entire fact set into the prompt.
+ *
+ * Measured on the 32 silence-expecting queries of `retrieval-core.v1`: the PIC
+ * floor correctly withheld everything for "Can you fix your own bug?", "Are
+ * you able to open your settings?", "Will you write your own documentation?"
+ * — and this lane put facts back for every one of them.
+ *
+ * The user is referred to in the FIRST person, which `analyseQuestion` already
+ * detects as `selfScoped`. Second person is the assistant. Conflating them is
+ * the self-knowledge failure the blueprint warns about: AQUA has to know how
+ * its own knowledge differs from the user's.
+ */
+const SECOND_PERSON = new Set(['you', 'your', 'yours', 'yourself', 'youre']);
+
+/**
+ * Entities whose label/alias overlaps the query tokens — the hop origins.
+ *
+ * THE SELF ENTITY IS NOT MATCHED BY LABEL, AND MUST NOT BE.
+ *
+ * It is labelled "You" — AQUA's name for the user, written from AQUA's point
+ * of view. Matching that label against query tokens gets the reference exactly
+ * backwards in both directions:
+ *
+ *   "Can you run your tests?"  → MATCHED the user's self entity and hopped
+ *                                their whole fact set. "you" is the ASSISTANT.
+ *   "Where do I work?"         → did NOT match, because "I" shares no
+ *                                characters with "You". First person is the
+ *                                one thing that DOES mean the user.
+ *
+ * So the self entity is anchored on first-person scope — the same signal the
+ * PIC floor uses — and never on the word "you". Everything else is matched by
+ * label as before, minus the pronouns that address AQUA.
+ */
+function findFocusEntities(G, ownerId, query, shape) {
   const qTokens = tokensOf(query);
-  if (!qTokens.size) return [];
+  const naming = [...qTokens].filter(t => !SECOND_PERSON.has(t));
+  if (!naming.length && !shape.selfScoped) return [];
   const out = [];
   for (const n of G.nodesByType(ownerId, 'entity')) {
+    if (n.data?.entityType === 'self') {
+      if (shape.selfScoped && shape.isQuestion) out.push(n);
+      continue;
+    }
     const names = [n.label, ...(n.data?.aliases ?? [])].map(v => String(v).toLowerCase());
-    if (names.some(name => [...qTokens].some(t => name.includes(t)))) out.push(n);
+    if (names.some(name => naming.some(t => name.includes(t)))) out.push(n);
   }
   // Prefer the better-corroborated entities as hop origins; cap the fan-out.
   out.sort((a, b) => (b.sourceFiles?.length ?? 0) - (a.sourceFiles?.length ?? 0));

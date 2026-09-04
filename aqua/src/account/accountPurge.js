@@ -43,6 +43,10 @@ import { purgeOwner as purgeFileIndex } from '../files/fileSearchIndex.js';
 import { purgeOwner as purgeReasoningGraph } from '../reasoning/reasoningGraph.js';
 import { purgeOwner as purgePic } from '../pic/picStore.js';
 import { purgeOwner as purgeBrain } from '../brain/index.js';
+// E5/PR-6 — the claim shadow path writes owner-scoped rows to Postgres. It
+// no-ops when DATABASE_URL is absent rather than reporting an erasure failure
+// for a database the deployment never had.
+import { purgeOwner as purgeClaims } from '../core/claims/claimRepository.js';
 import { listArtifacts, deleteArtifact } from '../artifacts/artifactStore.js';
 import { listWorkspaces, deleteWorkspace } from '../project/workspaceManager.js';
 import { clearIndex } from '../project/projectIndex.js';
@@ -145,6 +149,8 @@ export async function purgeOwnerData({ userId } = {}) {
   // Brain sidecar holds only annotations (no knowledge), but once a user has
   // written entity descriptions they are personal data and must be erased too.
   report.brainAnnotations = step(report, 'brain', () => purgeBrain(ownerId))?.annotations ?? 0;
+  // E5/PR-6 — claim shadow rows. Async because Postgres is.
+  report.claims = (await stepAsync(report, 'claims', () => purgeClaims(ownerId)))?.claims ?? 0;
 
   // ── 5. Generated artifacts (manifest index + files on disk) ───────────────
   const artifacts = step(report, 'artifacts:list', () => listArtifacts({ ownerId })) ?? [];

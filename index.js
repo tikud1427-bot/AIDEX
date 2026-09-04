@@ -35,6 +35,7 @@ const Bundle = require("./models/Bundle");
 const ai            = require("./services/ai.client");
 const { usageGuard } = require("./middleware/usage/usageGuard");
 const { attachCsrfToken, verifyCsrf, enforceSameOrigin, safeEqual } = require("./middleware/csrf");
+const { safeNextPath, rememberPostLoginNext, takePostLoginNext } = require("./middleware/redirectTarget");
 
 // ── Static data ───────────────────────────────────────────────────────────────
 const blogs = require("./blogs");
@@ -1126,7 +1127,16 @@ app.get("/resume/:id", requireLogin, async (req, res) => {
 // AUTH
 // ═════════════════════════════════════════════════════════════════════════════
 
-app.get("/login",  redirectIfLoggedIn, (req, res) => res.render("login"));
+// `?next=` exists for ONE caller: "Switch account" in the AQUA sidebar, which
+// ends the session and sends the browser to /login?next=/aqua so the next
+// account lands back in the product rather than on the workspace dashboard.
+// The target is kept in the session, not in the form or the OAuth URL, so it
+// survives the Google round trip without touching views/login.ejs. Sanitised
+// on the way in and again on the way out — see middleware/redirectTarget.js.
+app.get("/login",  redirectIfLoggedIn, (req, res) => {
+  rememberPostLoginNext(req, req.query.next, "/home");
+  res.render("login");
+});
 app.get("/signup", redirectIfLoggedIn, (req, res) => res.render("signup"));
 
 app.post("/login", authLimiter, async (req, res) => {
@@ -1140,9 +1150,13 @@ app.post("/login", authLimiter, async (req, res) => {
     const isMatch = user.password !== "google-oauth" ? await bcrypt.compare(password, user.password) : false;
     if (!isMatch) return res.status(401).send("Invalid credentials");
 
+    // Read BEFORE the identity is written so the value is consumed exactly
+    // once; "/home" stays the default for every login that did not ask.
+    const destination = takePostLoginNext(req, "/home");
+
     req.session.user   = { _id: user._id, email: user.email, username: user.email.split("@")[0] };
     req.session.userId = user._id;
-    req.session.save(() => res.redirect("/home"));
+    req.session.save(() => res.redirect(destination));
   } catch (err) {
     console.error(err);
     res.status(500).send("Login error");
@@ -1153,6 +1167,11 @@ app.get("/auth/google", authLimiter, passport.authenticate("google", { scope: ["
 
 app.get(
   "/auth/google/callback",
+  // Consume the switch-account target BEFORE passport runs. passport 0.6
+  // regenerates the session inside req.logIn() to prevent session fixation,
+  // which would discard anything written to it earlier — so the value is moved
+  // onto the request object while it still exists.
+  (req, res, next) => { req._postLoginNext = takePostLoginNext(req, "/home"); next(); },
   passport.authenticate("google", { failureRedirect: "/login" }),
   (req, res) => {
     req.session.user   = { _id: req.user._id, email: req.user.email, username: req.user.email.split("@")[0] };
@@ -1162,7 +1181,7 @@ app.get(
     // keeps the workspace. Optional chaining because `$locals` is only set on
     // the creation path.
     const firstRun = req.user?.$locals?.justCreated === true;
-    req.session.save(() => res.redirect(firstRun ? "/aqua" : "/home"));
+    req.session.save(() => res.redirect(firstRun ? "/aqua" : (req._postLoginNext || "/home")));
   },
 );
 
@@ -1173,10 +1192,12 @@ app.get(
 // by services/account/accountDeletion.service.js (valid for 10 minutes).
 
 /** Only same-origin app paths may be returned to — never an open redirect. */
+// Delegates rather than re-deriving the same rule. The local version accepted
+// "/\evil.com", which browsers normalise to a protocol-relative URL and follow
+// off-origin — an open redirect. Two derivations of one rule from the same
+// prose can disagree silently, and the silent one is the dangerous one.
 function safeReauthNext(next) {
-  const fallback = "/aqua";
-  if (typeof next !== "string" || !next.startsWith("/") || next.startsWith("//")) return fallback;
-  return next;
+  return safeNextPath(next, "/aqua");
 }
 
 app.get("/auth/google/reauth", requireLogin, (req, res, next) => {

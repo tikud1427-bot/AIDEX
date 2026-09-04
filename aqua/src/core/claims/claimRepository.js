@@ -282,3 +282,35 @@ export async function claimWithEvidence(claimId, ownerId) {
       WHERE ce.owner_id = $1 AND ce.claim_id = $2`, [ownerId, claimId]);
   return { ...claim.rows[0], evidence: evidence.rows };
 }
+
+/**
+ * Erase one owner's claim-path data. E5/PR-6 · G4 · L5's one exception.
+ *
+ * 🔴 THIS WAS A REAL GAP, FOUND BY RUNNING THE GATE RATHER THAN READING IT.
+ * PR-6 began writing owner-scoped rows into Postgres and `accountPurge` had no
+ * path to them. Worse, the purge-completeness pin added in PR-4 could not see
+ * the hole: it scans for modules EXPORTING `purgeOwner`, and a store that never
+ * had one is invisible to a test that looks for one. A deleted user's claims
+ * would have survived while every purge test stayed green.
+ *
+ * The fix is the convention, not a special case: this store now exports
+ * `purgeOwner` like the other eight, so the completeness pin covers it for free
+ * and the next store that forgets is caught by the same test.
+ *
+ * NO-OP WITHOUT POSTGRES, DELIBERATELY. Most deployments have no DATABASE_URL,
+ * and a throw here would land in `accountPurge`'s `errors[]` — which the module
+ * header defines as "NOT fully erased", a deletion-contract failure. Reporting
+ * a compliance failure because a database the deployment never had is absent
+ * would train callers to ignore the one array that must never be ignored.
+ *
+ * Order matters: evidence links reference claims, so links go first.
+ */
+export async function purgeOwner(ownerId) {
+  if (!ownerId) return { claims: 0, evidenceLinks: 0, skipped: 'no owner' };
+  if (!isConfigured()) return { claims: 0, evidenceLinks: 0, skipped: 'postgres not configured' };
+
+  const p = await pool();
+  const links = await p.query('DELETE FROM aqua_claim_evidence WHERE owner_id = $1', [ownerId]);
+  const claims = await p.query('DELETE FROM aqua_claims WHERE owner_id = $1', [ownerId]);
+  return { claims: claims.rowCount ?? 0, evidenceLinks: links.rowCount ?? 0, skipped: null };
+}

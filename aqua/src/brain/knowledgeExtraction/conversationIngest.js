@@ -424,7 +424,14 @@ export function ingestConversationTurn(deps, {
     if (entitiesLinked || relationshipsAdded || factsWritten) {
       console.log(`[BRAIN] Conversation ingested owner=${ownerId} conv=${conversationId} turn=${turn} entities=${entitiesLinked} relationships=${relationshipsAdded} facts=${factsWritten} in ${metrics.lastDurationMs}ms`);
     }
-    return { ok: true, entities: entitiesLinked, relationships: relationshipsAdded, facts: factsWritten };
+    // `factIds` is returned so E5/PR-6 can project THIS turn's facts into the
+    // claim substrate without re-scanning the owner's whole store. The ids were
+    // already being collected; only the return shape changed. Callers that
+    // ignore it are unaffected — this is additive.
+    return {
+      ok: true, entities: entitiesLinked, relationships: relationshipsAdded,
+      facts: factsWritten, factIds: writtenFactIds,
+    };
   } catch (err) {
     metrics.errors += 1;
     console.warn(`[BRAIN] ingestConversationTurn failed (fail-open): ${err?.message ?? err}`);

@@ -32,12 +32,80 @@ export const EPSILON = 1e-9;
 /** Metrics where a larger number is worse. Everything else is higher-is-better. */
 export const LOWER_IS_BETTER = new Set([
   'noise_lines', 'noisy_queries', 'false_positives',
+  // A wrongly-admitted segment costs an extractor call and can mint a bad
+  // entity. Fewer is better, and the gate said otherwise: it reported
+  // `n_false_admits 17 → 16` as a REGRESSION and blocked on it, which is the
+  // exact inversion this file's header warns about, pointing the other way.
+  'n_false_admits', 'n_captured_but_unreachable',
+  // Found by widening the completeness test to every baseline instead of a
+  // hand-listed two: forensic-edited reports this and nobody had declared it,
+  // so the gate would have waved through a DOUBLING of false positives on that
+  // suite as an improvement.
+  'n_false_positives',
+  // Same lesson, found the same way — by breaking the rule on purpose and
+  // watching the gate. `forensic-report` counts what the whole rule EMITS over
+  // a fixed corpus with fixed labels. Deleting the cross-file condition, so
+  // that ordinary table rows inside one document are accused of tampering,
+  // took it 17 -> 20 and the gate called that an improvement and passed.
+  //
+  // This is the FINDING-2 failure mode exactly: 90 accusations from 20 rows.
+  // On a fixed corpus more accusations is worse, and a genuine recall win that
+  // raises it should have to say so in a baseline update rather than arrive
+  // unremarked.
+  'n_report_findings',
 ]);
 
-/** Metrics that are counts of the dataset, not quality. Compared for equality. */
+/**
+ * Metrics that describe the dataset or the route taken, not quality.
+ *
+ * `n_via_*` counts which lane admitted a segment. They move whenever an
+ * upstream lane gets better at its job — improving the entity extractor pushed
+ * `n_via_cue_proper_noun` 45 → 29 because the cue fallback was no longer
+ * needed, and the gate read a 16-point drop as a regression while
+ * `gate_recall` had not moved at all.
+ *
+ * A route count is a diagnostic. Reported, never gated: there is no direction
+ * in which it is "better", and pretending there is turns a healthy shift in
+ * where work happens into a blocked build.
+ */
 export const STRUCTURAL = new Set([
   'positives', 'negatives', 'labelled_claims',
-  'answerable_queries', 'silence_queries',
+  'answerable_queries', 'silence_queries', 'n_claim_bearing',
+]);
+
+/**
+ * Per-category case counts published by `extraction-core`.
+ *
+ * They exist so a caller can tell a scored 0.0 from a 0/0 — the E6 promotion
+ * gate failed on `negation 0%` when no negation case had been sent. They
+ * describe the DATASET, so they are structural: a change means the corpus
+ * changed, which is never an improvement or a regression, and grading them
+ * would turn a deliberate dataset edit into a blocked build.
+ */
+export const STRUCTURAL_PREFIXES = ['n_cases_'];
+
+/**
+ * DIAGNOSTIC — reported, compared, and never gated in either direction.
+ *
+ * STRUCTURAL was the wrong home for these and the distinction is worth keeping
+ * sharp. A structural change means the DATASET moved, so every other metric now
+ * means something different and the run must stop. A diagnostic change means
+ * the SYSTEM moved work from one lane to another, which is often the intended
+ * result of an improvement.
+ *
+ * Route counts are the clear case. Improving the entity extractor pushed
+ * `n_via_cue_proper_noun` 45 → 29, because the cue fallback was no longer
+ * needed to catch third-person subjects — while `gate_recall` did not move at
+ * all. Gating that as a regression blocks the build for getting better, and
+ * gating it as structural would claim the dataset had changed, which is worse:
+ * it is a true statement about the wrong thing.
+ *
+ * There is no direction in which a route count is "better". Report it, let a
+ * human read it, and gate on the quality metrics next to it.
+ */
+export const DIAGNOSTIC = new Set([
+  'n_admitted',
+  'n_via_cue_proper_noun', 'n_via_declarative_intent', 'n_via_entity_extractor',
 ]);
 
 /**
@@ -100,12 +168,17 @@ export function compareToBaseline(baseline, report) {
     const now = metrics[name];
     const delta = now - was;
 
-    if (STRUCTURAL.has(name)) {
+    if (STRUCTURAL.has(name) || STRUCTURAL_PREFIXES.some(pre => name.startsWith(pre))) {
       const same = Math.abs(delta) < EPSILON;
       rows.push({ name, was, now, delta, verdict: same ? VERDICT.PASS : VERDICT.STRUCTURAL_CHANGE });
       if (!same) {
         blocking.push(`DATASET SHAPE CHANGED: ${name} ${was} → ${now} — every other metric now means something different`);
       }
+      continue;
+    }
+
+    if (DIAGNOSTIC.has(name)) {
+      rows.push({ name, was, now, delta, verdict: VERDICT.PASS });
       continue;
     }
 

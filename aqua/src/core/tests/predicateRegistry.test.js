@@ -220,13 +220,40 @@ describe('predicate registry — explicit registration', () => {
 
 // ── Inertness ────────────────────────────────────────────────────────────────
 
-describe('predicate registry — nothing uses it yet', () => {
-  test('only the claim repository imports it', () => {
+describe('predicate registry — who is allowed to use it', () => {
+  test('every importer of the registry is a DELIBERATE entry', () => {
     // E5/PR-2 asserted nothing imported it; E5/PR-3's repository must, to
     // resolve objectKind before a write. Red battery first, then a deliberate
     // entry — the guard working exactly as intended.
+    //
+    // E6/PR-4 (Aug 23) is the THIRD time it fired, and the first time from
+    // outside the claim layer. The STEP 0 audit recorded the claim substrate as
+    // having zero non-test importers — shipped, correct, and an island, the
+    // sixth instance of L12's build-but-never-called list. These two entries
+    // are the beginning of that closing: the extractor has to speak the claim
+    // vocabulary, and the only honest way to teach a model the vocabulary is to
+    // read it from the thing that enforces it. A hand-copied predicate list in
+    // the prompt is the drift this registry exists to prevent.
+    //
+    // Both are READERS. Neither writes a claim, and the one-writer guard in
+    // claimSchema.test.js is untouched and still passing.
     const ALLOWED = ['src/core/claims/claimRepository.js', 'src/core/claims/backfill.js',
-      'src/core/claims/projection.js'];
+      'src/core/claims/projection.js',
+      'src/brain/understanding/extractionPrompt.js',     // E6/PR-4 — generates the prompt vocabulary
+      'src/brain/understanding/extractionContract.js',   // E6/PR-4 — refuses unregistered predicates
+      // E6/PR-6 — S4 gate ③. Read-only: it asks isRegistered and routes an
+      // unknown predicate to PROPOSE rather than registering it. That is the
+      // point — ensurePredicate would auto-admit a model's invention, and
+      // `enjoys_working_at` beside `works_at` splits one employment history
+      // in two, permanently and invisibly.
+      'src/brain/understanding/claimValidator.js',
+      // E6/PR-8 — S7. Read-only: it asks getPredicate for objectKind, inverse
+      // and symmetric to decide edge DIRECTION, and routes an unknown
+      // predicate to the proposal queue with a usage count rather than
+      // registering it. The registry is the only thing that knows works_at and
+      // employs are one relationship; deciding direction from word order
+      // instead would write two opposed edges for every fact stated twice.
+      'src/brain/understanding/relationshipResolver.js'];
     const offenders = [];
     const walk = (dir) => {
       for (const name of fs.readdirSync(dir)) {
@@ -253,6 +280,76 @@ describe('predicate registry — nothing uses it yet', () => {
     const src = fs.readFileSync(path.join(ROOT, 'src/core/claims/predicateRegistry.js'), 'utf8');
     for (const property of ['strictMode', 'PREDICATE_CLASS', 'source: \'seed\'']) {
       assert.ok(src.includes(property), `missing the ${property} property from typeRegistry`);
+    }
+  });
+});
+
+// ── An inverse forces objectKind: 'entity' ───────────────────────────────────
+
+/**
+ * 🔴 A DERIVED RULE, NOT A STYLE PREFERENCE.
+ *
+ * "A owns B" and "B owned_by A" are the same fact. So `owns`'s OBJECT and
+ * `owned_by`'s SUBJECT are the same thing, and every subject in this system is
+ * an entity. A predicate that declares an inverse therefore cannot take a
+ * literal object without asserting that one thing is both an entity and not.
+ *
+ * Five entries violated it — `owns`, `depends_on`, `depended_on_by`, `blocks`,
+ * `blocked_by` — while `owned_by` sat two lines below `owns` already declared
+ * `entity`. The pair contradicted itself in adjacent lines and nothing noticed
+ * for as long as the registry has existed.
+ *
+ * The cost was measured, not hypothetical. Every contract rejection across a
+ * 525-call eval run was `object-kind-mismatch`, and the objects the extractor
+ * was refused for included `owns → billing service`, `depends_on → search` and
+ * `blocks → Priya` — a person, rejected for not being a literal.
+ *
+ * BITE, MEASURED (revert the named property → count failures):
+ *   any one of the five back to 'literal'  → 1 fail
+ *   the rule derived from `inverse`        → 1 fail
+ */
+describe('an inverse forces an entity object', () => {
+  const withInverse = () => allPredicates().filter(p => p.inverse);
+
+  test('the scan finds the inverse pairs it is supposed to find', () => {
+    // A rule over an empty set passes trivially. This is the denominator.
+    const names = withInverse().map(p => p.name);
+    assert.ok(names.length >= 15, `only ${names.length} inverse-bearing predicates found`);
+    for (const n of ['owns', 'owned_by', 'depends_on', 'blocks', 'works_at']) {
+      assert.ok(names.includes(n), `scan missed ${n}`);
+    }
+  });
+
+  test('EVERY predicate with an inverse takes an entity object', () => {
+    const bad = withInverse()
+      .filter(p => (p.objectKind ?? 'literal') !== 'entity')
+      .map(p => `${p.name} (${p.objectKind ?? 'literal'}, inverse ${p.inverse})`);
+    assert.deepEqual(bad, [],
+      `an inverse makes the object a subject on the other side, and subjects are entities: ${bad.join(', ')}`);
+  });
+
+  test('the inverse relation is symmetric — both halves are declared', () => {
+    // The rule above is only sound if `inverse` really is a two-way link. A
+    // one-way declaration would let a literal-objected predicate hide as the
+    // unnamed half of a pair.
+    const byName = new Map(allPredicates().map(p => [p.name, p]));
+    for (const p of withInverse()) {
+      const other = byName.get(p.inverse);
+      assert.ok(other, `${p.name} names an inverse that does not exist: ${p.inverse}`);
+      assert.equal(other.inverse, p.name,
+        `${p.name} ↔ ${p.inverse} is declared one way only`);
+    }
+  });
+
+  test('predicates WITHOUT an inverse are untouched by this rule', () => {
+    // `uses` and `task_owner` have no inverse, so nothing here says what shape
+    // their objects should be — that stays an ontology decision with the owner,
+    // and this test exists so a later reader does not mistake silence for
+    // endorsement.
+    for (const n of ['uses', 'task_owner', 'has_status', 'role_is']) {
+      const p = allPredicates().find(x => x.name === n);
+      assert.ok(p, `${n} is missing from the registry`);
+      assert.equal(p.inverse ?? null, null, `${n} gained an inverse — re-check its objectKind`);
     }
   });
 });

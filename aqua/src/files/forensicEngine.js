@@ -114,6 +114,18 @@ export function _looksEditedForTests(a, b) {
   return numericDiffCount(a, b) === 1;
 }
 
+/**
+ * Pairwise comparisons performed by the `edited_number` rule.
+ *
+ * Exported for tests only. Incrementing an integer is the entire cost of this
+ * seam, and it buys a pin that is exact and load-independent rather than
+ * merely usually-right — the instrument AQUA_INDEXED_NOT_SCAN.md argues for
+ * and the one `relationshipEngine.js` already uses for the contradiction pass.
+ */
+let editedNumberComparisons = 0;
+export function _editedNumberComparisonsForTests() { return editedNumberComparisons; }
+export function _resetEditedNumberComparisonsForTests() { editedNumberComparisons = 0; }
+
 export function forensicReport(deps, ownerId, { now = Date.now() } = {}) {
   const { ukoStore: US, evidenceStore: ES } = deps;
   const ukos = US.listUKOs(ownerId, { limit: 100000 });
@@ -201,6 +213,34 @@ export function forensicReport(deps, ownerId, { now = Date.now() } = {}) {
   }
 
   // ── edited_number: same sentence shape, different numbers, different files ──
+  //
+  // ⚠️ THIS IS THE SUPERLINEAR STAGE OF THE FI-2 PASS, AND IT IS NOW COUNTED.
+  //
+  // `fileIntelligence2.e2e.test.js` pinned the whole pass with a TIMING ratio
+  // and said what should replace it: "should be replaced by [a counter] when
+  // the next superlinear stage is identified." Timing each stage separately at
+  // 600 and 1200 facts identified it — everything else is flat, this is not:
+  //
+  //     rebuildGraph  1.19×      consensus   1.19×
+  //     forensics     4.60×      gaps        1.74×
+  //                              whatCaused  1.61×
+  //
+  // The cause is the pairwise loop below. `maskNumbers` collapses statements
+  // that differ only in their digits into one key, so a corpus of rows from
+  // the same table — the exact shape this rule exists to catch — lands in a
+  // SINGLE group and is then compared every-pair. 600 facts is ~180k
+  // comparisons; 1200 is ~719k. Quadratic, and the 4× matches the clock.
+  //
+  // The counter is the instrument, not the clock. Nine timing readings of the
+  // old pin spread 2.08–2.90× across sample counts without converging, with
+  // its 2.4 threshold sitting inside that spread — it was measuring GC, not
+  // growth. A comparison count is exact and load-independent, the same
+  // conclusion `relationshipEngine.js` reached for the contradiction pass.
+  //
+  // NOT FIXED HERE. Bucketing this the way FIX-5 bucketed contradictions is a
+  // real change to a shipped forensic rule, and it needs its own before/after
+  // on `forensic-edited.v1`. This PR makes the cost VISIBLE and pins it so the
+  // fix can be measured. See `editedNumberCost.test.js`.
   const masked = new Map(); // number-masked normalized statement → [{fact, files}]
   for (const f of facts) {
     const key = maskNumbers(f.normalizedRepresentation ?? f.statement);
@@ -208,11 +248,49 @@ export function forensicReport(deps, ownerId, { now = Date.now() } = {}) {
     const evs = ES.evidenceForFact(ownerId, f.id);
     const files = [...new Set(evs.map(e => e.sourceFileId))];
     if (!masked.has(key)) masked.set(key, []);
-    masked.get(key).push({ f, files, names: [...new Set(evs.map(e => e.sourceFileName ?? e.sourceFileId))], cits: evs.map(formatCitation) });
+    masked.get(key).push({ key, f, files, names: [...new Set(evs.map(e => e.sourceFileName ?? e.sourceFileId))], cits: evs.map(formatCitation) });
   }
+  // ── FIX: BUCKET BY "ALL SLOTS BUT ONE", THE WAY FIX-5 BUCKETED CONTRADICTIONS ──
+  //
+  // The pass above collapses statements differing only in their digits into one
+  // key, so a table's rows — the exact shape this rule exists to examine — land
+  // in a SINGLE group that was then compared every-pair: n(n−1)/2, measured at
+  // 11,175 / 44,850 / 179,700 comparisons for 150 / 300 / 600 facts.
+  //
+  // THIS IS AN EXACT TRANSFORM, NOT A HEURISTIC, AND THAT IS WHY IT IS SAFE.
+  // The rule fires only when EXACTLY ONE numeric slot differs. Within a mask
+  // group every statement has the same slot count, so for each statement and
+  // each slot k we can key on "every slot except k". Two statements differ in
+  // exactly one slot IFF they share such a key and are not identical — so:
+  //
+  //   · no qualifying pair can be missed  — it always collides on its own slot
+  //   · no pair is counted twice          — differing in slot k, they collide
+  //                                         on key k and on no other
+  //   · every pair examined already passes numericDiffCount === 1
+  //
+  // Which means the comparisons that remain are exactly the candidate pairs,
+  // and the ones removed were all guaranteed non-matches. Verified by snapshot
+  // rather than argument: the findings on the labelled corpus are byte-identical
+  // before and after, and `editedNumberCost.test.js` re-pins the new counts.
+  const slotBuckets = new Map();
   for (const group of masked.values()) {
     if (group.length < 2) continue;
+    for (const item of group) {
+      const nums = String(item.f.normalizedRepresentation ?? item.f.statement).match(NUMBER_RE) ?? [];
+      for (let k = 0; k < nums.length; k++) {
+        // The mask key is included so two different sentence skeletons that
+        // happen to share a numeric profile cannot meet.
+        const key = `${item.key}\u0000${k}\u0000${nums.slice(0, k).join(',')}\u0000${nums.slice(k + 1).join(',')}`;
+        if (!slotBuckets.has(key)) slotBuckets.set(key, []);
+        slotBuckets.get(key).push(item);
+      }
+    }
+  }
+
+  for (const group of slotBuckets.values()) {
+    if (group.length < 2) continue;
     for (let i = 0; i < group.length; i++) for (let j = i + 1; j < group.length; j++) {
+      editedNumberComparisons++;
       const A = group[i], B = group[j];
       if (A.f.normalizedRepresentation === B.f.normalizedRepresentation) continue;   // identical incl. numbers
       // FINDING-2 — one changed number is a doctored figure; several changing

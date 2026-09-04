@@ -95,6 +95,12 @@ describe('db pool — inert by default', () => {
       'src/core/claims/claimRepository.js',   // E5/PR-3 — claims live in Postgres
       'src/core/claims/backfill.js',          // E5/PR-4 — projects legacy facts
       'src/core/claims/projection.js',        // E5/PR-5 — the read path
+      // E5/PR-5 (this change) — resolves whether claim shadow writes can run.
+      // It asks the pool the SAME question the storage seam above asks, for the
+      // same reason and with the same answer: flag on with no DATABASE_URL
+      // degrades to off carrying a stated reason, rather than throwing (L11) or
+      // going quiet (L13). It reads availability only; it writes nothing.
+      'src/core/claims/shadowMode.js',
     ];
     const offenders = [];
     const walk = (dir) => {

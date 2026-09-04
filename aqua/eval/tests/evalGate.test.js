@@ -20,7 +20,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
-  compareToBaseline, gateReport, VERDICT, LOWER_IS_BETTER, STRUCTURAL, EPSILON, NOT_GATED,
+  compareToBaseline, gateReport, VERDICT, LOWER_IS_BETTER, STRUCTURAL, DIAGNOSTIC, EPSILON, NOT_GATED,
 } from '../core/gate.mjs';
 import { readdirSync } from 'node:fs';
 
@@ -40,6 +40,11 @@ const run = (metrics, over = {}) => ({
 });
 
 // ── It passes what it should ─────────────────────────────────────────────────
+
+/** Every committed baseline on disk. Data-driven on purpose: a completeness
+ *  check with a hand-maintained list of what to be complete over is not a
+ *  completeness check. */
+const allBaselines = () => readdirSync(path.join(HERE, '../baselines')).filter(f => f.endsWith('.json'));
 
 describe('gate — passes a clean run', () => {
   test('identical metrics pass with every row unchanged', () => {
@@ -129,28 +134,65 @@ describe('gate — blocks a regression', () => {
 // ── The direction table is complete ─────────────────────────────────────────
 
 describe('gate — direction and structure are declared, not guessed', () => {
-  test('every lower-is-better metric in the real baselines is declared', () => {
+  /**
+   * EVERY baseline on disk, not a hand-listed two.
+   *
+   * This test scanned only `extraction-core` and `retrieval-core`, which is
+   * precisely how the gate came to be wrong. `n_false_admits` lives in
+   * gate-core and `n_captured_but_unreachable` in capture-core, so neither was
+   * ever checked — and the gate duly reported `n_false_admits 17 → 16` as a
+   * REGRESSION and blocked the build for admitting less junk.
+   *
+   * A completeness test with a hand-maintained list of what to be complete
+   * over is not a completeness test.
+   */
+  // (hoisted to module scope — see `allBaselines` above. A second describe
+  //  block needs it, and a per-block copy is how two lists drift apart.)
+
+  test('every lower-is-better metric in EVERY baseline is declared', () => {
     // Catches the case where a future suite adds a "wrongness" metric and
     // nobody adds it to LOWER_IS_BETTER — it would then be gated backwards.
     const suspicious = [];
-    for (const f of ['extraction-core.v1.json', 'retrieval-core.v1.json']) {
-      for (const name of Object.keys(load(f).metrics)) {
-        if (/noise|false_positive|error|miss|fail/i.test(name) && !LOWER_IS_BETTER.has(name)) {
-          suspicious.push(name);
-        }
+    for (const f of allBaselines()) {
+      for (const name of Object.keys(load(f).metrics ?? {})) {
+        if (!/noise|false_positive|false_admit|error|miss|fail|unreachable|dropped|conflict|orphan/i.test(name)) continue;
+        if (LOWER_IS_BETTER.has(name) || STRUCTURAL.has(name) || DIAGNOSTIC.has(name)) continue;
+        suspicious.push(`${f}:${name}`);
       }
     }
     assert.deepEqual(suspicious, [],
       'these read like wrongness metrics but are gated as higher-is-better');
   });
 
-  test('the real baselines contain the metrics the direction table names', () => {
-    const all = new Set([
-      ...Object.keys(load('extraction-core.v1.json').metrics),
-      ...Object.keys(load('retrieval-core.v1.json').metrics),
-    ]);
+  test('a route count is DIAGNOSTIC, not structural and not gated', () => {
+    // Route counts move whenever an upstream lane improves — the entity
+    // extractor getting better pushed `n_via_cue_proper_noun` 45 → 29 while
+    // `gate_recall` did not move at all. Gating that blocks the build for
+    // getting better; calling it structural claims the DATASET changed, which
+    // is a true statement about the wrong thing.
+    const rows = compareToBaseline(
+      { suiteFingerprint: 'abc123', metrics: { n_via_cue_proper_noun: 45, gate_recall: 0.99 } },
+      run({ n_via_cue_proper_noun: 29, gate_recall: 0.99 }),
+    ).rows;
+    const route = rows.find(r => r.name === 'n_via_cue_proper_noun');
+    assert.equal(route.verdict, VERDICT.PASS, 'a route shift blocked the gate');
+  });
+
+  test('fewer false admits is an IMPROVEMENT, not a regression', () => {
+    const rows = compareToBaseline(
+      { suiteFingerprint: 'abc123', metrics: { n_false_admits: 17 } },
+      run({ n_false_admits: 16 }),
+    ).rows;
+    const row = rows.find(r => r.name === 'n_false_admits');
+    assert.equal(row.verdict, VERDICT.IMPROVED, 'the gate is pointed backwards on this metric');
+  });
+
+  test('the real baselines contain the metrics the direction tables name', () => {
+    const all = new Set();
+    for (const f of allBaselines()) for (const k of Object.keys(load(f).metrics ?? {})) all.add(k);
     for (const n of LOWER_IS_BETTER) assert.ok(all.has(n), `LOWER_IS_BETTER names ${n}, which no baseline reports`);
     for (const n of STRUCTURAL) assert.ok(all.has(n), `STRUCTURAL names ${n}, which no baseline reports`);
+    for (const n of DIAGNOSTIC) assert.ok(all.has(n), `DIAGNOSTIC names ${n}, which no baseline reports`);
   });
 
   test('both committed baselines are complete runs', () => {
@@ -247,10 +289,30 @@ describe('gate — a baseline note survives regeneration', () => {
     assert.match(rt.note, /retrieveKnowledge/);
   });
 
+  test('NO baseline carries the generic placeholder note', () => {
+    // The two assertions above are hand-listed, so a THIRD suite's baseline is
+    // invisible to them — `context-core.v1` was, on the day it was added. The
+    // completeness tests above already settled this argument for metric
+    // direction: "a completeness test with a hand-maintained list of what to be
+    // complete over is not a completeness test". Same rule, applied to notes.
+    //
+    // It cannot assert WHAT each note says — that is the hand-written part. It
+    // asserts the note was written at all, which is exactly what `--update`
+    // destroyed.
+    const generic = [];
+    for (const f of allBaselines()) {
+      if (NOT_GATED.has(f.replace(/\.v1\.json$/, ''))) continue;
+      const note = load(f).note ?? '';
+      if (/^Baseline for \S+\.$/.test(note.trim()) || note.trim().length < 40) generic.push(f);
+    }
+    assert.deepEqual(generic, [], 'these baselines carry no hand-written note');
+  });
+
   test('the notes name how to regenerate that ONE suite', () => {
-    for (const f of ['extraction-core.v1.json', 'retrieval-core.v1.json']) {
+    for (const f of allBaselines()) {
+      if (NOT_GATED.has(f.replace(/\.v1\.json$/, ''))) continue;
       assert.match(load(f).note, /eval:gate -- \S+ --update/,
-        'the note should show the per-suite form, not the whole-tree one');
+        `${f}: the note should show the per-suite form, not the whole-tree one`);
     }
   });
 });

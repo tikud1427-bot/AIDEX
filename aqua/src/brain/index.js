@@ -50,10 +50,24 @@ import { brainEnabled } from './worldModel/schema.js';
 import { purgeOwner as purgeIds } from './identity/idStore.js';
 import * as canonicalIds from './identity/canonicalId.js';
 import * as pic from '../pic/core.js';
-import { ensureSelfEntity } from './identity/selfEntity.js';
+import { ensureSelfEntity, SELF_CANONICAL_ID } from './identity/selfEntity.js';
+import { entityStoreFor } from './identity/entityStoreView.js';
+import { getEntry as getIdEntry } from './identity/idStore.js';
+
+/**
+ * The owner's self entity id, or null when they do not have one.
+ *
+ * Presence is checked rather than assumed: `SELF_CANONICAL_ID` is a single
+ * constant shared across owners, and `ensureSelfEntity` only registers it when
+ * `AQUA_SELF_ENTITY` is on — off by default. Returning the constant regardless
+ * would tell S6 that every owner has a self node, including the ones that do
+ * not, and first-person claims would resolve to an id with nothing behind it.
+ */
+const selfEntityIdFor = ownerId =>
+  (ownerId && getIdEntry(ownerId, SELF_CANONICAL_ID) ? SELF_CANONICAL_ID : null);
 
 /** Real dependency set. Tests inject their own via the `deps` option. */
-const REAL_DEPS = { graph, peekMind, evidenceStore, annotations, getMind, observeSignals, canonicalIds, pic, ensureSelfEntity };
+const REAL_DEPS = { graph, peekMind, evidenceStore, annotations, getMind, observeSignals, canonicalIds, pic, ensureSelfEntity, entityStoreFor, selfEntityIdFor };
 
 const metrics = {
   calls: 0, errors: 0, disabled: 0,
@@ -361,6 +375,125 @@ export function assembleContext(ownerId, query, floorRetrieve, opts = {}) {
 }
 
 export function contextV2Active() { return contextV2Enabled(); }
+
+// ── E6 — semantic understanding on the turn path ─────────────────────────────
+
+/**
+ * Is E6 turned on?
+ *
+ * OFF unless explicitly enabled, and read per call rather than captured at
+ * import, so turning it off is a restart and not a redeploy. E6 does not pass
+ * its own promotion gate — negation detection sits at 85% against a 95% bar on
+ * both valid full shadow runs — so the default is the honest one.
+ */
+export function e6Enabled() {
+  return String(process.env.AQUA_E6 ?? 'off').toLowerCase() === 'on';
+}
+
+/**
+ * Run one turn through the E6 understanding pipeline.
+ *
+ * Closes blueprint §8's non-negotiable: until this existed,
+ * `runUnderstandingPipeline` had zero production consumers — the exact
+ * "beautiful code + unit tests + nobody calls it" shape §8 names.
+ *
+ * ⚠️ IT EXTRACTS AND RETURNS; IT DOES NOT COMMIT. The claim substrate is a
+ * separate wiring decision with its own correctness bar, and an extractor that
+ * fails its own negation gate must not be writing into the world model on the
+ * way to being evaluated. Shadow first, commit second. `stats` comes back so a
+ * caller can log what the pipeline saw without the pipeline deciding anything.
+ *
+ * 🔴 S6 WAS STRUCTURALLY UNREACHABLE UNTIL THIS PASSED `entityStore`.
+ *
+ * `pipeline.js` returns at its own guard — `entityResolution: 'unresolved'`,
+ * `stagesRun: STAGES` — before S6 runs, when no store is supplied. This function
+ * supplied none, so the resolver was built, tested, and could not execute on a
+ * real turn no matter what the flag said. The pipeline's guard was right to
+ * exist: resolving against no store marks every subject provisional and reports
+ * a resolution rate of zero, which reads like a measurement of the resolver and
+ * is a measurement of the caller forgetting an argument.
+ *
+ * The store is a READ VIEW over the canonical identity map, not a new one — see
+ * `identity/entityStoreView.js`. Injected via `deps` so a wiring test proves the
+ * production default rather than a fixture.
+ *
+ * SELF ENTITY IS PASSED ONLY WHEN IT EXISTS. `SELF_CANONICAL_ID` is one constant
+ * shared by every owner (owner scoping lives in the store, not the id), so
+ * handing it to S6 unconditionally would assert an identity for owners who have
+ * none — `AQUA_SELF_ENTITY` is off by default and nothing has created it. S6
+ * then reports first person as `tier: self-grammar, reason: no-self-entity`,
+ * which is the honest reading and keeps deixis out of the store exactly as its
+ * never-fuse invariant requires. This increment does not change that flag.
+ *
+ * STILL SHADOW. S6 resolving does not make S7–S9 run; the pipeline does not
+ * invoke them and nothing here commits.
+ */
+export async function understandTurn(
+  { ownerId, conversationId, userMessage, callModel = null } = {},
+  { deps = REAL_DEPS } = {},
+) {
+  if (!e6Enabled()) return null;
+  if (!ownerId || !userMessage) return null;
+  const { runUnderstandingPipeline } = await import('./understanding/pipeline.js');
+
+  // Fail-open enrichment (L11): a store view that cannot be built leaves S6
+  // unrun and S0–S5 untouched — byte-identical to the behaviour before this
+  // change. Resolution is a bonus on top of extraction, never a precondition.
+  let entityStore = null;
+  let selfEntityId = null;
+  try {
+    entityStore = deps.entityStoreFor?.(ownerId) ?? null;
+    selfEntityId = deps.selfEntityIdFor?.(ownerId) ?? null;
+  } catch (err) {
+    console.warn(`[E6] entity store unavailable (fail-open): ${err?.message ?? err}`);
+    entityStore = null;
+    selfEntityId = null;
+  }
+
+  return runUnderstandingPipeline(userMessage, {
+    ownerId, conversationId, callModel: callModel ?? (await e6Transport()),
+    entityStore, selfEntityId,
+  });
+}
+
+/**
+ * The transport E6 actually speaks through.
+ *
+ * 🔴 WITHOUT THIS, THE SEAM WAS WIRED AND DEAD. `runUnderstandingPipeline`
+ * takes `callModel` from its caller and has NO default — its own docs say
+ * "without it S3 yields nothing". The first version of `understandTurn` did not
+ * pass one, so `AQUA_E6=on` produced, on every turn:
+ *
+ *     segments 1 · gated 1 · called 1 · errors 1 · admitted 0
+ *
+ * Silently, because the post-turn seam is fail-open by design. Zero claims
+ * forever, indistinguishable from an extractor that simply finds nothing —
+ * the exact failure `e6-shadow.mjs` refuses to publish and which was
+ * reintroduced here in production.
+ *
+ * SAME CALL SHAPE AS THE SHADOW HARNESS, deliberately. The measured numbers —
+ * strict accuracy 0.495, predicate 0.473 — describe `generateGroq` with
+ * `openai/gpt-oss-120b` pinned at 1024 tokens. A production transport that
+ * differs in provider, model or token budget is not the thing that was
+ * measured, and the shadow result would no longer transfer.
+ *
+ * The model is pinned rather than left to rotate: `getCandidateModels` cycles
+ * for both providers, and an unpinned run cannot attribute a change to the
+ * prompt rather than to whichever model answered.
+ */
+export async function e6Transport() {
+  const provider = String(process.env.AQUA_E6_PROVIDER ?? 'groq').toLowerCase();
+  const model = process.env.AQUA_E6_MODEL ?? 'openai/gpt-oss-120b';
+  const mod = provider === 'gemini'
+    ? await import('../providers/gemini.js')
+    : await import('../providers/groq.js');
+  const generate = provider === 'gemini' ? mod.generateGemini : mod.generateGroq;
+  return async ({ system, user, temperature, model: perCall }) => {
+    const res = await generate(system, [{ role: 'user', content: user }], undefined, 1024,
+      { model: perCall ?? model, temperature });
+    return { text: res.text, model: res.model ?? null };
+  };
+}
 
 // ── Conversation ingest (B3) ─────────────────────────────────────────────────
 

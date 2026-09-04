@@ -15,9 +15,45 @@
  * failing. The self-test suite has no baseline by design — it grades the
  * harness, and a harness self-check is not a quality metric to gate on.
  */
-import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, existsSync, mkdtempSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+// ── Isolation ────────────────────────────────────────────────────────────────
+//
+// 🔴 THE GATE WAS THE ONE ENTRY POINT THIS GUARD DID NOT COVER.
+//
+// `scripts/run-tests.mjs` sandboxes AQUA_DATA_DIR before spawning, and
+// `src/core/tests/testCoverage.test.js` asserts that it took. Both were written
+// because, unset, the variable resolves to `os.homedir()/.aquiplex` — a
+// developer's REAL store. Neither reached the gate, which runs as
+// `node eval/gate.mjs` and never spawns through the runner.
+//
+// Observed, not hypothesised. A plain `npm run eval:gate -- extraction-core
+// --update` on a developer machine printed:
+//
+//   [EVIDENCE]  Loaded 409 fact(s), 405 evidence object(s) across 18 owner(s)
+//   [REASONING] Graph loaded: 1521 node(s), 7729 edge(s) across 19 owner(s)
+//
+// from `C:\Users\<user>\.aquiplex`. That is a person's live conversations,
+// minds and projects, read by an eval run — and `capture-core` drives the real
+// turn path with `drainJobs`, while several suites call `purgeOwner`. The
+// baseline being regenerated was measured against a store nobody controls, and
+// it differs machine to machine.
+//
+// Set HERE, before any suite is imported, where ESM hoisting cannot reach it.
+// Half the adapters assign AQUA_DATA_DIR in their own module bodies; that only
+// works when the adapter happens to be the first thing to touch `dataDir.js`,
+// which is an ordering accident, not isolation.
+//
+// An explicit AQUA_DATA_DIR from the caller is respected — pointing a run at a
+// fixture directory on purpose means it.
+if (!process.env.AQUA_DATA_DIR) {
+  process.env.AQUA_DATA_DIR = mkdtempSync(path.join(os.tmpdir(), 'aqua-eval-'));
+}
+// The mirror would otherwise try to reach a real cluster from an eval run.
+process.env.AQUA_DISABLE_MONGO_MIRROR ??= '1';
 
 import { runSuite } from './core/runner.mjs';
 import { compareToBaseline, gateReport, NOT_GATED } from './core/gate.mjs';
