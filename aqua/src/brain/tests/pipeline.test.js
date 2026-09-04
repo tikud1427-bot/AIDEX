@@ -250,3 +250,114 @@ describe('one composition, not two', () => {
     assert.ok(!src.includes('surfaces'), 'surface expansion belongs to the eval adapter');
   });
 });
+
+// ── A discard says WHICH rule it tripped ─────────────────────────────────────
+
+/**
+ * 🔴 ONE NUMBER, ELEVEN RULES, ELEVEN DIFFERENT FIXES.
+ *
+ * S3 collapsed every contract rejection into `?:contract`. A 200-case eval
+ * reported `?:contract: 22` and there was no way to learn whether that was a
+ * predicate the vocabulary lacks, an object typed as an entity where the
+ * registry wants a literal, or a missing statement span — three problems with
+ * nothing in common except the count they shared.
+ *
+ * It mattered: two of the three negation cases that fail the promotion gate on
+ * every run are contract discards, and `negation` is the only category the gate
+ * is judged on.
+ *
+ * BITE, MEASURED (revert the named property → count failures):
+ *   the rule is carried into the key   → 3 fail
+ *   the key stays bounded              → 1 fail
+ */
+describe('S3 contract discards name the rule they tripped', () => {
+  const seg = 'I own the billing service.';
+  const respond = claim => async () => ({
+    text: JSON.stringify({ claims: [claim] }), model: 'stub/model',
+  });
+  // ⚠️ THE CACHE MUST GO BETWEEN CASES OR THE SECOND ASSERTION IS THE FIRST.
+  // `extractionClient` memoises on the segment hash, and every case here uses
+  // the SAME sentence on purpose — the variable under test is the claim, not
+  // the text. Without this, run two replays run one's response and the test
+  // reports that two different defects produced the same key, which is exactly
+  // the conclusion it exists to disprove.
+  const run = async claim => {
+    __clearExtractionCache();
+    return runUnderstandingPipeline(seg, {
+      ownerId: 'o', conversationId: 'c', callModel: respond(claim),
+    });
+  };
+
+  // `owns` takes an ENTITY — it declares an inverse, and an inverse forces it
+  // (see predicateRegistry.js). This fixture was `{ literal: … }` until that
+  // contradiction was fixed, and the tests below flipped direction with it:
+  // the mismatch to provoke is now a literal where an entity belongs.
+  const base = {
+    subject: 'self', predicate: 'owns', object: { entity: 'billing service' },
+    polarity: 'asserted', modality: 'fact', timePrecision: 'none',
+    statementText: seg,
+  };
+
+  test('an object-kind mismatch is a PROPOSAL, carrying the kind observed', async () => {
+    // This asserted a byGate key until the named-discard run showed that every
+    // contract rejection in 525 calls was this one rule, on objects like
+    // `uses → Postgres` and `blocks → Priya`. A person typed as a literal is
+    // the registry being wrong, not the claim — so the evidence survives.
+    const r = await run({ ...base, object: { literal: 'billing service' } });
+    assert.equal(r.stats.proposed, 1);
+    assert.equal(r.stats.discarded, 0, 'the claim was destroyed instead of proposed');
+    const p = r.proposals.find(x => x.kind === 'object-shape');
+    assert.ok(p, `no object-shape proposal: ${JSON.stringify(r.proposals)}`);
+    assert.equal(p.predicate, 'owns');
+    assert.equal(p.observed, 'literal', 'the proposal does not say what shape arrived');
+  });
+
+  test('an object-shape proposal is DISTINGUISHABLE from a predicate proposal', async () => {
+    // Two different repairs: one grows the vocabulary, the other corrects the
+    // shape of a term already in it. Collapsing them would recreate the
+    // one-number problem this whole block exists to end.
+    const shape = await run({ ...base, object: { literal: 'billing service' } });
+    const vocab = await run({ ...base, predicate: 'enjoys_immensely' });
+    assert.equal(shape.proposals[0].kind, 'object-shape');
+    assert.equal(vocab.proposals[0].kind, 'predicate');
+  });
+
+  test('two different contract rules are still DIFFERENT keys', () => {
+    // The property the old code destroyed: unrelated defects shared one number.
+    // Object-kind now routes to proposals, so this checks the pair that still
+    // discards — a bad enum value against a missing span.
+    return Promise.all([
+      run({ ...base, modality: 'speculative' }),
+      run({ ...base, statementText: '' }),
+    ]).then(([a, b]) => {
+      const ka = Object.keys(a.stats.byGate).find(k => k.startsWith('?:contract'));
+      const kb = Object.keys(b.stats.byGate).find(k => k.startsWith('?:contract'));
+      assert.ok(ka && kb, `missing keys: ${ka} / ${kb}`);
+      assert.notEqual(ka, kb, 'two different contract rules produced the same key');
+    });
+  });
+
+  test('a missing statement span is named too', async () => {
+    const r = await run({ ...base, statementText: '' });
+    assert.ok(Object.keys(r.stats.byGate).some(k => k.includes('missing-statement-text')));
+  });
+
+  test('the key space stays BOUNDED — the predicate name never enters it', async () => {
+    // `bad-modality:speculative` interpolates the value. Keying on the full
+    // reason would grow the map with every value a model invents, on a hot
+    // path. G6.
+    const r = await run({ ...base, modality: 'speculative' });
+    for (const k of Object.keys(r.stats.byGate)) {
+      assert.ok(!k.includes(' '), `byGate key carries free text: ${k}`);
+      assert.ok(!k.includes('speculative'), `byGate key carries a free value: ${k}`);
+    }
+  });
+
+  test('an unregistered predicate is still a PROPOSAL, not a discard', async () => {
+    // Unchanged behaviour, pinned because this edit sits directly beside it:
+    // "unknown predicate → propose, don't force" is how the vocabulary grows.
+    const r = await run({ ...base, predicate: 'enjoys_immensely' });
+    assert.equal(r.stats.proposed, 1);
+    assert.equal(r.stats.discarded, 0);
+  });
+});

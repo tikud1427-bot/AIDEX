@@ -73,6 +73,29 @@ const C = PREDICATE_CLASS;
  */
 const SEED = [
   // identity
+  // ── AN INVERSE FORCES objectKind: 'entity'. THIS IS DERIVED, NOT CHOSEN. ────
+  //
+  // "A owns B" is the same fact as "B owned_by A". So `owns`'s OBJECT and
+  // `owned_by`'s SUBJECT are the same thing, and every subject in this system
+  // is an entity. A predicate that declares an inverse therefore cannot take a
+  // literal object without asserting that one thing is both an entity and not.
+  //
+  // Five entries violated it — `owns`, `depends_on`, `depended_on_by`,
+  // `blocks`, `blocked_by` — and `owned_by` was already `entity`, so the pair
+  // contradicted itself in adjacent lines. The cost was not theoretical: every
+  // contract rejection in a 525-call eval run was `object-kind-mismatch`, and
+  // the objects the model was refused for were `owns → billing service`,
+  // `depends_on → search`, and `blocks → Priya`. A person, rejected for not
+  // being a literal. Two of the three negation cases that fail the E6
+  // promotion gate on every run are this.
+  //
+  // `predicateRegistry.test.js` enforces the rule structurally, so a sixth
+  // cannot be added by hand.
+  //
+  // NOT changed here: `uses` and `task_owner` have no inverse, so this
+  // derivation says nothing about them and they remain an ontology decision
+  // with the owner. Nor does it touch the predicates whose gold objects really
+  // are values — `has_status → "blocked"`, `role_is → "tech lead"`.
   ['works_at',    { class: C.IDENTITY, objectKind: 'entity',   inverse: 'employs' }],
   ['role_is',     { class: C.IDENTITY, objectKind: 'literal' }],
   ['located_in',  { class: C.IDENTITY, objectKind: 'entity' }],
@@ -98,12 +121,12 @@ const SEED = [
   ['has_property', { class: C.ATTRIBUTE, objectKind: 'literal' }],
 
   // projects and artefacts
-  ['owns',        { class: C.RELATION, objectKind: 'literal',  inverse: 'owned_by' }],
+  ['owns',        { class: C.RELATION, objectKind: 'entity',   inverse: 'owned_by' }],
   ['owned_by',    { class: C.RELATION, objectKind: 'entity',   inverse: 'owns' }],
-  ['depends_on',  { class: C.RELATION, objectKind: 'literal',  inverse: 'depended_on_by' }],
-  ['depended_on_by', { class: C.RELATION, objectKind: 'literal', inverse: 'depends_on' }],
-  ['blocks',      { class: C.RELATION, objectKind: 'literal',  inverse: 'blocked_by' }],
-  ['blocked_by',  { class: C.RELATION, objectKind: 'literal',  inverse: 'blocks' }],
+  ['depends_on',  { class: C.RELATION, objectKind: 'entity',   inverse: 'depended_on_by' }],
+  ['depended_on_by', { class: C.RELATION, objectKind: 'entity', inverse: 'depends_on' }],
+  ['blocks',      { class: C.RELATION, objectKind: 'entity',   inverse: 'blocked_by' }],
+  ['blocked_by',  { class: C.RELATION, objectKind: 'entity',   inverse: 'blocks' }],
 
   // intent and decision — absent from the engine entirely today
   ['plans_to',    { class: C.INTENT, objectKind: 'literal' }],

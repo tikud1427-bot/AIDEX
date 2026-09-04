@@ -102,20 +102,38 @@ describe('S7 — symmetric predicates canonicalise the ENDPOINTS', () => {
   });
 });
 
-describe('S7 — the registry defect is handled, not papered over', () => {
-  test('owned_by does NOT canonicalise to owns, because owns cannot hold an entity', () => {
-    // 🔴 owns(literal) ↔ owned_by(entity). Lexicographic order says `owned_by`
-    // → `owns`, and `owns` cannot legally hold an entity object — S4 gate ②
-    // would reject the very claim this edge came from.
-    assert.equal(getPredicate('owns').objectKind, 'literal', 'the defect still exists');
+describe('S7 — the registry defect is FIXED, and the guard outlived it', () => {
+  test('owns now holds an entity, as its own inverse always implied', () => {
+    // ✅ INVERTED, ON THE INSTRUCTION THIS TEST LEFT BEHIND.
+    //
+    // It used to read `assert.equal(getPredicate('owns').objectKind, 'literal',
+    // 'the defect still exists')` and ended with "INVERT THIS TEST if owns is
+    // ever corrected to entity-object". It has been.
+    //
+    // The correction is derived, not chosen: "A owns B" is "B owned_by A", so
+    // `owns`'s object is `owned_by`'s subject, and subjects are entities.
+    // `owned_by` was already `entity` two lines below it in the registry. Four
+    // more pairs were wrong the same way. `predicateRegistry.test.js` now
+    // enforces the rule so a sixth cannot be added by hand.
+    //
+    // What made it worth doing: every contract rejection across a 525-call eval
+    // run was `object-kind-mismatch`, on objects like `owns → billing service`
+    // and `blocks → Priya`. A person, refused for not being a literal.
+    assert.equal(getPredicate('owns').objectKind, 'entity', 'the correction was reverted');
     assert.equal(getPredicate('owned_by').objectKind, 'entity');
-    assert.deepEqual(canonicalDirection('owned_by'), { type: 'owned_by', flip: false },
-      'INVERT THIS TEST if owns is ever corrected to entity-object');
+
+    // Same answer as before, for a DIFFERENT reason — worth stating, because a
+    // green test here no longer means the guard is doing anything. Before, the
+    // guard forced the entity side; now `'owned_by' < 'owns'` picks it and the
+    // guard has nothing to correct.
+    assert.deepEqual(canonicalDirection('owned_by'), { type: 'owned_by', flip: false });
   });
 
   test('the guard fires on a pair where alphabetical order would get it WRONG', () => {
     // Measured: deleting the guard failed ZERO tests, because for the one
     // broken pair `'owned_by' < 'owns'` already picks the entity-side member.
+    // Since the registry correction there is no broken pair left at all, so
+    // this synthetic case is now the ONLY thing exercising the guard — keep it.
     // The guard was resting on an accident of alphabetical order, and a rename
     // would have removed the protection silently.
     //
@@ -148,10 +166,17 @@ describe('S7 — the registry defect is handled, not papered over', () => {
       if (inv.inverse !== p.name) offenders.push(`${p.name} ↔ ${p.inverse} not reciprocal`);
       if (inv.objectKind !== p.objectKind) offenders.push(`${p.name}(${p.objectKind}) ↔ ${p.inverse}(${inv.objectKind})`);
     }
-    assert.deepEqual(offenders.sort(), [
-      'owned_by(entity) ↔ owns(literal)',
-      'owns(literal) ↔ owned_by(entity)',
-    ], 'a new inverse-pair inconsistency appeared — canonicalisation assumes there is exactly one');
+    // WAS a two-entry allow-list naming the owns ↔ owned_by mismatch. The
+    // registry correction emptied it.
+    //
+    // ⚠️ AND THIS TEST COULD NEVER HAVE FOUND THE OTHER FOUR. It compares the
+    // two halves of a pair to EACH OTHER, and `depends_on` ↔ `depended_on_by`
+    // and `blocks` ↔ `blocked_by` were both literal — consistent, and
+    // consistently wrong. Agreement is not correctness. The rule that catches
+    // them is in `predicateRegistry.test.js`: an inverse makes the object a
+    // subject on the other side, and subjects are entities.
+    assert.deepEqual(offenders.sort(), [],
+      'a new inverse-pair inconsistency appeared — canonicalisation assumes there are none');
   });
 });
 

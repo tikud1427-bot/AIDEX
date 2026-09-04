@@ -391,3 +391,186 @@ detection_modality REGRESSED 72.0% -> 52.0% and is the largest single loss:
 
 State: 3085 tests · 396 suites · 3084 pass · 0 fail · 1 skip
        flagproof 30/30 · eval:gate PASS
+
+## Increment 11 — the per-case data, and naming the contract discards
+
+### WHAT e6-percase.json PROVES
+The 70% negation was an ARTIFACT, and increment 10's fix is confirmed by data
+collected before it existed.
+
+perCase, reported pass 3, negation category (20 cases):
+  emitted a claim ......... 14  -> 14/20 = 70.0% as published
+  transport ERROR ..........  3  negation-015, -016, -017
+  genuine miss .............  3  negation-008, -012, -014
+
+ALL THREE transport errors in the reported pass landed in negation — the ONE
+category the promotion gate is judged on. Excluding them: 14/17 = 82.4%.
+Both clean passes read 85% (17/20), missing the SAME three cases.
+
+So detection_negation is STABLE at 3 misses. The "15% run-to-run noise" I
+reported last turn was three timeouts, not extractor variance. I called it
+stable on two agreeing runs, then called it noisy on three — both from
+insufficient data. The 3 misses are:
+  negation-008  "The billing service doesn't depend on search."  ?:contract
+  negation-012  "I never learned Rust properly."                 model returned []
+  negation-014  "I don't own the parser now."                    ?:contract
+
+The gate needs 19/20. Three stable misses. E6 genuinely fails, for 3 reasons.
+
+### TAXONOMY OF THE 35 EMPTY CASES (pass 3)
+   3  transport errors      (negation) — not extraction failures
+  10  ?:contract            model answered, contract rejected
+   5  2:object-not-in-quote S2
+   1  1:quote-not-verbatim  S1 (decision-009, 2 discards)
+  18  model returned []     no gate involved
+Ten of those 18 are MODALITY — the biggest single bucket in the run, with no
+gate attribution at all. modality regressed 72% -> 52%. The sentences are
+questions and hypotheticals ("What if we moved to Bangalore?", "Should I make
+Dev the tech lead?"); the model declines to extract from non-assertions while
+the dataset labels them modality=hypothetical|question.
+
+### Changed
+- `src/brain/understanding/pipeline.js` — S3 contract discards now key on the
+  RULE: `?:contract:object-kind-mismatch` instead of `?:contract`. The reason
+  was already in `r.reason` and was being replaced with a question mark.
+  Bounded on the rule (fixed list), not the reason (interpolates the predicate).
+- `src/brain/tests/pipeline.test.js` (+5 tests)
+
+### Bite
+  collapse back to '?:contract'      -> 3 fail
+  key on the full reason (unbounded) -> 1 fail
+  remove the cache clear in run()    -> 1 fail
+
+### A TEST BUG I CAUGHT MID-WRITE
+Two runs inside ONE test reused the same segment text, and extractionClient
+memoises on the segment hash — so run two replayed run one's response and the
+test "proved" two different defects produce the same key, the exact conclusion
+it exists to disprove. The file already had beforeEach(clearCache); per-test is
+not per-call. Same trap as the E6 wiring test earlier in this engagement.
+
+State: 3090 tests · 397 suites · 3089 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate PASS
+
+## Increment 12 — the object-kind mismatch, and what e6-named.json proved
+
+### THE INFRASTRUCTURE FIXES ALL FIRED
+  pass 3 INVALID — 5 transport errors (2.5%) — excluded, pass 2 reported
+  UNMEASURED — negative-035, excluded from every metric (negatives 40 -> 39)
+  ?:contract  ->  ?:contract:object-kind-mismatch
+  detection_negation 85.0%, stable, matching every clean pass ever run
+
+### ONE RULE, NOT ELEVEN
+discardedByGate over 525 calls:
+  ?:contract:object-kind-mismatch  23     <- every contract rejection
+  2:object-not-in-quote            18
+  1:quote-not-verbatim              1
+Twenty-three of twenty-three. The "?" hid a single defect, not a distribution.
+
+### THE REGISTRY IS WRONG, NOT THE MODEL
+  identity-006  uses        wants literal   object "Postgres"
+  identity-019  owns        wants literal   object "billing service"
+  identity-025  uses        wants literal   objects "Node", "React"
+  negation-008  depends_on  wants literal   object "search"
+  negation-014  owns        wants literal   object "parser"
+  modality-012  owns        wants literal   object "billing"
+  task-003      blocks      wants literal   object "Priya"      <- a PERSON
+  task-008      task_owner  wants literal   object "deploy checklist"
+  temporal-006  uses        wants literal   object "Python"
+
+Implicated: uses×4 owns×3 depends_on×1 has_status×1 blocks×1 task_owner×1
+TWO OF THE THREE negation cases blocking the gate are here (008, 014).
+The third, negation-012 "I never learned Rust properly", is the model
+returning nothing against gold `habit_of → "learning Rust"`.
+
+### Changed
+- `src/brain/understanding/pipeline.js` — an object-kind mismatch is now a
+  PROPOSAL, not a silent discard, carrying the predicate and the kind actually
+  observed. Same doctrine as the rule directly above it: "unknown predicate ->
+  propose, don't force". Proposals are tagged kind:'predicate' (grow the
+  vocabulary) vs kind:'object-shape' (correct a term already in it).
+- `src/brain/tests/pipeline.test.js` — 2 tests RE-TARGETED (the behaviour they
+  described changed by design), +1 new. 25 pass.
+
+METRICS UNCHANGED. A proposal is not emitted as a fact, so detection does not
+move. The gate still fails, for the same reason, now in a form somebody can act
+on: the next run reports "uses was handed an entity N times".
+
+### Bite
+  mismatch back to a discard        -> 2 fail
+  proposal drops the observed kind  -> 1 fail
+  the two proposal kinds collapse   -> 2 fail
+
+### THE DECISION I DID NOT MAKE
+Whether `uses`, `owns`, `depends_on`, `blocks`, `task_owner` should take
+entities is an ONTOLOGY change with downstream effects on S6 resolution and
+claim storage. It is the owner's call (L3, L20), and it is worth roughly 2 of
+the 3 gate-blocking negation misses. `has_status -> "blocked"` should stay
+literal — there the model is wrong.
+
+State: 3091 tests · 397 suites · 3090 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate PASS
+
+## Increment 13 — the registry contradicted itself, and had for as long as it existed
+
+### THE FULL DATASET SAYS MY LAST RECOMMENDATION WAS TOO SIMPLE
+I said "flip uses, owns, depends_on, blocks, task_owner to entity". Auditing
+all 167 gold claims against the 17 literal-typed predicates shows three groups:
+
+  CLEAN ENTITY   uses(14/14 named technologies) blocks(3/3) depends_on(2/2)
+  CLEAN LITERAL  habit_of(17) has_status(11) plans_to(9) role_is(7)
+                 deadline_for(6) has_property(3) dislikes(2) related_to(3)
+  GENUINELY MIXED decided(13) owns(11) rejected(6) prefers(4) builds(6)
+                 task_owner(8)
+    decided -> "Postgres" AND "drop the mobile app"; both legitimate.
+    No single objectKind is correct for these six. Flipping them moves the
+    failures rather than removing them. That is a design finding, not a fix.
+
+### BUT ONE SUBSET IS NOT A JUDGEMENT CALL AT ALL
+"A owns B" is the same fact as "B owned_by A". So `owns`'s OBJECT and
+`owned_by`'s SUBJECT are the same thing, and every subject is an entity.
+A predicate declaring an inverse CANNOT take a literal object.
+
+Violations, 5 of 15 inverse-bearing predicates:
+  owns(literal) — while owned_by(entity) sat TWO LINES BELOW IT
+  depends_on(literal) / depended_on_by(literal)
+  blocks(literal) / blocked_by(literal)
+
+All five corrected to entity. This resolves owns, depends_on and blocks
+WITHOUT touching the ontology question, and leaves uses and task_owner
+(no inverse) open — the derivation says nothing about them.
+
+### A PRIOR SESSION FOUND THIS AND ROUTED AROUND IT
+`relationshipResolver.test.js:105` is titled "S7 — the registry defect is
+handled, not papered over". It asserted `objectKind === 'literal'` with the
+comment "the defect still exists", built an S7 guard to canonicalise around
+it, and ended: "INVERT THIS TEST if owns is ever corrected to entity-object".
+Inverted, as instructed.
+
+### AND THE EXISTING CONSISTENCY TEST COULD NEVER HAVE CAUGHT THE OTHER FOUR
+It compared the two halves of a pair to EACH OTHER. depends_on ↔
+depended_on_by and blocks ↔ blocked_by were both literal — consistent, and
+consistently wrong. Agreement is not correctness.
+
+### Changed
+- `src/core/claims/predicateRegistry.js` — 5 objectKind corrections + the
+  derivation recorded where the entries are.
+- `src/core/tests/predicateRegistry.test.js` (+4 tests) — the inverse rule
+  enforced structurally, so a sixth cannot be added by hand.
+- `src/brain/tests/relationshipResolver.test.js` — the defect test INVERTED per
+  its own instruction; the known-offenders allow-list emptied.
+- `src/brain/tests/pipeline.test.js` — fixtures flipped: the mismatch to
+  provoke is now a literal where an entity belongs.
+
+### Bite
+  any one of the five back to 'literal'  -> 1 fail
+  a one-way inverse declaration          -> 2 fail
+
+### NOT MEASURED — this changes extraction acceptance
+uses(14) and owns(11) are heavily used in the dataset. Accepting entity objects
+where they were refused should raise detection, but predicate_accuracy and
+subject_recall can move in both directions. RE-RUN BEFORE BELIEVING ANYTHING:
+  node scripts/e6-shadow.mjs --provider groq --model openai/gpt-oss-120b \
+    --repeat 3 --pace 1500 --json e6-inverse.json
+
+State: 3095 tests · 398 suites · 3094 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate PASS · router boot OK

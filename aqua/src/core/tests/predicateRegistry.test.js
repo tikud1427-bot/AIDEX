@@ -283,3 +283,73 @@ describe('predicate registry — who is allowed to use it', () => {
     }
   });
 });
+
+// ── An inverse forces objectKind: 'entity' ───────────────────────────────────
+
+/**
+ * 🔴 A DERIVED RULE, NOT A STYLE PREFERENCE.
+ *
+ * "A owns B" and "B owned_by A" are the same fact. So `owns`'s OBJECT and
+ * `owned_by`'s SUBJECT are the same thing, and every subject in this system is
+ * an entity. A predicate that declares an inverse therefore cannot take a
+ * literal object without asserting that one thing is both an entity and not.
+ *
+ * Five entries violated it — `owns`, `depends_on`, `depended_on_by`, `blocks`,
+ * `blocked_by` — while `owned_by` sat two lines below `owns` already declared
+ * `entity`. The pair contradicted itself in adjacent lines and nothing noticed
+ * for as long as the registry has existed.
+ *
+ * The cost was measured, not hypothetical. Every contract rejection across a
+ * 525-call eval run was `object-kind-mismatch`, and the objects the extractor
+ * was refused for included `owns → billing service`, `depends_on → search` and
+ * `blocks → Priya` — a person, rejected for not being a literal.
+ *
+ * BITE, MEASURED (revert the named property → count failures):
+ *   any one of the five back to 'literal'  → 1 fail
+ *   the rule derived from `inverse`        → 1 fail
+ */
+describe('an inverse forces an entity object', () => {
+  const withInverse = () => allPredicates().filter(p => p.inverse);
+
+  test('the scan finds the inverse pairs it is supposed to find', () => {
+    // A rule over an empty set passes trivially. This is the denominator.
+    const names = withInverse().map(p => p.name);
+    assert.ok(names.length >= 15, `only ${names.length} inverse-bearing predicates found`);
+    for (const n of ['owns', 'owned_by', 'depends_on', 'blocks', 'works_at']) {
+      assert.ok(names.includes(n), `scan missed ${n}`);
+    }
+  });
+
+  test('EVERY predicate with an inverse takes an entity object', () => {
+    const bad = withInverse()
+      .filter(p => (p.objectKind ?? 'literal') !== 'entity')
+      .map(p => `${p.name} (${p.objectKind ?? 'literal'}, inverse ${p.inverse})`);
+    assert.deepEqual(bad, [],
+      `an inverse makes the object a subject on the other side, and subjects are entities: ${bad.join(', ')}`);
+  });
+
+  test('the inverse relation is symmetric — both halves are declared', () => {
+    // The rule above is only sound if `inverse` really is a two-way link. A
+    // one-way declaration would let a literal-objected predicate hide as the
+    // unnamed half of a pair.
+    const byName = new Map(allPredicates().map(p => [p.name, p]));
+    for (const p of withInverse()) {
+      const other = byName.get(p.inverse);
+      assert.ok(other, `${p.name} names an inverse that does not exist: ${p.inverse}`);
+      assert.equal(other.inverse, p.name,
+        `${p.name} ↔ ${p.inverse} is declared one way only`);
+    }
+  });
+
+  test('predicates WITHOUT an inverse are untouched by this rule', () => {
+    // `uses` and `task_owner` have no inverse, so nothing here says what shape
+    // their objects should be — that stays an ontology decision with the owner,
+    // and this test exists so a later reader does not mistake silence for
+    // endorsement.
+    for (const n of ['uses', 'task_owner', 'has_status', 'role_is']) {
+      const p = allPredicates().find(x => x.name === n);
+      assert.ok(p, `${n} is missing from the registry`);
+      assert.equal(p.inverse ?? null, null, `${n} gained an inverse — re-check its objectKind`);
+    }
+  });
+});

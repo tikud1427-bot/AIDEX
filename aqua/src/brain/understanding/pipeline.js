@@ -152,12 +152,66 @@ export async function runUnderstandingPipeline(text, opts = {}) {
     // The contract preserves the reason and the raw claim precisely so this
     // routing is possible.
     for (const r of out.rejected ?? []) {
-      if (String(r.reason ?? '').startsWith('unregistered-predicate')) {
+      // 🔴 AN OBJECT-KIND MISMATCH IS VOCABULARY FEEDBACK, NOT A BAD CLAIM.
+      //
+      // The rule directly above says "unknown predicate → propose, don't
+      // force", because refusing is not forgetting and a dropped rejection
+      // loses the only evidence the vocabulary is too small. A mismatch is the
+      // same complaint one level down: the predicate exists, and the registry
+      // disagrees with the model about the SHAPE of its object.
+      //
+      // The first named-discard run made the case. Every contract rejection in
+      // 525 calls was this one rule — 23 of 23 — and the objects were things
+      // like `uses → Postgres`, `owns → billing service`, `depends_on → search`
+      // and `blocks → Priya`. A person, typed as a literal. Two of the three
+      // negation cases that fail the promotion gate on every run are here.
+      //
+      // Whether those predicates should take entities is an ONTOLOGY decision
+      // and not one this file gets to make silently. What it can stop doing is
+      // destroying the evidence: the claim, its predicate and the kind actually
+      // observed now survive as a proposal, so the next run reports "uses was
+      // handed an entity 14 times" instead of a counter nobody can act on.
+      //
+      // Metrics are untouched. A proposal is not emitted as a fact, so nothing
+      // here moves detection — the gate still fails, for the same reason, and
+      // now says so in a form somebody can fix.
+      const reason = String(r.reason ?? '');
+      if (reason.startsWith('object-kind-mismatch')) {
         stats.proposed++;
-        proposals.push({ predicate: r.raw?.predicate, quote: r.raw?.statementText, segment: seg.text });
+        proposals.push({
+          kind: 'object-shape',
+          predicate: r.raw?.predicate,
+          observed: ['entity', 'literal', 'quantity', 'time']
+            .find(k => r.raw?.object?.[k] !== undefined) ?? 'unknown',
+          quote: r.raw?.statementText,
+          segment: seg.text,
+        });
+        continue;
+      }
+      if (reason.startsWith('unregistered-predicate')) {
+        stats.proposed++;
+        proposals.push({ kind: 'predicate', predicate: r.raw?.predicate, quote: r.raw?.statementText, segment: seg.text });
       } else {
+        // 🔴 THE REASON WAS RIGHT HERE AND WAS THROWN AWAY.
+        //
+        // `r.reason` already says exactly what failed — `object-kind-mismatch:
+        // owns wants literal, got entity`, `bad-modality:speculative`,
+        // `missing-statement-text` — and this line replaced all of it with a
+        // question mark. Across a 200-case eval that produced a single number,
+        // `?:contract: 22`, sitting on top of eleven different rules with
+        // eleven different fixes. The three negation cases that fail the
+        // promotion gate every run are two of those twenty-two, and nothing in
+        // the output could say which rule they tripped.
+        //
+        // BOUNDED (G6): keyed on the RULE, not the reason. The full reason
+        // interpolates the predicate name and is therefore open-ended; the rule
+        // set is the fixed list in `extractionContract.js`. The detail still
+        // reaches the caller through `rejected`, which is where an open-ended
+        // string belongs.
         stats.discarded++;
-        stats.byGate['?:contract'] = (stats.byGate['?:contract'] ?? 0) + 1;
+        const rule = reason.split(':')[0] || 'unknown';
+        const key = `?:contract:${rule}`;
+        stats.byGate[key] = (stats.byGate[key] ?? 0) + 1;
       }
     }
 
