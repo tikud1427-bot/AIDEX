@@ -181,3 +181,99 @@ describe('extraction controls — overall_strict_accuracy cannot gate a decision
     assert.equal(levels.size, 4, 'two different extractors produced identical per-level metrics');
   });
 });
+
+// ── The fifth level: what the claim is ABOUT ─────────────────────────────────
+
+/**
+ * 🔴 THE CONTROL THAT DID NOT EXIST.
+ *
+ * The battery above proves the suite can tell a mute extractor from a firehose
+ * and a subject-blind one from the real thing. It could not tell an extractor
+ * that names the wrong THING, because the object was never compared.
+ *
+ * Measured on `identity-019` — "I own the billing service." — an emitted object
+ * of `"billing service"` and one of `"the moon"` produced byte-identical
+ * scores across all four levels. That blindness is why a registry contradiction
+ * (`owns`, `depends_on`, `blocks` typed to take literals while declaring
+ * inverses) survived for as long as the registry did: nothing measured the part
+ * of the claim it corrupted.
+ *
+ * BITE, MEASURED (revert the named property → count failures):
+ *   object_accuracy computed at all       → 3 fail
+ *   the unmatchable ceiling published     → 2 fail
+ *   `correct` left additive-only          → 1 fail
+ */
+describe('extraction controls — the object is scored', () => {
+  const CASE = 'identity-019';
+  const one = (over = {}) => {
+    const tc = suite.cases.find(c => c.id === CASE);
+    return suite.score(tc, {
+      facts: [{
+        statement: tc.text, subject: 'SELF', predicate: 'owns',
+        // ⚠️ THE REAL ADAPTER SHAPE. `e6Extractor.toFact` passes the contract's
+        // object straight through, and a validated object is `{ entity: … }` or
+        // `{ literal: … }` — never a bare string. This fixture used a string,
+        // which is what the SUITE wanted rather than what the ADAPTER produces,
+        // so the metric shipped stringifying `[object Object]` and its first
+        // real run reported object_accuracy 0 against a 78/92 ceiling.
+        polarity: 'asserted', modality: 'fact', object: { entity: 'billing service' }, ...over,
+      }],
+      surfaces: ['__self__'],   // subjectFound() maps gold `SELF` to this sentinel
+    });
+  };
+
+  test('THE ORIGINAL BLINDNESS: a wrong object used to score identically', () => {
+    const right = one();
+    const wrong = one({ object: { entity: 'the moon' } });
+    assert.equal(right.objectHits, 1);
+    assert.equal(wrong.objectHits, 0, 'the object is still not compared');
+    // Everything the suite scored BEFORE remains identical between the two —
+    // which is the blindness, stated as an assertion rather than a memory.
+    for (const k of ['subjectHits', 'predicateHits', 'fidelityHits', 'correct']) {
+      assert.equal(right[k], wrong[k], `${k} unexpectedly distinguishes the object`);
+    }
+  });
+
+  test('BOTH object shapes score — the wrapped one and the bare one', () => {
+    // E6 emits `{ entity: … }`; the regex floor emits a bare string. A metric
+    // that only understood one of them would report the other as total failure,
+    // which is exactly what happened on the first real run.
+    assert.equal(one({ object: { entity: 'billing service' } }).objectHits, 1);
+    assert.equal(one({ object: { literal: 'billing service' } }).objectHits, 1);
+    assert.equal(one({ object: 'billing service' }).objectHits, 1, 'the floor lane shape stopped matching');
+  });
+
+  test('matching is EXACT after normalisation, not fuzzy', () => {
+    // A containment or token rule would score "commuting by metro" against
+    // "commute by metro" and the metric would measure a labelling convention.
+    assert.equal(one({ object: { entity: 'Billing Service' } }).objectHits, 1, 'case should not matter');
+    assert.equal(one({ object: { entity: 'the billing service' } }).objectHits, 1, 'a leading article should not matter');
+    assert.equal(one({ object: { entity: 'billing' } }).objectHits, 0, 'a prefix is not a match');
+  });
+
+  test('the CEILING is published, so the number is read honestly', () => {
+    // 34 gold objects are normalised forms absent from their own sentence, and
+    // S4 gate ② forces an emitted object to be verbatim in the quote. Those
+    // claims are unreachable, so 1.0 is not the target and the report must say
+    // so in a number rather than a comment.
+    const m = suite.metrics(suite.cases.map(c => suite.score(c, { facts: [], surfaces: [] })));
+    assert.equal(m.n_object_unmatchable, 34);
+    assert.ok(m.n_object_unmatchable > 0 && m.n_object_unmatchable < m.labelled_claims);
+  });
+
+  test('ADDITIVE ONLY — the headline is untouched', () => {
+    // ⚠️ THIS TEST DID NOT BITE ON ITS FIRST WRITING. It compared two cases
+    // built from `facts: []`, where `emitted` is false and `correct` is false
+    // whatever the object does — so folding the object into `correct` passed.
+    // A test that survives the defect it guards is not a test (L16).
+    //
+    // The fixture below is a claim that satisfies all four original levels, so
+    // `correct` is genuinely TRUE. Only then does spoiling the object have
+    // anywhere to show up.
+    const right = one();
+    assert.equal(right.correct, true,
+      'the fixture no longer scores correct — this test cannot detect the fold');
+    assert.equal(one({ object: { entity: 'the moon' } }).correct, true,
+      '`correct` now depends on the object — every historical run is incomparable');
+  });
+});

@@ -4,7 +4,6 @@
  * AQUIPLEX — account self-service (Google Play User Data policy).
  *
  *   GET  /api/account          — who am I, and how do I have to reauthenticate
- *   POST /api/account/logout   — end this session (used by the AQUA SPA)
  *   POST /api/account/delete   — permanently delete this account
  *
  * The Google OAuth reauthentication round trip itself lives in index.js
@@ -27,7 +26,6 @@ const {
   authMethodFor,
   REAUTH_MAX_AGE_MS,
 } = require("../../services/account/accountDeletion.service");
-const { endSession } = require("../../services/account/sessionLogout.service");
 const { createLogger } = require("../../utils/logger");
 
 const log = createLogger("ACCOUNT_ROUTES");
@@ -171,47 +169,6 @@ router.post("/delete", requireLogin, async (req, res) => {
       },
     });
   });
-});
-
-// ── POST /api/account/logout ─────────────────────────────────────────────────
-// Ends the current session for the AQUA SPA.
-//
-// WHY A JSON ENDPOINT WHEN GET /logout ALREADY EXISTS
-// ---------------------------------------------------
-// GET /logout is a browser navigation that lands on "/". The SPA needs to do
-// three things in order — end the server session, tear down every client-side
-// store and persisted key, and only THEN navigate — and it needs to know
-// whether the first step actually succeeded so it can refuse to pretend. A
-// redirect tells it nothing. GET /logout is untouched and still works.
-//
-// The teardown itself is the same req.session.destroy() + clearCookie the
-// existing call sites use, extracted into sessionLogout.service.js.
-//
-// NO requireLogin, DELIBERATELY
-// -----------------------------
-// An expired or already-destroyed session must get a clean 200, not a 401.
-// The caller's goal is "not signed in"; if that is already true the request
-// succeeded. Gating this on a live session would mean the one case where the
-// client most needs a definitive answer — a session that died underneath it —
-// is the case it cannot get one for.
-//
-// CSRF: covered by enforceSameOrigin() (index.js), which is mounted globally
-// ahead of every route for the /api/* surface. A cross-site POST here carries
-// an Origin that is not ours and is rejected before it arrives.
-router.post("/logout", async (req, res) => {
-  const uid = getUid(req);
-  const result = await endSession(req, res);
-
-  if (!result.ok) {
-    log.error(`logout: session destroy failed user=${uid || "anon"}: ${result.error}`);
-    return res.status(500).json({
-      success: false,
-      error:   "LOGOUT_FAILED",
-      message: "We couldn't sign you out. Check your connection and try again.",
-    });
-  }
-
-  return res.json({ success: true, hadSession: result.hadSession });
 });
 
 module.exports = router;

@@ -43,7 +43,9 @@
     "doctor:mirror": "node scripts/mirror-doctor.mjs",
     "doctor": "npm run doctor:mirror",
     "clean:test-artifacts": "node scripts/clean-test-artifacts.mjs",
-    "rollout": "node rollout.mjs"
+    "rollout": "node rollout.mjs",
+    "env:doctor": "node scripts/env-doctor.mjs",
+    "worker": "node scripts/worker.mjs"
   },
   "dependencies": {
     "@e965/xlsx": "^0.20.3",

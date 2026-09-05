@@ -49,6 +49,31 @@ function subjectFound(claim, surfaces) {
   return surfaces.has(claim.s.toLowerCase());
 }
 
+/**
+ * Compare objects the way the claim substrate would: trimmed, case-folded.
+ *
+ * 🔴 UNWRAPS THE CLAIM SHAPE, BECAUSE THE FIRST VERSION DID NOT AND SCORED ZERO.
+ *
+ * A contract-validated object is `{ entity: 'billing service' }` or
+ * `{ literal: 'commuting by metro' }` — never a bare string. `e6Extractor`
+ * passes it through untouched. Stringifying that gives `[object Object]`, which
+ * matches no gold object ever, so the metric's first real run reported
+ * `object_accuracy: 0` against a 78/92 ceiling and looked like a devastating
+ * extractor finding. It was a devastating finding about the metric.
+ *
+ * The control that should have caught it fed `object: 'billing service'` — a
+ * plain string, the shape the suite wanted rather than the shape the adapter
+ * produces. A fixture that does not match reality tests the fixture.
+ *
+ * The floor lane emits bare strings, so both shapes have to work.
+ */
+const normObject = (v) => {
+  const raw = (v && typeof v === 'object')
+    ? (v.entity ?? v.literal ?? v.quantity ?? v.time ?? '')
+    : v;
+  return String(raw ?? '').trim().toLowerCase().replace(/^the\s+/, '');
+};
+
 export default {
   id: 'extraction-core',
   title: 'extraction quality — current engine vs claim labels',
@@ -93,6 +118,30 @@ export default {
         f.modality === c.modality &&
         (c.time ? Boolean(f.time || f.validFrom || f.validTo) : true))).length;
 
+    // ── the fifth level: WHAT THE CLAIM IS ABOUT ────────────────────────────
+    //
+    // 🔴 THE OBJECT WAS NEVER SCORED, AND THAT IS WHY A REGISTRY CONTRADICTION
+    // SURVIVED AS LONG AS THE REGISTRY.
+    //
+    // Measured, not assumed: for `identity-019` — "I own the billing service."
+    // — an emitted object of `"billing service"` and an emitted object of
+    // `"the moon"` produced byte-identical scores. Every one of the four levels
+    // above is blind to it. A system that got every object wrong graded exactly
+    // as well as one that got them all right, so the only signal that would
+    // have exposed `owns`/`depends_on`/`blocks` taking the wrong object kind
+    // did not exist.
+    //
+    // ADDITIVE ONLY. `correct` is deliberately NOT extended — folding a new
+    // level into the headline would move every historical number and make this
+    // run incomparable to every previous one. It is published beside them.
+    //
+    // EXACT MATCH AFTER NORMALISATION, and no fuzzier. A containment or token
+    // rule would score `"commuting by metro"` against `"commute by metro"` and
+    // the number would then be measuring a labelling convention. The honest
+    // ceiling is published instead — see `n_object_unmatchable` below.
+    const objectHits = claims.filter(c =>
+      actual.facts.some(f => normObject(f.object) === normObject(c.o))).length;
+
     return {
       correct: emitted && subjectHits === claims.length
                && predicateHits === claims.length && fidelityHits === claims.length,
@@ -103,6 +152,14 @@ export default {
       subjectHits,
       predicateHits,
       fidelityHits,
+      objectHits,
+      // Gold objects that no gate-obeying extractor can equal: S4 gate ② forces
+      // an emitted object to appear verbatim in the quote, and 34 of the 167
+      // gold objects are normalised forms absent from their own sentence
+      // ("commuting by metro" from "I commute by metro"). Counted per case so
+      // the ceiling on `object_accuracy` is computed, never estimated.
+      objectUnmatchable: claims.filter(c =>
+        c.o && !String(testCase.text).toLowerCase().includes(String(c.o).toLowerCase())).length,
     };
   },
 
@@ -128,6 +185,12 @@ export default {
       subject_recall: ratio(pos.reduce((n, s) => n + s.subjectHits, 0), claims),
       predicate_accuracy: ratio(pos.reduce((n, s) => n + s.predicateHits, 0), claims),
       fidelity_accuracy: ratio(pos.reduce((n, s) => n + s.fidelityHits, 0), claims),
+      // Additive (E2). Read it with the ceiling beside it: `n_object_unmatchable`
+      // gold objects cannot be produced by an extractor obeying S4 gate ②, so
+      // the best achievable score is (labelled_claims - n_object_unmatchable)
+      // / labelled_claims, not 1.0.
+      object_accuracy: ratio(pos.reduce((n, s) => n + s.objectHits, 0), claims),
+      n_object_unmatchable: pos.reduce((n, s) => n + (s.objectUnmatchable ?? 0), 0),
 
       // precision, kept separate so it cannot hide inside an average
       silence_on_negatives: ratio(neg.filter(s => !s.emitted).length, neg.length),

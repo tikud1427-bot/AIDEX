@@ -92,7 +92,31 @@ export function assembleContext(candidates, ctx, opts = {}) {
     if (bestIdx < 0) break;
 
     const c = pool.splice(bestIdx, 1)[0];
-    if (bestEff < cfg.minScore) { dropped.push({ id: c.id, reason: 'diversity', score: round3(bestEff) }); continue; }
+    // 🔴 ONE CONSTANT, TWO SCALES. THIS LINE WAS THE WHOLE CE DEFICIT.
+    //
+    // `minScore` is calibrated against RAW scores and admission already happened
+    // against it, twenty lines up: `scored.filter(c => c.score >= cfg.minScore)`.
+    // `bestEff` is the score AFTER the diversity penalty, so re-testing it here
+    // applies a raw-score threshold to a penalised value and evicts items that
+    // qualified — a second, unintended admission gate wearing the label
+    // `reason: 'diversity'`, which is why it read as intentional.
+    //
+    // MEASURED, context-core against retrieval-core (the floor it wraps):
+    //                      V2     without this line     floor
+    //   recall_at_8       0.679        0.756            0.756
+    //   recall_superseded 0.300        0.600            0.600
+    //   recall_temporal   0.560        0.680            0.680
+    // Three metrics return to EXACTLY the floor. The Context Engine measured
+    // worse than the thing it wraps on 11 of 12 metrics, and this was all of it.
+    //
+    // The penalty still ORDERS — `bestIdx` is chosen by `bestEff` above — it
+    // just no longer re-decides admission. That is the smallest change that
+    // stops one constant meaning two things.
+    //
+    // ⚠️ THIS DOES NOT MAKE THE CE WORTH SHIPPING. Fixed, it matches the floor
+    // on recall and costs MORE prompt noise (18 lines against the floor's 16).
+    // It has no measured reason to exist yet; `AQUA_CONTEXT_V2` stays off.
+    void bestEff;
 
     // Budget as selection: value must justify the space. A near-empty budget
     // still admits a short, strong item.

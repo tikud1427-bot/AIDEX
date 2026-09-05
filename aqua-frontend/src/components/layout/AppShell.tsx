@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sidebar } from '@/components/sidebar/Sidebar';
 import { Header } from './Header';
@@ -9,7 +9,6 @@ import { ArtifactsPanel } from '@/components/artifact/ArtifactsPanel';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { useUiStore } from '@/stores/uiStore';
 import { useChatStore } from '@/stores/chatStore';
-import { useSessionStore } from '@/stores/sessionStore';
 import { useKeyboardShortcuts } from '@/hooks/useKeyboardShortcuts';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { searchInputId } from '@/components/sidebar/Sidebar';
@@ -25,15 +24,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const setProjectUploadOpen = useUiStore((s) => s.setProjectUploadOpen);
   const newConversation = useChatStore((s) => s.newConversation);
   const stopGenerating = useChatStore((s) => s.stopGenerating);
-  const loadSession = useSessionStore((s) => s.load);
-
-  /* Resolve the signed-in identity once, here, rather than inside the account
-     control: the sidebar is rendered twice (rail + mobile drawer) and two
-     mounts must not mean two lookups. The store starts at 'loading', so the
-     control shows a placeholder until this answers. */
-  useEffect(() => {
-    void loadSession();
-  }, [loadSession]);
 
   const handlers = {
     onNewChat: useCallback(() => {
