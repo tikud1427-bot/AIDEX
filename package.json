@@ -1,11 +1,17 @@
 {
-  "name": "aqua-ai",
-  "version": "1.0.0",
+  "name": "aquiplex-platform",
+  "version": "2.0.0",
   "type": "module",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node server.js",
+    "start": "node index.js",
+    "dev": "node index.js",
+    "postinstall": "npm --prefix aqua install --include=dev",
+    "build:aqua": "npm --prefix aqua-frontend install --include=dev && npm --prefix aqua-frontend run build",
+    "build": "npm run build:aqua",
+    "test": "npm run test:aqua",
+    "test:aqua": "cd aqua && npm test",
+    "eval:gate": "cd aqua && npm run eval:gate",
     "test:edit": "node src/project/tests/editEngine.test.js && node src/project/tests/editRoutes.test.js",
     "test:upload": "node --test src/upload/tests/upload.test.js",
     "test:mind": "node --test src/mind/tests/mind.test.js",
@@ -22,21 +28,28 @@
     "soak:providers": "node src/providers/tests/providerResilience.soak.js"
   },
   "dependencies": {
-    "@google/genai": "^2.9.0",
-    "@pdf-lib/fontkit": "^1.1.1",
-    "adm-zip": "^0.5.17",
-    "cors": "^2.8.6",
-    "dejavu-fonts-ttf": "^2.37.3",
-    "docx": "^9.7.1",
+    "axios": "^1.13.6",
+    "bcrypt": "^6.0.0",
+    "connect-mongo": "^5.1.0",
     "dotenv": "^17.4.2",
+    "ejs": "^3.1.10",
     "express": "^5.2.1",
-    "groq-sdk": "^1.3.0",
-    "mammoth": "^1.12.0",
-    "openai": "^6.44.0",
-    "pdf-lib": "^1.17.1",
-    "pdf-parse": "^2.4.5",
-    "pptxgenjs": "^4.0.1",
-    "uuid": "^14.0.1",
-    "xlsx": "^0.18.5"
-  }
+    "express-rate-limit": "^8.2.0",
+    "express-session": "^1.18.1",
+    "helmet": "^8.1.0",
+    "memorystore": "^1.6.7",
+    "mongoose": "^9.3.1",
+    "multer": "^2.1.1",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "razorpay": "^2.9.6"
+  },
+  "devDependencies": {
+    "vite-plugin-pwa": "^1.3.0"
+  },
+  "engines": {
+    "node": "20.x",
+    "npm": "10.x"
+  },
+  "license": "MIT"
 }
