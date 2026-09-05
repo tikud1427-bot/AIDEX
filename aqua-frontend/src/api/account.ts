@@ -93,6 +93,62 @@ export function startGoogleReauth(returnTo = '/aqua?settings=account'): void {
   window.location.href = `/auth/google/reauth?next=${encodeURIComponent(returnTo)}`;
 }
 
+
+/**
+ * End the current server-side session.
+ *
+ * Logout is intentionally idempotent: an already-expired session is still a
+ * successful logout from the user's point of view. The endpoint is also
+ * deliberately unauthenticated so an expired session can always be cleaned up.
+ */
+export interface LogoutSessionResult {
+  ok: boolean;
+  message?: string;
+}
+
+export async function logoutSession(): Promise<LogoutSessionResult> {
+  try {
+    const res = await fetch('/api/account/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { Accept: 'application/json' },
+      cache: 'no-store',
+    });
+
+    let body: { success?: boolean; message?: string } = {};
+    try {
+      body = await res.json();
+    } catch {
+      /* empty/non-JSON body — fall through to the status */
+    }
+
+    if (res.ok && body?.success !== false) return { ok: true };
+
+    return {
+      ok: false,
+      message: body?.message ?? "We couldn't sign you out. Please try again.",
+    };
+  } catch {
+    return {
+      ok: false,
+      message: "Couldn't reach the server. Check your connection and try again.",
+    };
+  }
+}
+
+/**
+ * Remove client-side state that can belong to the signed-in account.
+ *
+ * Keep this synchronous because signOut deliberately performs the teardown
+ * before navigating. The persisted Zustand stores and the small session-scoped
+ * UI markers are all browser storage; the in-memory stores are reset separately
+ * by resetAllStores().
+ */
+export function clearPersistedAppData(): void {
+  try { localStorage.clear(); } catch { /* storage disabled */ }
+  try { sessionStorage.clear(); } catch { /* storage disabled */ }
+}
+
 /**
  * Wipe every trace of the account from THIS device after a successful
  * deletion: persisted zustand stores ('aqua-ui', 'aqua-settings',

@@ -27,6 +27,7 @@ const {
   REAUTH_MAX_AGE_MS,
 } = require("../../services/account/accountDeletion.service");
 const { createLogger } = require("../../utils/logger");
+const { endSession } = require("../../services/account/sessionLogout.service");
 
 const log = createLogger("ACCOUNT_ROUTES");
 
@@ -54,6 +55,33 @@ function reauthFresh(session) {
   const r = session?.accountDeleteReauth;
   return !!(r && r.at && Date.now() - r.at <= REAUTH_MAX_AGE_MS);
 }
+
+// ── POST /api/account/logout ─────────────────────────────────────────────────
+// Logout must not require a live session. An expired/stale session is already
+// in the desired end state, and the client must still be able to finish its
+// local teardown and reach the login screen.
+router.post("/logout", async (req, res) => {
+  try {
+    const result = await endSession(req, res);
+    if (!result.ok) {
+      log.error("logout: session destroy failed:", result.error || "unknown error");
+      return res.status(500).json({
+        success: false,
+        error: "LOGOUT_FAILED",
+        message: "We couldn't sign you out. Please try again.",
+      });
+    }
+
+    return res.json({ success: true, hadSession: result.hadSession });
+  } catch (err) {
+    log.error("logout: unexpected error:", err.message);
+    return res.status(500).json({
+      success: false,
+      error: "LOGOUT_FAILED",
+      message: "We couldn't sign you out. Please try again.",
+    });
+  }
+});
 
 // ── GET /api/account ─────────────────────────────────────────────────────────
 // Drives the Delete Account UI: it needs to know whether to show a password
