@@ -4,6 +4,7 @@ import {
   Brain, BrainCircuit, ChevronDown, ChevronRight, FolderGit2, PanelLeftClose, PanelLeftOpen,
   Search, Settings, SquarePen, X,
 } from 'lucide-react';
+import { AccountMenu } from './AccountMenu';
 import { ConversationItem } from './ConversationItem';
 import { SidebarSkeleton } from './SidebarSkeleton';
 import { LoadFailed, NoConversations, NoSearchMatch } from './SidebarEmptyStates';
@@ -143,6 +144,7 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
             <Settings className="h-4.5 w-4.5" />
           </button>
         </Tooltip>
+        <AccountMenu collapsed />
       </nav>
     );
   }
@@ -284,6 +286,14 @@ export function Sidebar({ collapsed, isMobileOverlay, onNavigate }: Props) {
             <Settings className="h-4 w-4 shrink-0" />
             Settings
           </button>
+        </div>
+
+        {/* Who you are, and the way out. Last block on purpose: it is the one
+            control a trapped user goes looking for, and the bottom-left corner
+            is where every product they already use keeps it. Settings stays
+            exactly where it was — the two have different jobs. */}
+        <div className="mt-1 border-t border-border/60 pt-1">
+          <AccountMenu />
         </div>
       </div>
     </nav>

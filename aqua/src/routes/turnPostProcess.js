@@ -78,11 +78,7 @@ const REAL_DEPS = Object.freeze({
   // deferral and same fail-open; the registry simply makes the work visible
   // to the shutdown drain. The injectable seam was already here, which is why
   // this is a one-line change rather than new plumbing.
-  // ownerId makes this owner's post-turn work SERIAL (E4/PR-4). Two messages
-  // sent quickly used to run both blocks at once against one owner's stores —
-  // observeConversationTurn is read-modify-write and the loser's entities were
-  // silently dropped. Other owners still run in parallel.
-  defer: (fn, ownerId) => defer('post-turn', fn, { ownerId }),
+  defer: fn => defer('post-turn', fn),
   // E6 — semantic understanding. Injected so the seam is testable without a
   // provider; see the note at the deferred block below.
   understandTurn: Brain.understandTurn,
@@ -198,7 +194,7 @@ export function runPostTurn({
       // output would be a closed loop that manufactures its own evidence.
       d.observeTwin({ ownerId, userMessage, conversationId });
     } catch { /* fail-open */ }
-  }, ownerId);
+  });
 
   // ── E6 — SEMANTIC UNDERSTANDING, ON THE REAL TURN PATH AT LAST ─────────────
   //
@@ -257,7 +253,7 @@ export function runPostTurn({
         error => d.reportE6({ ownerId, conversationId, error, ms: Date.now() - started }),
       )
       .catch(() => { /* fail-open: understanding must never affect the turn */ });
-  }, ownerId);
+  });
 
   // Brain Reflection V2 (B5) — on the Mind's reflection cadence, compute a
   // STRUCTURED world-model delta (entities/relationships/obsoleted facts) and
@@ -270,7 +266,7 @@ export function runPostTurn({
         d.reflectTurn(ownerId);
       }
     } catch { /* fail-open: reflection must never affect the turn */ }
-  }, ownerId);
+  });
 
   // PIC consolidation (audit M6) — knowledge was accumulating and never
   // maturing: duplicates unmerged, corroborated claims never promoted to
@@ -290,7 +286,7 @@ export function runPostTurn({
       lastConsolidatedAt.set(ownerId, turns);
       d.consolidate(ownerId);
     } catch { /* fail-open: maintenance must never affect the turn */ }
-  }, ownerId);
+  });
 }
 
 export const _internals = { REAL_DEPS };

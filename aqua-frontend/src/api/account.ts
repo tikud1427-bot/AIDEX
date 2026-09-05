@@ -93,40 +93,43 @@ export function startGoogleReauth(returnTo = '/aqua?settings=account'): void {
   window.location.href = `/auth/google/reauth?next=${encodeURIComponent(returnTo)}`;
 }
 
-
-/**
- * End the current server-side session.
- *
- * Logout is intentionally idempotent: an already-expired session is still a
- * successful logout from the user's point of view. The endpoint is also
- * deliberately unauthenticated so an expired session can always be cleaned up.
- */
-export interface LogoutSessionResult {
+export interface LogoutResult {
   ok: boolean;
+  /** Human sentence, safe to render directly. */
   message?: string;
 }
 
-export async function logoutSession(): Promise<LogoutSessionResult> {
+/**
+ * End the current session on the SERVER.
+ *
+ * This is the platform's own mechanism — POST /api/account/logout runs the same
+ * req.session.destroy() + clearCookie that GET /logout and the deletion route
+ * already run (services/account/sessionLogout.service.js). It is a JSON call
+ * rather than a navigation to /logout because the caller has to know whether
+ * the session actually died before it claims the user is signed out, and has to
+ * tear down client state BEFORE the page goes away.
+ *
+ * A missing or already-expired session is a SUCCESS: the desired end state is
+ * "not signed in", and it is already true. Only a server that could not destroy
+ * a live session, or an unreachable server, is a failure.
+ */
+export async function logoutSession(): Promise<LogoutResult> {
   try {
     const res = await fetch('/api/account/logout', {
       method: 'POST',
       credentials: 'same-origin',
-      headers: { Accept: 'application/json' },
+      headers: jsonHeaders,
       cache: 'no-store',
     });
 
-    let body: { success?: boolean; message?: string } = {};
-    try {
-      body = await res.json();
-    } catch {
-      /* empty/non-JSON body — fall through to the status */
-    }
+    if (res.ok) return { ok: true };
 
-    if (res.ok && body?.success !== false) return { ok: true };
+    let body: { message?: string } = {};
+    try { body = await res.json(); } catch { /* empty body */ }
 
     return {
       ok: false,
-      message: body?.message ?? "We couldn't sign you out. Please try again.",
+      message: body.message ?? "We couldn't sign you out just now. Please try again.",
     };
   } catch {
     return {
@@ -137,12 +140,19 @@ export async function logoutSession(): Promise<LogoutSessionResult> {
 }
 
 /**
- * Remove client-side state that can belong to the signed-in account.
+ * Remove everything about the signed-in account that this device wrote to disk:
+ * the persisted zustand stores ('aqua-ui', 'aqua-settings',
+ * 'aqua-conversation-overlay') and every sessionStorage marker.
  *
- * Keep this synchronous because signOut deliberately performs the teardown
- * before navigating. The persisted Zustand stores and the small session-scoped
- * UI markers are all browser storage; the in-memory stores are reset separately
- * by resetAllStores().
+ * THIS IS THE WHOLE TEARDOWN FOR A LOGOUT, and deliberately no more. The
+ * service worker caches hashed static assets and Google Fonts only — there is
+ * no runtimeCaching rule for /api, so no response containing user data is ever
+ * stored there. src/test/sessionIsolation.test.ts asserts that against
+ * vite.config.ts, so if an API caching rule is ever added, that test fails and
+ * whoever adds it has to extend this function.
+ *
+ * Best-effort throughout: a browser that blocks storage must never block the
+ * redirect to /login.
  */
 export function clearPersistedAppData(): void {
   try { localStorage.clear(); } catch { /* storage disabled */ }
@@ -150,15 +160,16 @@ export function clearPersistedAppData(): void {
 }
 
 /**
- * Wipe every trace of the account from THIS device after a successful
- * deletion: persisted zustand stores ('aqua-ui', 'aqua-settings',
- * 'aqua-conversation-overlay'), any session state, the PWA's cached shell,
- * and its service worker. Everything is best-effort — a browser that blocks
- * one of these must never block the redirect to /login.
+ * Everything clearPersistedAppData() does, plus the PWA's cached shell and its
+ * service worker.
+ *
+ * The extra two steps exist for ACCOUNT DELETION, where the account is gone and
+ * leaving an installed app pointing at it is wrong. They are not part of logout:
+ * unregistering the worker throws away the precached shell and makes the next
+ * sign-in slower for no isolation benefit.
  */
 export async function clearLocalAppData(): Promise<void> {
-  try { localStorage.clear(); } catch { /* storage disabled */ }
-  try { sessionStorage.clear(); } catch { /* storage disabled */ }
+  clearPersistedAppData();
 
   try {
     if ('caches' in window) {

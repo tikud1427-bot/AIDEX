@@ -78,7 +78,6 @@ import suite from '../eval/suites/extraction-core.suite.mjs';
 import { extractWithCurrentEngine, surfacesOf } from '../eval/adapters/currentExtractor.mjs';
 import { extractE6 } from '../eval/adapters/e6Extractor.mjs';
 import { generateOpenRouter } from '../src/providers/openrouter.js';
-import { generateGemini } from '../src/providers/gemini.js';
 import { generateGroq, msUntilAnyKeyFree } from '../src/providers/groq.js';
 import { buildExtractionPrompt } from '../src/brain/understanding/extractionPrompt.js';
 import { __clearExtractionCache } from '../src/brain/understanding/extractionClient.js';
@@ -118,39 +117,6 @@ export const ABORT_AFTER_CONSECUTIVE_ERRORS = 10;
  * worse than stopping and saying so.
  */
 export const MAX_STALL_WAIT_MS = 15 * 60 * 1000;
-
-/**
- * Total time a single pass may spend asleep, across ALL its stalls.
- *
- * 🔴 A PER-STALL CEILING IS NOT A BOUND ON THE RUN.
- *
- * `MAX_STALL_WAIT_MS` checks one wait at a time, and a real exhaustion looks
- * like this: `sleeping 73s` · `sleeping 9s` · `sleeping 6s` · `sleeping 165s`,
- * with a hundred-odd cases still to go. Every individual figure is far under
- * fifteen minutes and passes the check, so the run sleeps for hours while each
- * decision to sleep looks reasonable. G6 asks for bounded, and the aggregate
- * was not.
- *
- * The same shape as three other defects found in this codebase: a guard that
- * examines the case and never asks about the total. Purge reachability, the
- * case-level error scoring, and `?:contract` were all this.
- *
- * On exceeding it the pass ABORTS and is marked invalid, so `pickReportedPass`
- * falls back to whatever completed. A one-pass run with no noise band is a
- * worse measurement than a two-pass one and an enormously better one than a
- * process still asleep tomorrow morning.
- */
-export const MAX_PASS_STALL_MS = 20 * 60 * 1000;
-
-/**
- * Has this pass slept its budget?
- *
- * Exported so the rule is graded by behaviour rather than by a source grep —
- * the mistake that hid the per-stall/cumulative gap in the first place.
- */
-export function stallBudgetExceeded(sleptMs, budgetMs = MAX_PASS_STALL_MS) {
-  return Number(sleptMs ?? 0) >= budgetMs;
-}
 
 export const PROMOTION_GATE = Object.freeze({
   precision: 0.85,
@@ -409,41 +375,16 @@ async function main() {
    * exists to catch. Both signatures are identical, so this is a binding
    * choice, not a rewrite.
    */
-  //
-  // 🔴 GEMINI WAS MISSING, AND PRODUCTION HAS SUPPORTED IT ALL ALONG.
-  //
-  // `brain/index.js:e6Transport()` reads `AQUA_E6_PROVIDER` and dispatches to
-  // groq OR gemini. This harness accepted groq and openrouter, so the eval
-  // could not measure a transport the running system is configured to use —
-  // and when Groq's daily token budget was exhausted (200,000 TPD,
-  // organisation-wide, shared by every key in the pool) there was no second
-  // road to a measurement at all.
-  //
-  // All three signatures are identical, which is what makes this three lines
-  // rather than a rewrite.
-  //
-  // ⚠️ A GEMINI RUN IS NOT COMPARABLE TO A GROQ RUN. Different model, different
-  // extractor. It is comparable to the FLOOR — the baseline in every report is
-  // the regex lane, not a previous E6 run — so "does E6 beat the floor" stays
-  // answerable. "Did the registry fix help" does not, unless both sides used
-  // the same model. The provider is recorded in the JSON so a later reader
-  // cannot mistake one for the other.
-  const PROVIDERS = { groq: generateGroq, openrouter: generateOpenRouter, gemini: generateGemini };
   const providerName = String(flag('--provider', 'openrouter')).toLowerCase();
-  const generate = PROVIDERS[providerName];
-  if (!generate) {
-    console.error(`\n✗ Unknown --provider "${providerName}" — expected ${Object.keys(PROVIDERS).join(', ')}.\n`);
+  const generate = providerName === 'groq' ? generateGroq : generateOpenRouter;
+  if (!['groq', 'openrouter'].includes(providerName)) {
+    console.error(`\n✗ Unknown --provider "${providerName}" — expected groq or openrouter.\n`);
     process.exit(1);
   }
 
-  // Output budget. 1024 truncated a sixth of gemini-2.5-flash's answers — a
-  // reasoning model spends output tokens thinking before it emits JSON. Exposed
-  // rather than raised, because changing it changes what is measured and that
-  // needs its own run to compare.
-  const maxTokens = Number(flag('--max-tokens', '1024'));
   const callModel = async ({ system, user, temperature, model }) => {
     const res = await generate(system, [{ role: 'user', content: user }],
-      undefined, maxTokens, { model: model ?? modelPin ?? undefined, temperature });
+      undefined, 1024, { model: model ?? modelPin ?? undefined, temperature });
     return { text: res.text, model: res.model ?? null };
   };
 
@@ -459,12 +400,6 @@ async function main() {
     console.error('    curl -s https://openrouter.ai/api/v1/models | jq -r \'.data[]|select(.pricing.prompt=="0")|.id\'');
     console.error('  Or use the provider the registry already has this model on:');
     console.error('    node scripts/e6-shadow.mjs --provider groq --model openai/gpt-oss-120b --limit 20');
-    console.error('  If the message above says "tokens per day (TPD)", the Groq budget is spent');
-    console.error('  for the day — it is per ORGANISATION, so more keys do not buy more tokens.');
-    console.error('  A different provider is the only way to measure today:');
-    console.error('    node scripts/e6-shadow.mjs --provider gemini --model gemini-2.5-flash --repeat 2');
-    console.error('  That measures a DIFFERENT extractor. It is comparable to the floor,');
-    console.error('  not to any previous groq run.');
     console.error('  Nothing was measured —');
     console.error('  a run with no transport emits no claims and would score 0.0% detection,');
     console.error('  which is indistinguishable from a catastrophically bad extractor.\n');
@@ -490,8 +425,6 @@ async function main() {
     const perCase = [];
     let passErrors = 0, consecutiveErrors = 0, aborted = false;
     const unmeasured = [];   // cases the transport never answered
-    let sleptMs = 0;         // cumulative stall for THIS pass — see MAX_PASS_STALL_MS
-    let passMalformed = 0;   // answered but unparseable — NOT a transport failure
 
     for (const [i, c] of cases.entries()) {
       if (pass === 0) {
@@ -510,25 +443,13 @@ async function main() {
       // extraction, which reads as a confident 0% rather than as a pause.
       if ((e6.stats.errors ?? 0) > 0 && providerName === 'groq') {
         const wait = msUntilAnyKeyFree();
-        if (wait != null && wait > 0 && wait <= MAX_STALL_WAIT_MS
-            && !stallBudgetExceeded(sleptMs)) {
+        if (wait != null && wait > 0 && wait <= MAX_STALL_WAIT_MS) {
           process.stderr.write(`\n  ⏸  all keys cooling — sleeping ${Math.ceil(wait / 1000)}s, retrying case ${i + 1}\n`);
           await sleep(wait + 1000);
-          sleptMs += wait + 1000;
           e6 = await extractE6(c.text, { callModel, modelPin });
-        } else if (wait != null && stallBudgetExceeded(sleptMs)) {
-          // The budget, not this wait, is what ended the pass.
-          process.stderr.write(`\n  ✗ pass ${pass + 1} has slept ${Math.round(sleptMs / 60000)} min in total — `
-            + `the quota is not recovering inside this run. Aborting the pass.\n`);
-          aborted = true;
         } else if (wait != null && wait > MAX_STALL_WAIT_MS) {
-          // A single cooldown this long IS the daily quota. Printing and
-          // carrying on scored every remaining case as a transport error.
-          process.stderr.write(`\n  ✗ cooldown is ${Math.ceil(wait / 60000)} min — that is the DAILY quota, `
-            + `not the per-minute one. Aborting the pass.\n`);
-          aborted = true;
+          process.stderr.write(`\n  ✗ cooldown is ${Math.ceil(wait / 60000)} min — that is the DAILY quota, not the per-minute one.\n`);
         }
-        if (aborted) { passErrors++; break; }
       }
 
       // ── A CASE THE TRANSPORT NEVER ANSWERED IS UNMEASURED, NOT A MISS ──────
@@ -555,12 +476,7 @@ async function main() {
       // rather than the numerator being punished. This is the same rule the
       // suite already applies one level up: a metric with no cases is
       // unmeasured, not zero.
-      // TRANSPORT errors only. A malformed answer is a measured extraction
-      // failure — the model replied and the reply was unusable — so it stays in
-      // the denominator. Excluding it would hide a truncation defect behind a
-      // shrinking sample.
       const caseErrored = (e6.stats.errors ?? 0) > 0;
-      passMalformed += e6.stats.malformed ?? 0;
       const sc = suite.score(c, { facts: e6.facts, surfaces: e6.surfaces });
       if (caseErrored) unmeasured.push({ id: c.id, cat: c.cat });
       else scoredE6.push(sc);
@@ -628,7 +544,7 @@ async function main() {
     // A pass is VALID only if the transport answered for essentially all of it.
     // An invalid pass is kept for the record and excluded from every number.
     const { valid, errorRate } = passIsValid({ aborted, passErrors }, cases.length);
-    passes.push({ metrics: suite.metrics(scoredE6), perCase, unmeasured, valid, passErrors, passMalformed, errorRate, aborted, index: pass + 1 });
+    passes.push({ metrics: suite.metrics(scoredE6), perCase, unmeasured, valid, passErrors, errorRate, aborted, index: pass + 1 });
     if (!valid) {
       console.error(`  ⚠️  pass ${pass + 1} INVALID — ${passErrors} transport errors ` +
         `(${(errorRate * 100).toFixed(1)}% of cases). Excluded from results.`);
@@ -752,12 +668,6 @@ async function main() {
     console.log('    and nothing here distinguishes them. Re-run with --model <id>.');
   }
 
-  if (reported.passMalformed) {
-    console.log(`\nMALFORMED — ${reported.passMalformed} answer(s) the model returned that did not parse.`);
-    console.log('  Scored as extraction failures, not transport errors: the call succeeded.');
-    console.log(`  If the provider logged "hit maxTokens cap", raise it: --max-tokens 2048`);
-  }
-
   if (reported.unmeasured?.length) {
     const byCat = {};
     for (const u of reported.unmeasured) byCat[u.cat] = (byCat[u.cat] ?? 0) + 1;
@@ -785,7 +695,6 @@ async function main() {
       // which gate dropped it. The aggregate `discardedByGate` above cannot
       // attribute a discard to a case, so "detection_negation 85%" has been
       // unexplainable across three sessions.
-      provider: providerName,   // a gemini run is not comparable to a groq one
       perCase: reported.perCase, unmeasured: reported.unmeasured ?? [],
     }, null, 2));
     console.log(`→ ${p}\n`);

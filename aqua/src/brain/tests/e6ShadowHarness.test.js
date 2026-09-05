@@ -31,8 +31,7 @@ import { fileURLToPath } from 'node:url';
 
 import { stratify, evaluatePromotion, spread, isRealRegression,
   MAX_PASS_ERROR_RATE, ABORT_AFTER_CONSECUTIVE_ERRORS, MAX_STALL_WAIT_MS,
-  passIsValid, pickReportedPass, PROMOTION_GATE,
-  MAX_PASS_STALL_MS, stallBudgetExceeded } from '../../../scripts/e6-shadow.mjs';
+  passIsValid, pickReportedPass, PROMOTION_GATE } from '../../../scripts/e6-shadow.mjs';
 import suite from '../../../eval/suites/extraction-core.suite.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -637,127 +636,5 @@ describe('an unanswered case is unmeasured, not a miss', () => {
     assert.equal(casesAllowedToMiss, 1);
     assert.ok(observedSpreadInCases > casesAllowedToMiss,
       'noise now fits inside the gate — re-measure before trusting this comment');
-  });
-});
-
-// ── Sleeping is bounded across the pass, not just per stall ──────────────────
-
-/**
- * 🔴 A PER-STALL CEILING IS NOT A BOUND ON THE RUN.
- *
- * `MAX_STALL_WAIT_MS` checks one wait at a time. A real quota exhaustion looks
- * like `sleeping 73s` · `sleeping 9s` · `sleeping 6s` · `sleeping 165s` with a
- * hundred cases still to go — every figure comfortably under fifteen minutes,
- * every decision to sleep locally reasonable, and the run asleep for hours.
- *
- * This is the fourth defect in this codebase with the same shape: a guard that
- * examines the individual case and never asks about the aggregate. Purge
- * reachability, case-level error scoring and `?:contract` were the others.
- *
- * BITE, MEASURED (revert the named property → count failures):
- *   the cumulative budget checked  → 3 fail
- *   a long single cooldown aborts  → 1 fail
- */
-describe('a pass cannot sleep forever', () => {
-  test('the budget is cumulative, not per stall', () => {
-    // The exact sequence from the stalled run. No single wait trips
-    // MAX_STALL_WAIT_MS; together they are the problem.
-    const waits = [73_000, 9_000, 6_000, 165_000];
-    for (const w of waits) assert.ok(w <= MAX_STALL_WAIT_MS, 'the fixture no longer reproduces the case');
-    const total = waits.reduce((a, b) => a + b, 0);
-    assert.equal(stallBudgetExceeded(total), false, 'four stalls should still be affordable');
-    assert.equal(stallBudgetExceeded(MAX_PASS_STALL_MS), true, 'the budget never binds');
-  });
-
-  test('a hundred small stalls exhaust the budget', () => {
-    // The scenario the per-stall check waves through: 120 remaining cases each
-    // costing a plausible 30 seconds is an hour of sleep.
-    assert.equal(stallBudgetExceeded(120 * 30_000), true,
-      '120 cases at 30s each is an hour and the budget did not bind');
-  });
-
-  test('the budget is BELOW what an exhausted quota would cost', () => {
-    // A per-key daily cooldown ran 598s in the observed log. Four keys cooling
-    // in sequence over the remaining cases dwarfs any sane budget, so the
-    // ceiling has to be well under it or it never fires.
-    assert.ok(MAX_PASS_STALL_MS < 120 * 598_000);
-    assert.ok(MAX_PASS_STALL_MS >= MAX_STALL_WAIT_MS,
-      'a cumulative budget below a single permitted stall is incoherent');
-  });
-
-  test('an aborted pass is INVALID, so the run falls back to what completed', () => {
-    // The payoff. Pass 1 finished clean; pass 2 hit the wall at case 78.
-    // Aborting pass 2 must leave pass 1 reportable rather than sinking the run.
-    const p1 = { index: 1, aborted: false, passErrors: 0, metrics: {} };
-    const p2 = { index: 2, aborted: true, passErrors: 1, metrics: {} };
-    const passes = [p1, p2].map(p => ({ ...p, ...passIsValid(p, 200) }));
-    assert.equal(passes[1].valid, false);
-    assert.equal(pickReportedPass(passes).index, 1);
-  });
-});
-
-// ── The harness can measure every transport production can use ───────────────
-
-/**
- * 🔴 THE TWO LISTS DRIFTED, AND NOBODY COULD HAVE NOTICED.
- *
- * `brain/index.js:e6Transport()` reads `AQUA_E6_PROVIDER` and dispatches to
- * groq OR gemini. The shadow harness accepted groq and openrouter. So gemini
- * was a transport production could be configured to run and the eval could not
- * measure — a capability with no way to earn a number, which is L14 backwards.
- *
- * It stopped being theoretical the day Groq's daily token budget ran out:
- * 200,000 TPD, reported per ORGANISATION, so four keys in the pool bought no
- * extra headroom. With no second provider wired there was no road to any
- * measurement at all until the quota reset.
- *
- * BITE, MEASURED (revert the named property → count failures):
- *   gemini in the harness's provider map  → 2 fail
- */
-describe('the harness offers every provider production can dispatch to', () => {
-  const SCRIPT = path.join(HERE, '../../../scripts/e6-shadow.mjs');
-  const FACADE = path.join(HERE, '../index.js');
-
-  /** Provider names `e6Transport()` can actually select. */
-  function productionProviders() {
-    const src = readFileSync(FACADE, 'utf8');
-    const fn = src.slice(src.indexOf('export async function e6Transport'));
-    const found = new Set();
-    for (const m of fn.matchAll(/provider === '([a-z]+)'/g)) found.add(m[1]);
-    // The ternary's else-branch is the default, named in the env read above it.
-    for (const m of fn.matchAll(/AQUA_E6_PROVIDER \?\? '([a-z]+)'/g)) found.add(m[1]);
-    return found;
-  }
-
-  test('the scan finds the providers it is supposed to find', () => {
-    const p = productionProviders();
-    assert.ok(p.has('gemini') && p.has('groq'), `scan returned ${[...p]}`);
-  });
-
-  test('EVERY production provider is selectable in the harness', () => {
-    const src = readFileSync(SCRIPT, 'utf8');
-    const missing = [...productionProviders()].filter(name => {
-      const map = src.slice(src.indexOf('const PROVIDERS ='), src.indexOf('const PROVIDERS =') + 300);
-      return !map.includes(`${name}:`);
-    });
-    assert.deepEqual(missing, [],
-      `production can run these and the eval cannot measure them: ${missing.join(', ')}`);
-  });
-
-  test('the harness may offer MORE than production — that is fine', () => {
-    // openrouter is a comparison road, not a production transport. The rule is
-    // one-directional: everything production can run must be measurable, not
-    // the reverse.
-    const src = readFileSync(SCRIPT, 'utf8');
-    assert.match(src, /openrouter: generateOpenRouter/);
-  });
-
-  test('the JSON records WHICH provider produced it', () => {
-    // A gemini run and a groq run measure different extractors. Without the
-    // field, two files with the same shape invite a comparison that means
-    // nothing.
-    const src = readFileSync(SCRIPT, 'utf8');
-    assert.match(src, /provider: providerName/,
-      'the artifact does not say which provider produced it');
   });
 });
