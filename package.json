@@ -1,17 +1,12 @@
 {
   "name": "aquiplex-platform",
   "version": "2.0.0",
-  "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
     "dev": "node index.js",
-    "postinstall": "npm --prefix aqua install --include=dev",
-    "build:aqua": "npm --prefix aqua-frontend install --include=dev && npm --prefix aqua-frontend run build",
     "build": "npm run build:aqua",
-    "test": "npm run test:aqua",
-    "test:aqua": "cd aqua && npm test",
-    "eval:gate": "cd aqua && npm run eval:gate",
+    "build:aqua": "npm --prefix aqua-frontend install --include=dev && npm --prefix aqua-frontend run build",
     "test:edit": "node src/project/tests/editEngine.test.js && node src/project/tests/editRoutes.test.js",
     "test:upload": "node --test src/upload/tests/upload.test.js",
     "test:mind": "node --test src/mind/tests/mind.test.js",
@@ -46,10 +41,5 @@
   },
   "devDependencies": {
     "vite-plugin-pwa": "^1.3.0"
-  },
-  "engines": {
-    "node": "20.x",
-    "npm": "10.x"
-  },
-  "license": "MIT"
+  }
 }
