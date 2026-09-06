@@ -24,6 +24,7 @@ import {
 import {
   parseExtractionResponse, validateClaim, extractJsonBlock,
 } from '../understanding/extractionContract.js';
+import { validateAgainstSegment } from '../understanding/claimValidator.js';
 import { allPredicates, registerPredicate, isRegistered } from '../../core/claims/predicateRegistry.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -142,6 +143,28 @@ describe('contract — the shipped fixtures satisfy it', () => {
       assert.equal(r.ok, true, `${ex.id}: ${r.error}`);
       assert.deepEqual(r.rejected, [], `${ex.id} produced rejections`);
       assert.equal(r.claims.length, ex.claims.length, `${ex.id} lost claims in validation`);
+    }
+  });
+
+  test('every fixture ALSO survives the seven-gate TRUTH validator, not just the shape gate', () => {
+    // `parseExtractionResponse` above only proves a fixture is well-FORMED —
+    // it never calls claimValidator, so a fixture can pass that test while
+    // still being a claim the real firewall would discard. That gap is how
+    // fx-employment shipped an object literal ('runs product') that does not
+    // occur verbatim in its own statementText ('I run product at Nummo') —
+    // gate \u2461 rejects it, meaning the few-shot example was teaching the
+    // model output the validator refuses. A test that stops at the shape
+    // gate cannot see this; it has to run the same two stages production
+    // does, in the same order.
+    for (const ex of FIXTURES.examples) {
+      const parsed = parseExtractionResponse(JSON.stringify({ claims: ex.claims }));
+      assert.equal(parsed.ok, true, `${ex.id}: fails shape gate, cannot reach truth gate`);
+      for (const claim of parsed.claims) {
+        const r = validateAgainstSegment(claim, ex.segment, { sourceTier: 'chat' });
+        assert.equal(r.outcome, 'admit',
+          `${ex.id}: '${claim.statementText}' -> ${claim.predicate}=${JSON.stringify(claim.object)} `
+          + `was ${r.outcome} at gate ${r.gate} (${r.reason}) — the prompt is teaching an example its own firewall refuses`);
+      }
     }
   });
 

@@ -7,7 +7,7 @@
     {
       "id": "fx-employment",
       "segment": "I run product at Nummo, a fintech in Bangalore.",
-      "why": "The canonical self-disclosure. Three claims from one sentence \u2014 employer, role, and the company's location \u2014 which is the point of a semantic extractor over a regex: one sentence is not one claim. The role literal stays as written ('runs product') rather than being normalised to 'head of product': rule 7 in the same prompt forbids adding what is probably also true, and an example that embellishes teaches the model to embellish.",
+      "why": "The canonical self-disclosure. Three claims from one sentence \u2014 employer, role, and the company's location \u2014 which is the point of a semantic extractor over a regex: one sentence is not one claim. The role literal stays as written ('run product') rather than being normalised to 'head of product' or reconjugated to 'runs product': rule 7 in the same prompt forbids adding what is probably also true, and an example that embellishes \u2014 grammatically or otherwise \u2014 teaches the model to embellish. A literal object must be gate \u2461-safe: it has to appear inside its own statementText, not just be plausible from it.",
       "claims": [
         {
           "subject": "self",
@@ -24,7 +24,7 @@
           "subject": "self",
           "predicate": "role_is",
           "object": {
-            "literal": "runs product"
+            "literal": "run product"
           },
           "polarity": "asserted",
           "modality": "fact",
