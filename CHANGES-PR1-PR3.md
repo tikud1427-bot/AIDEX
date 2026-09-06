@@ -574,3 +574,689 @@ subject_recall can move in both directions. RE-RUN BEFORE BELIEVING ANYTHING:
 
 State: 3095 tests · 398 suites · 3094 pass · 0 fail · 1 skip
        flagproof 30/30 · eval:gate PASS · router boot OK
+
+## Increment 14 — the eval never scored the object
+
+### THE UPLOADED TREE HAD NO NEW WORK
+121 files differed byte-wise; ZERO differed after stripping CR. Pure CRLF
+conversion from a Windows round-trip. No e6-inverse.json — the inverse-fix
+measurement has not been run yet.
+
+### THE FINDING
+extraction-core scores four levels: detection, subject, predicate, fidelity
+(polarity + modality + time). It has never scored the OBJECT.
+
+Measured on identity-019 "I own the billing service.":
+  emitted object "billing service" -> subjectHits 1 predicateHits 1 fidelityHits 1
+  emitted object "the moon"        -> subjectHits 1 predicateHits 1 fidelityHits 1
+Byte-identical. A system that got every object wrong graded exactly as well as
+one that got them all right.
+
+THAT IS WHY THE REGISTRY CONTRADICTION SURVIVED. `owns`, `depends_on` and
+`blocks` were typed to take literals while declaring inverses, for as long as
+the registry has existed, and the metric that would have exposed it did not
+exist. Increment 13 found it by reading; nothing could have found it by running.
+
+### AND THE GOLD OBJECTS HAVE A CEILING
+34 of 167 gold objects are NOT verbatim in their own sentence — normalised
+forms like "commuting by metro" from "I commute by metro". S4 gate ② requires
+an emitted object to appear verbatim in the quote. Those 34 are unreachable by
+any gate-obeying extractor, so object_accuracy cannot exceed 0.7964.
+Published as a number, not a comment.
+
+### Changed
+- `eval/suites/extraction-core.suite.mjs` — objectHits per case;
+  `object_accuracy` + `n_object_unmatchable` as ADDITIVE metrics.
+  `correct` deliberately NOT extended: folding a fifth level in would move
+  every historical number and make this run incomparable with every previous.
+  Exact match after normalisation (case, leading article) and no fuzzier — a
+  containment rule would score "commuting by metro" against "commute by metro"
+  and measure a labelling convention instead of extraction.
+- `eval/tests/extractionControl.test.js` (+4 tests)
+- `.gitattributes` (NEW) — `* text=auto eol=lf`, so the next Windows round-trip
+  does not produce a 121-file diff that buries a real edit.
+
+eval:gate PASS. 17 existing metrics UNCHANGED, 2 additive. Floor scores
+object_accuracy 0 — it emits no structured objects, same as predicate_accuracy.
+
+### Bite
+  stop computing object_accuracy  -> 2 fail
+  drop the unmatchable ceiling    -> 1 fail
+  fold the object into `correct`  -> 2 fail
+
+### A TEST OF MINE THAT DID NOT BITE, CAUGHT AND FIXED
+The "additive only" test first compared two cases built from `facts: []`, where
+`emitted` is false and `correct` is false whatever the object does — so folding
+the object into `correct` passed it. Rewritten around a fixture that genuinely
+scores correct. Third time this pattern has appeared in this engagement.
+
+### STILL OPEN
+- negation-012 "I never learned Rust properly" -> habit_of("learning Rust"),
+  negated. The third gate blocker, and a LABEL question, not an extractor one:
+  the sentence is about a skill not attained, not a habit. identity-034 "I'm
+  learning Rust at the moment" carries the identical (s,p,o) asserted. Owner's
+  call — I will not edit ground truth to make a score move.
+- `uses`(14) and `task_owner`(8): no inverse, so increment 13's derivation says
+  nothing about them. Ontology decision.
+- modality: 10 cases the model returns nothing for, all questions and
+  hypotheticals. Prompt/spec disagreement.
+
+State: 3099 tests · 399 suites · 3098 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate PASS · router boot OK
+
+## Increment 15 — a per-stall ceiling is not a bound on the run
+
+### THE STALLED RUN
+Pass 1 completed clean, 200/200. Pass 2 hit the quota at case 78 and began:
+  sleeping 73s (case 78) · 9s (79) · 6s (80) · 165s (81) · …
+with cooldowns of 463s and 598s reported per key. The log ends mid-run.
+
+### THE DEFECT
+MAX_STALL_WAIT_MS (15 min) bounds ONE wait. Every figure above is far under it
+and passes the check. With ~120 cases left, cumulative sleep is unbounded while
+each individual decision to sleep looks reasonable. G6 asks for bounded; the
+aggregate never was.
+
+FOURTH defect in this codebase with the same shape — a guard that examines the
+individual case and never asks about the total. The others: purge reachability
+(import-level, not call-level), case-level transport errors (run guard did not
+reach the case), and ?:contract (one key over eleven rules).
+
+Also: the explicit "cooldown is N min — that is the DAILY quota" branch PRINTED
+AND CONTINUED, scoring every remaining case as a transport error.
+
+### Changed
+- `scripts/e6-shadow.mjs` — MAX_PASS_STALL_MS (20 min cumulative per pass) and
+  an exported `stallBudgetExceeded()`. On exceeding it, or on a single cooldown
+  above MAX_STALL_WAIT_MS, the pass ABORTS and is marked invalid, so
+  pickReportedPass falls back to whatever completed.
+- `src/brain/tests/e6ShadowHarness.test.js` (+4 tests)
+
+### Bite
+  remove the cumulative check              -> 2 fail
+  budget below a single permitted stall    -> 1 fail
+
+### THE QUOTA IS THE REAL CONSTRAINT
+Pass 1 (200 calls) ran clean; the wall came ~80 calls into pass 2. So roughly
+280 calls/day are available across the four keys. `--repeat 2` on 200 cases
+needs 400 and is not affordable. Affordable and still noise-measuring:
+  node scripts/e6-shadow.mjs --provider groq --model openai/gpt-oss-120b \
+    --repeat 2 --limit 100 --pace 1500 --json e6-inverse.json
+--limit stratifies, so category balance is preserved. 200 calls total.
+
+State: 3103 tests · 400 suites · 3102 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate PASS
+
+## Increment 16 — gemini wired into the harness
+
+### WHAT THE 429 ACTUALLY SAID
+  "tokens per day (TPD): Limit 200000, Used 198568"
+  organization `org_01kvwzqg69eyvvdar00xyb4bym`
+
+TOKENS per day, not calls. And PER ORGANISATION — all four GROQ_API_KEY_N share
+one budget. My advice that a 4-key pool bought headroom was wrong: the pool
+helps with per-minute limits and does nothing for TPD. ~198.5k of 200k spent.
+
+### THE GAP
+`brain/index.js:e6Transport()` dispatches to groq OR gemini, reading
+AQUA_E6_PROVIDER. The harness accepted groq and openrouter only. So gemini was
+a transport production can be configured to run and the eval could not measure
+— a capability with no way to earn a number, which is L14 backwards. It stopped
+being theoretical the moment the Groq budget ran out: no second road to any
+measurement until the quota reset.
+
+### Changed
+- `scripts/e6-shadow.mjs` — PROVIDERS map now { groq, openrouter, gemini }; all
+  three signatures were already identical. Error text explains TPD-vs-per-minute
+  and that more keys do not buy more tokens. JSON records `provider`.
+- `src/brain/tests/e6ShadowHarness.test.js` (+4 tests) — every provider
+  e6Transport() can dispatch to must be selectable in the harness, derived from
+  the facade source so the two lists cannot drift again.
+
+### Bite
+  remove gemini from the harness map -> 1 fail
+
+### ⚠️ A GEMINI RUN IS NOT COMPARABLE TO A GROQ RUN
+Different model, different extractor. It IS comparable to the floor — the
+baseline in every report is the regex lane, not a previous E6 run — so "does E6
+beat the floor" stays answerable. "Did the inverse fix help" does NOT, unless
+both sides use the same model. The provider is now in the JSON so a later
+reader cannot mistake one for the other.
+
+To answer the inverse-fix question specifically, a groq run is still required
+once TPD resets.
+
+State: 3107 tests · 401 suites · 3106 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate PASS
+
+## Increment 17 — a truncated answer was being reported as a dead provider
+
+### THE GEMINI RUN DID NOT FAIL ON TRANSPORT
+Pass 1 completed 100/100. Every provider line read `success` or
+`hit maxTokens=1024 cap — returning partial as successful completion`.
+ZERO calls failed. The harness reported:
+  ⚠️ pass 1 INVALID — 16 transport errors (16.0% of cases)
+  ✗ NOTHING WAS MEASURED — all 2 pass(es) failed on transport
+  Cooldowns of this length are the DAILY quota...
+Only the last part was even about pass 2, and the advice pointed at a quota
+that was never the constraint for pass 1.
+
+### THE DEFECT
+`pipeline.js:144` was `if (out.error) { stats.errors++; }`.
+`extractionClient` had ALREADY distinguished them:
+  transport:<msg> / no-transport   the call threw
+  bad-json:<msg> / no-json-found / missing-claims-array
+                                   the model ANSWERED, unparseably
+S3 discarded the distinction one line later.
+
+1024 output tokens is not enough for a reasoning model — gemini-2.5-flash
+spends output budget thinking before emitting JSON — so a sixth of its answers
+arrived truncated, failed to parse, and were filed as a provider outage.
+
+The split decides three things downstream: whether a pass is valid, whether
+consecutive failures abort the run, and (since increment 10) whether a case is
+scored at all. A truncated answer must still be SCORED — the model replied and
+the reply was unusable, which is an extraction failure the system owns. Only an
+unanswered call is unmeasured.
+
+### Changed
+- `src/brain/understanding/pipeline.js` — stats.errors (transport) vs
+  stats.malformed (answered, unparseable).
+- `scripts/e6-shadow.mjs` — caseErrored uses transport errors only; a MALFORMED
+  block in the report; `--max-tokens` exposed (default UNCHANGED at 1024,
+  because raising it changes what is measured and needs its own run).
+- `src/brain/tests/pipeline.test.js` (+5 tests)
+
+### Bite
+  collapse the split back to one counter -> 3 fail
+
+### WHAT THIS MEANS FOR THE RUN THAT "FAILED"
+Under the fix, pass 1 has 0 transport errors and is VALID. It would have
+reported 100 scored cases with 16 malformed answers named as such. The run
+produced a usable measurement and threw it away.
+
+State: 3112 tests · 402 suites · 3111 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate PASS
+
+## Increment 18 — the inverse fix worked; the object metric was measuring itself
+
+### THE INVERSE FIX: CONFIRMED (groq, 100 cases, 2 valid passes, 0 errors)
+  discardedByGate BEFORE:  ?:contract:object-kind-mismatch 23 · object-not-in-quote 18
+  discardedByGate AFTER:   object-not-in-quote 2
+Every object-kind mismatch is gone. Twenty-three to zero.
+
+  detection_negation   85.0%  ->  92.3%   (12/13)
+  detection_recall     78.1%  ->  87.5%
+  subject_recall       66.5%  ->  72.8%
+  detection_identity   80.0%  ->  92.3%
+  overall_strict       48.0%  ->  46.0%   (different slice, not comparable)
+negation-008 and negation-014 now extract. Exactly the two the derivation
+predicted. negation-012 remains the sole miss, and it is a LABEL question.
+
+### BUT PRECISION DROPPED, AND THE CAUSE IS THE SAME FIX
+  precision  100.0%  ->  83.3%   FAIL (need 85%)
+  false_positives 0 -> 2 on 12 negatives (negative-009, negative-012)
+The broken contract rule had been acting as an ACCIDENTAL PRECISION FILTER:
+claims it wrongly rejected included ones that would have fired on negatives.
+Precision was being bought by a bug.
+⚠️ n=12 negatives at --limit 100. Measured noise on silence_on_negatives is
+83.3%–100.0%, range 16.7% — TWO cases. Precision is not measurable to an 85%
+gate at this sample size. Needs the full 40 negatives before it means anything.
+
+### GEMINI IS THE WEAKER EXTRACTOR HERE
+  negation      92.3% groq  vs  69.2% gemini
+  fidelity      70.7%       vs  59.8%
+  modality      69.2%       vs  61.5%
+  subject       72.8%       vs  60.9%
+  object-not-in-quote discards: 2 vs 12 — gemini paraphrases objects.
+Only 1 valid pass (per-minute rate limits, not the daily quota). Directional,
+not conclusive, but the gap is wide and one-sided.
+
+### 🔴 MY OWN METRIC WAS BROKEN, AND ITS CONTROL PASSED ANYWAY
+Both runs reported object_accuracy: 0 against a 78/92 ceiling.
+CAUSE: `e6Extractor.toFact` passes the contract object through untouched, and a
+validated object is `{ entity: 'billing service' }` — never a bare string.
+`normObject` stringified it to `[object Object]`, which matches nothing.
+The control I wrote to prove the metric works fed `object: 'billing service'` —
+the shape the SUITE wants, not the shape the ADAPTER produces. A fixture that
+does not match reality tests the fixture.
+
+FOURTH time this pattern has caught me in this engagement: empty facts arrays,
+a shared segment behind a cache, cases built from `facts: []`, and now a
+hand-written object shape. The common factor is a fixture invented to satisfy
+the assertion rather than taken from the code under test.
+
+### Changed
+- `eval/suites/extraction-core.suite.mjs` — normObject unwraps
+  {entity|literal|quantity|time} and still accepts the floor's bare strings.
+- `eval/tests/extractionControl.test.js` — fixtures use the REAL adapter shape;
+  +1 test asserting BOTH shapes score.
+
+### Bite
+  revert the unwrap -> 3 fail
+
+object_accuracy is still UNMEASURED against real output — the number in both
+JSONs is the defect, not a result. It needs one more run.
+
+State: 3113 tests · 402 suites · 3112 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate PASS
+
+## Increment 19 — E8 STARTED. The Context Engine's whole deficit was one line.
+
+### E8 NEEDS NO PROVIDER — it was never blocked on infrastructure
+context-core runs entirely locally against retrieval-core (the floor it wraps).
+Measured, 200 cases, both complete:
+
+  metric                floor    CE-V2    delta
+  recall_at_8           0.756    0.679    WORSE
+  mrr                   0.687    0.645    WORSE
+  ndcg_at_8             0.671    0.615    WORSE
+  recall_superseded     0.600    0.300    WORSE (halved)
+  recall_temporal       0.680    0.560    WORSE
+  recall_selfword       0.750    0.625    WORSE
+  recall_negation       0.800    0.700    WORSE
+  ... 11 of 12 worse. Better on 1: noise_lines 16 -> 13 (lower is better).
+
+Confirms with numbers that AQUA_CONTEXT_V2=off (increment 13) was right.
+
+### THE CAUSE: ONE CONSTANT, TWO SCALES
+`assembler.js:95` tested the DIVERSITY-PENALISED score against `minScore` —
+a constant calibrated against RAW scores, and already applied for admission
+twenty lines earlier (`scored.filter(c => c.score >= cfg.minScore)`).
+A second, unintended admission gate wearing the label `reason: 'diversity'`,
+which is why it read as deliberate.
+
+EXPERIMENT (remove the line):
+  recall_at_8       0.679 -> 0.756   EXACTLY the floor
+  recall_superseded 0.300 -> 0.600   EXACTLY the floor
+  recall_temporal   0.560 -> 0.680   EXACTLY the floor
+Three metrics return to the floor value precisely. That line was all of it.
+
+### Changed
+- `src/brain/contextEngine/assembler.js` — the penalty now ORDERS only; it no
+  longer re-decides admission. Smallest change that stops one constant meaning
+  two things.
+
+### ⚠️ eval:gate is BLOCKED, DELIBERATELY LEFT SO
+  9 metrics improved · noise_lines REGRESSED 13 -> 18 (+5)
+Regenerating the baseline is one line and I have not done it. The gate is
+asking whether 5 lines of prompt noise are worth that recall — an owner
+decision (L20), and silently updating a baseline is the exact move this
+engagement has argued against throughout.
+
+### THE CE STILL SHOULD NOT SHIP
+Fixed, it MATCHES the floor on recall and costs MORE noise (18 vs 16). It has
+no measured reason to exist. AQUA_CONTEXT_V2 stays off. The next E8 question is
+not "promote it" but "what is it for" — the answer has to be a metric it beats
+the floor on, and there currently is none.
+
+State: 3113 tests · 402 suites · 3112 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate BLOCKED (context-core, by design)
+
+## Increment 20 — E8 answered: the Context Engine has no purpose it can reach
+
+The tarball contained no new work — only e6-inverse.json and e6-gemini.json,
+both already analysed. So E8 continued.
+
+### THE QUESTION MY OWN FIX RAISED
+Increment 19 fixed the double-threshold bug: recall returned to the floor and
+noise went 13 -> 18. But the buggy gate WAS the mechanism producing the CE's
+only advantage. So: can it deliver floor recall AND less noise?
+
+### KNOB 1 — a separate penalised-score threshold. IT IS A CLIFF, NOT A DIAL.
+  T=0.00  recall8=0.756  mrr=0.670  sup=0.600  temp=0.680  noise=18
+  T=0.02  identical
+  T=0.04  identical
+  T=0.06  identical
+  T=0.08  identical
+  T=0.10  identical
+  T=0.12  recall8=0.679  mrr=0.645  sup=0.300  temp=0.560  noise=13
+  FLOOR   recall8=0.756  mrr=0.687  sup=0.600  temp=0.680  noise=16
+
+Arithmetic, not coincidence: admission passes raw >= minScore (0.12) and the
+penalty is x0.6, so penalised scores cluster at >= 0.072. The only band the
+gate can reach is raw [0.12, 0.20). Nothing sits between. There is no
+intermediate setting.
+
+### KNOB 2 — the char budget. IT NEVER BINDS.
+  budget=1600 / 1400 / 1200 / 1000 / 800  ->  ALL identical, noise=18
+`limit: 8` binds first on this corpus. The budget is inert.
+
+### THE ANSWER
+Fixed, the Context Engine:
+  · matches the floor on recall_at_8, recall_superseded, recall_temporal
+  · is BELOW the floor on mrr (0.670 vs 0.687) and no knob moves it
+  · costs MORE prompt noise than the floor (18 vs 16)
+  · has two configuration knobs that are inert on this corpus
+It cannot be tuned into beating the thing it wraps. AQUA_CONTEXT_V2 stays off.
+
+E8's next question is not "promote" or "tune" — it is whether the Context
+Engine should exist. That is an owner decision, and it now has evidence
+instead of a code reading behind it.
+
+### eval:gate STILL BLOCKED, STILL DELIBERATE
+context-core: 9 metrics improved, noise_lines 13 -> 18. The baseline currently
+enshrines the BUGGY behaviour, so it should be updated — but that is a PR with
+a written reason, not a silent regeneration, and the reason is now the whole of
+increments 19-20.
+
+State: 3113 tests · 402 suites · 3112 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate BLOCKED (context-core, by design)
+
+## Increment 21 — env-doctor: the linter I offered twice and never built
+
+Third tarball with no new work — e6-inverse.json and e6-gemini.json again, both
+already analysed. So rather than repeat the blocked list, the outstanding item
+I had promised and not delivered.
+
+### THE DEFECT IT EXISTS FOR
+`AQUA_E6_SHADOW=on` sat in production for months. Nothing reads it — the real
+gate is `AQUA_E6` — so the understanding pipeline had NEVER run while the
+deployment claimed it was on, and every observation about E6 was about a stage
+that was switched off. The name was invented in a conversation and typed into
+an env file.
+
+THE FLAG REGISTRY CANNOT CATCH THIS. It compares the REGISTRY to the SOURCE, in
+both directions. A key set in .env and read by nothing is absent from both.
+The gap is between the deployment and the registry, and only something that
+reads the env file can stand in it.
+
+### Changed
+- `scripts/env-doctor.mjs` (NEW, 175) — `npm run env:doctor [path]`
+- `src/core/tests/envDoctor.test.js` (NEW, 12 tests)
+- `package.json` — env:doctor script
+
+### WHAT IT REFUSES
+  · an AQUA_* key no source file reads         (the AQUA_E6_SHADOW case)
+  · a gate set to a value its read site never matches — AQUA_E6=true is OFF
+    because the read is `=== 'on'`, judged per-gate so inverted ones like
+    AQUA_BRAIN (`!== 'off'`) are handled correctly too
+  · the same key assigned twice, naming which line is dead
+
+### WHAT IT REFUSES TO DO
+Validate credentials. A previous session declared a set of live Gemini API keys
+invalid by pattern-matching their `AQ.` prefix and was WRONG — Google had begun
+issuing keys in that format. Shape is not validity. The linter checks only what
+it can actually check.
+
+### AGAINST A REPRODUCTION OF THE REAL DEPLOYMENT
+  ✗ line 9  AQUA_E6_SHADOW  no source file reads this — it does nothing
+  ✗ line 10 AQUA_E6         set to "true" but resolves to off — read is === 'on'
+  ⚠ line 8  AQUA_SELF_ENTITY assigned again — line 5 is dead, this one wins
+  exit 1
+All three faults that were actually present, found in one pass.
+
+### Bite
+  stop reporting unregistered keys       -> 2 fail
+  stop reporting unreachable gate values -> 3 fail
+  stop reporting duplicates              -> 2 fail
+
+State: 3125 tests · 403 suites · 3124 pass · 0 fail · 1 skip
+       flagproof 30/30 · eval:gate BLOCKED (context-core, by design, unchanged)
+
+## Increment 22 — the prompt forbids two of the five modalities it declares
+
+Fourth identical tarball. Rather than repeat the blocked list, the largest
+remaining extraction deficit after negation: modality.
+
+### THE CONTRADICTION, IN ONE FILE
+  extractionPrompt.js:57   MODALITIES = ['fact','intent','hypothetical','question','quote']
+  extractionPrompt.js:141  "4. A conditional or a question asserts nothing. Return []."
+
+`hypothetical` and `question` are declared valid and made unproducible thirteen
+lines later. The contract ACCEPTS them; the prompt ORDERS the model never to
+emit them. Every one of the 10 "model returned [] — no gate involved" modality
+misses is the prompt working exactly as written.
+
+### THE MEASURED COST
+  13 of 167 gold claims are hypothetical|question = 7.8% of the corpus
+  ALL 13 sit in the `modality` category, which has 25 cases
+  => detection_modality CEILING under rule 4 = 12/25 = 0.480
+
+Observed runs: 0.52 · 0.60 · 0.69 — ALL ABOVE THE CEILING.
+That is only possible when the model DISOBEYS rule 4. The metric has been
+rewarding instruction-violation, and the "modality REGRESSED 72% -> 52%"
+finding from increment 11 may be nothing more than the model obeying its
+instructions more consistently.
+
+### Changed
+- `src/brain/tests/extractionPrompt.test.js` (+2 tests) — the invariant "every
+  declared modality is producible" is stated and marked `todo` with the reason;
+  the arithmetic ceiling is pinned unconditionally so the decision cannot be
+  made by forgetting.
+
+Nothing in the extractor was changed. Which side is wrong is a design decision
+(L20) and either choice alters what the extractor produces:
+  · rule 4 right  -> the 13 labels are wrong, drop hypothetical|question from
+                     MODALITIES, and detection_modality's denominator changes
+  · schema right  -> rule 4 goes, and the model extracts these with the modality
+                     that says what they are
+
+### STANDING STATE
+  E6   negation 92.3% (12/13) after the inverse fix; needs the full 200-case run
+       + the negation-012 label call. modality now has a named cause.
+  E7   not blocked — needs one local command with the Gemini keys
+  E8   answered: the CE cannot be tuned into beating its floor; stays off
+  gate BLOCKED on context-core noise_lines 13 -> 18, awaiting a written reason
+
+State: 3126 tests · 405 suites · 3125 pass · 0 fail · 1 skip · 1 todo
+       flagproof 30/30 · eval:gate BLOCKED (context-core, by design)
+
+## Increment 23 — blueprint gap analysis, and E1/PR-7 closed
+
+Fifth identical tarball. Probed all 99 blueprint PRs against the source.
+
+### VERIFIED STATE (52-ish of 99)
+  E1  Platform Safety   6/7   E7  Retrieval V3      1/9
+  E2  Evaluation        6/6   E8  Context V3        4/7
+  E3  Storage          11/11  E9  Reflection V3     0/8
+  E4  Jobs              2/7   E10 Unification       1/10
+  E5  Claims            8/10  E11 API               1/6
+  E6  Understanding    11/12  E12 Observability     2/6
+Critical path E2 -> E3 -> E5 -> E6 is 36 of 39.
+
+### 🔴 MY FIRST PROBE WAS WRONG, THE SAME WAY THE FLAG COUNT WAS
+I scanned `aqua/src`, `scripts`, `eval`, `router.js` — and not the root
+`index.js`, where the platform layer lives. E1-6 came back "no" and is in fact
+COMPLETE: `safeEqual` (timingSafeEqual), `authLimiter` on /admin, explicit
+`sameSite: "lax"`, and CSRF are all present, with E1/PR-6 comments in place.
+Two of the three items I offered as "unblocked, ready to build" were already
+built. Re-probed across the whole repo before touching anything.
+
+### E1/PR-7 — DONE
+Deleted, after confirming ZERO importers for each:
+  brain-tests-backup-before-pr15/      understanding-backup-before-pr13/
+  eval-backup-before-pr15/             understanding-backup-before-pr14/
+  scripts-backup-before-pr15/          understanding-backup-before-pr16/
+  e6Extractor-before-pr16.mjs          src/brain/understanding/pipeline.before-pr17.js
+118 files, 1.3 MB. Inventoried in the Phase 0 audit; survived 22 increments
+because nothing ever failed on account of them — which is what made them
+expensive. A grep for a symbol returned the live definition and three stale
+ones with no way to tell them apart from the path.
+
+- `src/core/tests/repoHygiene.test.js` (NEW, 4 tests) — no *backup* /
+  *before-pr* paths, no .orig/.bak/.old/.save/.copy, the walk's own
+  denominator asserted, and a check that pipeline.js SURVIVED (the deleted
+  file sat directly beside it).
+
+### Bite
+  recreate a snapshot directory -> 1 fail
+  add a .bak file              -> 1 fail
+
+State: 3130 tests · 406 suites · 3129 pass · 0 fail · 1 skip · 1 todo
+       flagproof 30/30 · router boots · eval:gate BLOCKED (context-core, by design)
+
+## Increment 24 — E4/PR-4: per-owner serial ordering
+
+### THE RACE
+`jobRegistry.defer` fired every job through `setImmediate` — whatever is queued,
+in whatever order it lands. Two messages sent quickly ran BOTH post-turn blocks
+concurrently against ONE owner's stores. `observeConversationTurn` is
+read-modify-write: read entities, add, write back. Twice, interleaved. The
+loser's entities are gone and nothing reports it, because both jobs "succeeded".
+
+Serialising everything would be the easy fix and the wrong one — one slow turn
+would stall every other user behind it. The guarantee is PER OWNER: same owner
+in order, different owners in parallel.
+
+### Changed
+- `src/core/jobs/jobRegistry.js` — `defer(name, fn, { ownerId })`. An ownerId
+  queues behind that owner's previous job via a tail-promise chain; no ownerId
+  keeps the old concurrent behaviour, so every existing caller is unaffected
+  until it opts in. `jobStats().serialOwners` exposes the map size.
+  BOUNDED (G6): the entry is deleted when the chain drains, identity-checked so
+  a job queued mid-flight becomes the new tail rather than a parallel branch.
+- `src/routes/turnPostProcess.js` — all 4 deferred blocks pass ownerId.
+- `src/core/tests/jobRegistry.test.js` (+6 tests) — the concurrency test the
+  blueprint asks for.
+
+### Bite
+  remove the per-owner chain            -> 3 fail
+  make it a GLOBAL lock (ignore ownerId) -> 2 fail
+  never clean the owner map              -> 1 fail
+  chain through success only             -> 0 fail   <-- DID NOT BITE
+
+### A CLAIM OF MINE THE BITE DISPROVED
+I wrote that `.then(run, run)` was load-bearing because "chaining through only
+the success path would strand every later job". `.then(run)` failed ZERO tests:
+`run` catches everything itself, so `previous` can never reject and the
+rejection handler is unreachable. The two-argument form stays as insurance
+against someone moving the try/catch out of `run` later — but the comment now
+says "unreachable today" instead of claiming it is doing work.
+
+### AN EXISTING GREP TEST, REPLACED WITH BEHAVIOUR
+`the post-turn block defers THROUGH the registry` pinned the literal
+`defer('post-turn', fn)` and broke on the new argument while the behaviour was
+intact. Rewritten to drive the real REAL_DEPS seam and assert that the owner
+REACHES the chain — two jobs for one owner must serialise through it.
+
+### BLUEPRINT RE-PROBE (whole repo, root + aqua)
+  E1-6 YES · E1-7 YES (closed last increment) · E4-1 YES · E4-4 YES · E4-5 YES
+  E4-2 worker process        no
+  E4-3 job table + DLQ       no
+  E4-6 reflection as jobs    no
+  E4-7 DLQ runbook           no
+E4 is now 3/7. E1 is 7/7 — COMPLETE.
+
+State: 3136 tests · 407 suites · 3135 pass · 0 fail · 1 skip · 1 todo
+       flagproof 30/30 · router boots · eval:gate BLOCKED (context-core, by design)
+
+## Increment 25 — E4/PR-2 + PR-3: the durable job queue
+
+The in-memory registry drains on SIGTERM and loses everything to any other
+death — OOM, SIGKILL, a lost node. This is where a job outlives its process.
+
+### Changed
+- `src/core/db/migrations/0007_jobs.sql` (NEW) — aqua_jobs with idempotency_key
+  UNIQUE per owner, priority, run_after, attempts/max_attempts, state
+  (queued|running|done|dead), last_error, partial indexes for the claim query
+  and the DLQ.
+- `src/core/jobs/jobQueue.js` (NEW, 200) — enqueue/claim/complete/fail/
+  reapStale/queueStats/deadLetters/purgeOwner + exported pure `backoffMs`.
+- `scripts/worker.mjs` (NEW, 130) — `npm run worker`, graceful SIGTERM,
+  `--kinds` / `--poll` / `--reap`.
+- `src/core/tests/jobQueue.test.js` (NEW, 16 tests)
+- `src/account/accountPurge.js`, `src/core/tests/dbPool.test.js` — see below.
+
+### PER-OWNER ORDERING IS ENFORCED IN SQL, NOT BY AGREEMENT
+PR-4 gave the in-memory path a per-owner chain, which works because one process
+holds one Map. N workers have no shared memory, so the claim query carries it:
+  AND NOT EXISTS (SELECT 1 FROM aqua_jobs r
+                   WHERE r.owner_id = j.owner_id AND r.state = 'running')
+with FOR UPDATE SKIP LOCKED so the loser of a race takes a DIFFERENT owner's
+job instead of blocking. Verified against real Postgres: two jobs for one owner
+-> second claim returns null; two owners -> both claimed at once.
+
+### NOTHING IS DELETED (L5)
+done and dead rows are kept. A dead job is the only record that work was asked
+for and never happened. reapStale() reclaims jobs stranded by a vanished
+worker — without it one crash wedges ONE owner permanently behind the very
+predicate that guarantees their ordering.
+
+### HANDLERS ARE DELIBERATELY EMPTY
+E4/PR-5 and PR-6 move ingest, reflection and consolidation onto the runner.
+Wiring a handler in the same commit that introduces the runner would put
+production work on an unproven queue and give the first failure two candidate
+causes. An unknown kind DEAD-LETTERS rather than burning its attempt budget.
+
+### 🔴 MY OWN PINS CAUGHT A REAL GAP
+The battery failed on two structural tests I wrote in earlier increments:
+  · purgeCompleteness — jobQueue exports purgeOwner and account deletion never
+    called it. I had built a new owner-scoped store and not wired G4.
+  · dbPool ALLOWED — a new pool consumer, undeclared.
+Both fixed: accountPurge now purges jobs; the allow-list gained jobQueue with
+its reason. This is the third time a pin from an earlier increment has caught
+the increment adding it.
+
+### A TEST-ISOLATION DEFECT, CAUGHT AND FIXED
+The first version called `claim('w1')` unfiltered and assumed the table held
+only its own rows. It failed the moment a manual probe left rows behind, and
+would fail against any real deployment. Every claim is now filtered to the
+file's own `kind` — a shared queue is shared.
+
+### Bite (against real Postgres)
+  per-owner claim exclusion removed -> 1 fail
+  dead-letter never triggers        -> 2 fail
+  backoff not capped                -> 1 fail
+  purgeOwner is a no-op             -> 8 fail
+
+### Gates
+  no PG   : 3141 tests · 3140 pass · 0 fail · 1 skip · 1 todo
+  with PG : 3162 tests · 3161 pass · 0 fail · 1 skip · 2 todo
+  flagproof 30/30 · router boots · eval:gate BLOCKED (context-core, by design)
+
+## Increment 26 — E4/PR-6: reflection and consolidation move onto the queue
+
+### Changed
+- `src/routes/turnPostProcess.js` — `runOrEnqueue(kind, ownerId, work, discriminator)`,
+  gated on AQUA_JOBS_DURABLE (default off). Reflection and consolidation route
+  through it; every other deferred block is untouched. Idempotency key is
+  `kind:discriminator` — the turn number for consolidation, so the same tick
+  enqueued twice is one row (G2).
+- `src/core/flags.js` — AQUA_JOBS_DURABLE registered (28 gates now).
+
+### THE FALLBACK RUNS THE WORK. IT DOES NOT DROP IT.
+A deployment with the flag on and no worker running, or no DATABASE_URL, would
+otherwise quietly stop reflecting while the flag said the opposite — the
+AQUA_E6_SHADOW failure with a different name. `runOrEnqueue` is best-effort:
+if it cannot be scheduled, it runs inline, exactly as before the flag existed.
+The queue is an optimisation over inline work, never a replacement that can
+silently fail.
+
+### 🔴 A REAL BUG, CAUGHT BY THE EXISTING TEST SUITE IMMEDIATELY
+`runOrEnqueue` is async. The reflection/consolidation blocks were a plain
+`try { work() } catch {}`, sufficient while the call was synchronous. Making
+it async meant a throwing job REJECTED AFTER the try had exited — an
+unhandledRejection instead of a swallowed failure. Same shape as the E6 seam
+fixed earlier in this engagement. Fixed with the same pattern:
+`Promise.resolve().then(...).catch(...)`.
+
+### FIVE EXISTING TESTS BROKE ON TIMING, NOT LOGIC
+`consolidationCadence.test.js` called `turn()` and asserted synchronously,
+correct while consolidation was synchronous. Once it routed through an async
+call, the assertion ran before the microtask landed and every count read as
+"never fired". All 12 tests in the file converted to async + `await flush()`.
+Same fix applied to 4 tests in `turnPostProcess.test.js` (order-sensitive
+assertions) and 2 that needed `doesNotReject` instead of `doesNotThrow`.
+
+### 🔴 A CLAIM OF MINE THE BITE DISPROVED, CORRECTED IN THE COMMENT
+I added `runOrEnqueue: (k,o,w) => work()` to the test fixture with a comment
+claiming its ABSENCE would throw and be silently swallowed by the fail-open
+catch. Bite: deleted the line, re-ran — 12/12 still passed. Reason:
+`runPostTurn` merges deps with REAL_DEPS (`{...REAL_DEPS, ...deps}`), so an
+omitted key falls back to the real function, which already runs inline when
+AQUA_JOBS_DURABLE is off. My comment asserted something I never ran. Corrected
+to state what the bite actually showed, kept the explicit line so the fixture
+does not rely on the merge to define its own behaviour.
+
+### VERIFIED AGAINST REAL POSTGRES
+AQUA_JOBS_DURABLE=on, real turn, real queue: 5 jobs landed in aqua_jobs
+(queued state), not just claimed-and-dropped inline. Flag off (production
+default): confirmed still synchronous fallback via the full battery.
+
+### Gates
+  no PG   : 3140 tests · 3140 pass · 0 fail · 1 skip · 1 todo
+  with PG : 3161 tests · 3161 pass · 0 fail · 1 skip · 2 todo
+  flagproof 30/30 · router boots · eval:gate BLOCKED (context-core, unchanged, by design)
+
+### E4 now 6/7 — only PR-7 (DLQ alerting + runbook) remains.

@@ -61,8 +61,21 @@ beforeEach(() => { calls = []; });
 
 // ── NO-OP EXTRACTION ─────────────────────────────────────────────────────────
 
-test('every subsystem the inline block called is still called, in order', () => {
+/**
+ * Drain the microtask queue.
+ *
+ * ⚠️ REQUIRED SINCE E4/PR-6. The reflection and consolidation blocks route
+ * through `runOrEnqueue`, which is async, so their calls land one tick after
+ * `runPostTurn` returns. A synchronous assertion sees the list before they
+ * arrive and reports the subsystem as never called — the failure looks
+ * identical to the wiring being broken, which is exactly the confusion this
+ * comment exists to prevent.
+ */
+const flush = () => new Promise(r => setImmediate(r));
+
+test('every subsystem the inline block called is still called, in order', async () => {
   runPostTurn(TURN, spyDeps({}, { conversationLength: 8 }));
+  await flush();
   assert.deepEqual(names(), ['memoryAfterTurn', 'ingest', 'twin', 'reflect']);
 });
 
@@ -97,24 +110,30 @@ test('the Twin sees the USER message and never the assistant\'s', () => {
 
 // ── ORDER ────────────────────────────────────────────────────────────────────
 
-test('ingest lands before reflection', () => {
+test('ingest lands before reflection', async () => {
   runPostTurn(TURN, spyDeps({}, { conversationLength: 8 }));
+  await flush();
   assert.ok(names().indexOf('ingest') < names().indexOf('reflect'),
     'reflection must reflect on the turn just absorbed, not the one before it');
 });
 
 // ── CADENCE ──────────────────────────────────────────────────────────────────
 
-test('reflection fires only on the Mind\'s interval', () => {
+test('reflection fires only on the Mind\'s interval', async () => {
+  // `await flush()` after each: since E4/PR-6 the reflection call lands one
+  // microtask after runPostTurn returns.
   runPostTurn(TURN, spyDeps({}, { conversationLength: 8 }));
+  await flush();
   assert.ok(names().includes('reflect'), '8 % 8 === 0 → due');
 
   calls = [];
   runPostTurn(TURN, spyDeps({}, { conversationLength: 9 }));
+  await flush();
   assert.ok(!names().includes('reflect'), '9 % 8 !== 0 → not due');
 
   calls = [];
   runPostTurn(TURN, spyDeps({}, { conversationLength: 16 }));
+  await flush();
   assert.ok(names().includes('reflect'));
 });
 
@@ -127,17 +146,25 @@ test('a throwing ingest does not stop the Twin', () => {
   assert.ok(names().includes('twin'), 'the Twin runs even when ingest fails');
 });
 
-test('a throwing Mind post-turn does not stop the deferred work', () => {
+test('a throwing Mind post-turn does not stop the deferred work', async () => {
   runPostTurn(TURN, spyDeps({
     memoryAfterTurn: () => { throw new Error('mind exploded'); },
   }, { conversationLength: 8 }));
+  await flush();
   assert.deepEqual(names(), ['ingest', 'twin', 'reflect']);
 });
 
-test('a throwing reflection is swallowed', () => {
-  assert.doesNotThrow(() => runPostTurn(TURN, spyDeps({
-    reflectTurn: () => { throw new Error('reflection exploded'); },
-  }, { conversationLength: 8 })));
+test('a throwing reflection is swallowed', async () => {
+  // `doesNotReject`, not `doesNotThrow`: since E4/PR-6 the reflection path is a
+  // promise, and a synchronous-only assertion would pass while the rejection
+  // escaped to unhandledRejection — which is what happened when this change
+  // first landed.
+  await assert.doesNotReject(async () => {
+    runPostTurn(TURN, spyDeps({
+      reflectTurn: () => { throw new Error('reflection exploded'); },
+    }, { conversationLength: 8 }));
+    await flush();
+  });
 });
 
 test('every subsystem failing at once still never reaches the caller', () => {
@@ -150,7 +177,7 @@ test('every subsystem failing at once still never reaches the caller', () => {
 
 // ── OFF THE HOT PATH ─────────────────────────────────────────────────────────
 
-test('only the Mind post-turn runs synchronously; the rest is deferred', () => {
+test('only the Mind post-turn runs synchronously; the rest is deferred', async () => {
   const deferred = [];
   runPostTurn(TURN, spyDeps({ defer: (fn) => deferred.push(fn) }, { conversationLength: 8 }));
 
@@ -173,6 +200,10 @@ test('only the Mind post-turn runs synchronously; the rest is deferred', () => {
   assert.equal(deferred.length, 4, 'ingest+twin, reflection, consolidation, E6');
 
   for (const fn of deferred) fn();
+  // `await flush()`: reflection and consolidation route through the async
+  // `runOrEnqueue` since E4/PR-6, so calling the deferred function is no longer
+  // the same as the work having happened.
+  await flush();
   // E6 is ABSENT from this list on purpose: AQUA_E6 defaults to off, so its
   // tick runs and does nothing. That is the production default, and the whole
   // safety argument for wiring an extractor that fails its own negation gate.

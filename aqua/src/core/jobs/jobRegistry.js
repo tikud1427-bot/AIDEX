@@ -40,6 +40,29 @@
 
 /** name → Set of in-flight promises. Named so the drain report is readable. */
 const inFlight = new Map();
+
+/**
+ * ownerId → tail of that owner's serial chain. E4/PR-4.
+ *
+ * 🔴 EVERY DEFERRED JOB RAN CONCURRENTLY, INCLUDING TWO FOR THE SAME PERSON.
+ *
+ * `setImmediate` fires whatever is queued, in whatever order it lands. Send two
+ * messages quickly and both post-turn blocks run at once against ONE owner's
+ * stores — `observeConversationTurn` reads entities, adds to them and writes
+ * back, and so does the other. Read-modify-write, twice, interleaved. The
+ * loser's entities are gone and nothing reports it, because both jobs
+ * "succeeded".
+ *
+ * Serialising ALL jobs would be the easy fix and the wrong one: owners have
+ * nothing to do with each other, and one slow turn would stall every other
+ * user's post-processing behind it. The guarantee is per owner — same owner in
+ * order, different owners in parallel.
+ *
+ * BOUNDED (G6): an entry exists only while that owner has work in flight and is
+ * deleted when its chain drains. A Map keyed by every owner who has ever spoken
+ * is a leak with a slow fuse.
+ */
+const ownerTail = new Map();
 let completed = 0;
 let failed = 0;
 let lost = 0;
@@ -50,14 +73,14 @@ let lost = 0;
  * A drop-in replacement for `setImmediate(fn)` — same deferral, same
  * fail-open, plus the registry knows the work exists.
  */
-export function defer(name, fn) {
+export function defer(name, fn, { ownerId = null } = {}) {
   let settle;
   const tracked = new Promise(resolve => { settle = resolve; });
 
   if (!inFlight.has(name)) inFlight.set(name, new Set());
   inFlight.get(name).add(tracked);
 
-  setImmediate(async () => {
+  const run = async () => {
     try {
       await fn();
       completed++;
@@ -73,7 +96,29 @@ export function defer(name, fn) {
       if (set && set.size === 0) inFlight.delete(name);
       settle();
     }
-  });
+  };
+
+  // No owner: unchanged behaviour, so every existing caller is unaffected until
+  // it opts in. An ownerId queues behind that owner's previous job and nobody
+  // else's.
+  if (!ownerId) { setImmediate(run); return tracked; }
+
+  const previous = ownerTail.get(ownerId) ?? Promise.resolve();
+  // `.then(run, run)` is INSURANCE, NOT A LIVE REQUIREMENT, and the bite proved
+  // it: replacing it with `.then(run)` failed zero tests. `run` catches
+  // everything itself, so `previous` cannot reject and the rejection handler is
+  // unreachable today. It stays because the day someone moves the try/catch out
+  // of `run` — to add retries, say — the one-argument form would silently
+  // strand every later job for that owner behind the first failure, and nothing
+  // would fail to say so. Recorded as unreachable rather than claimed as
+  // load-bearing.
+  const chained = previous.then(run, run);
+  ownerTail.set(ownerId, chained);
+
+  // Drop the entry once this job is the last one standing. Checking identity
+  // matters: a job that queued while this one ran is the new tail and deleting
+  // it here would let the next arrival run in parallel with it.
+  chained.then(() => { if (ownerTail.get(ownerId) === chained) ownerTail.delete(ownerId); });
 
   return tracked;
 }
@@ -87,7 +132,7 @@ export function outstanding() {
 }
 
 export function jobStats() {
-  return { completed, failed, lost, ...outstanding() };
+  return { completed, failed, lost, serialOwners: ownerTail.size, ...outstanding() };
 }
 
 /**
@@ -135,6 +180,7 @@ export function drainLine(result) {
 
 /** Tests only. */
 export function _resetForTests() {
+  ownerTail.clear();
   inFlight.clear();
   completed = 0; failed = 0; lost = 0;
 }

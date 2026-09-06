@@ -361,3 +361,76 @@ describe('S3 contract discards name the rule they tripped', () => {
     assert.equal(r.stats.discarded, 0);
   });
 });
+
+// ── A truncated answer is not a dead transport ───────────────────────────────
+
+/**
+ * 🔴 THE CONFLATION COST A WHOLE RUN.
+ *
+ * A gemini pass completed 100 cases with no failed calls — every provider line
+ * read `success` or `hit maxTokens=1024 cap — returning partial as successful
+ * completion` — and the harness reported "16 transport errors (16.0%) … pass
+ * INVALID … NOTHING WAS MEASURED", then advised waiting for a daily quota that
+ * was never the constraint. 1024 output tokens is not enough for a reasoning
+ * model, so a sixth of the answers arrived truncated and unparseable.
+ *
+ * `extractionClient` had already told the two apart — `transport:…` when the
+ * call throws, `bad-json:…` when the model answers and the answer will not
+ * parse. S3 threw the distinction away one line later.
+ *
+ * It decides three things downstream: whether a pass is valid, whether
+ * consecutive failures abort the run, and whether a case is scored at all.
+ *
+ * BITE, MEASURED (revert the named property → count failures):
+ *   the transport/malformed split  → 3 fail
+ */
+describe('S3 tells a broken transport from a broken answer', () => {
+  const seg = 'I own the billing service.';
+  const run = (callModel) => {
+    __clearExtractionCache();
+    return runUnderstandingPipeline(seg, { ownerId: 'o', conversationId: 'c', callModel });
+  };
+
+  test('a THROWN call is a transport error', async () => {
+    const r = await run(async () => { throw new Error('socket hang up'); });
+    assert.equal(r.stats.errors, 1);
+    assert.equal(r.stats.malformed, 0, 'a dead transport was filed as a bad answer');
+  });
+
+  test('TRUNCATED JSON is malformed, not a transport error', async () => {
+    // What a maxTokens cap actually produces: a real reply, cut mid-object.
+    const r = await run(async () => ({ text: '{"claims":[{"subject":"self","predi', model: 'stub' }));
+    assert.equal(r.stats.errors, 0, 'a successful call was reported as a provider failure');
+    assert.equal(r.stats.malformed, 1);
+  });
+
+  test('a reply with no JSON at all is malformed too', async () => {
+    const r = await run(async () => ({ text: 'I could not find any claims.', model: 'stub' }));
+    assert.equal(r.stats.errors, 0);
+    assert.equal(r.stats.malformed, 1);
+  });
+
+  test('the two are counted SEPARATELY, never summed into one figure', async () => {
+    // The property the old code destroyed. A run reporting `errors: 16` could
+    // mean the provider is down or the output cap is too low — opposite
+    // diagnoses, opposite fixes, one number.
+    const bad = await run(async () => ({ text: 'not json', model: 'stub' }));
+    const dead = await run(async () => { throw new Error('ECONNRESET'); });
+    assert.notDeepEqual(
+      { e: bad.stats.errors, m: bad.stats.malformed },
+      { e: dead.stats.errors, m: dead.stats.malformed },
+      'a truncation and an outage produce identical stats');
+  });
+
+  test('a clean answer counts as neither', async () => {
+    const r = await run(async () => ({
+      text: JSON.stringify({ claims: [{
+        subject: 'self', predicate: 'owns', object: { entity: 'billing service' },
+        polarity: 'asserted', modality: 'fact', timePrecision: 'none', statementText: seg,
+      }] }), model: 'stub',
+    }));
+    assert.equal(r.stats.errors, 0);
+    assert.equal(r.stats.malformed, 0);
+    assert.equal(r.stats.admitted, 1);
+  });
+});

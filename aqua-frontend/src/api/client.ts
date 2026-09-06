@@ -1,6 +1,5 @@
 import axios, { AxiosError } from 'axios';
 import type { ApiError } from '@/types';
-import { LOGIN_PATH } from './routes';
 
 export const API_BASE_URL = (import.meta.env.VITE_API_URL ?? '/api/aqua').replace(/\/+$/, '');
 
@@ -23,7 +22,7 @@ apiClient.interceptors.response.use(
   (res) => res,
   (err) => {
     if (axios.isAxiosError(err) && err.response?.status === 401) {
-      window.location.href = LOGIN_PATH;
+      window.location.href = '/login';
       return new Promise(() => {}); // navigation is underway; let it happen
     }
     return Promise.reject(err);

@@ -76,6 +76,8 @@ export const GATES = Object.freeze([
   { name: 'AQUA_GRAPH', subsystem: 'orchestrator', dflt: 'off', reads: ON,
     note: 'gates POST /chat graph path AND POST /intelligence/orchestrate' },
   { name: 'AQUA_GRAPH_STRICT_TYPES', subsystem: 'reasoning', dflt: 'off', reads: ONE },
+  { name: 'AQUA_JOBS_DURABLE', subsystem: 'jobs', dflt: 'off', reads: ON,
+    note: 'E4/PR-6 — reflection and consolidation go to the durable queue; falls back to inline if it cannot be scheduled' },
   { name: 'AQUA_MIND_VIEW', subsystem: 'mind', dflt: 'off', reads: ONE },
   { name: 'AQUA_PARSE_WORKER', subsystem: 'upload', dflt: 'on', reads: "!== 'off'", inverted: true,
     note: 'ON by default' },
