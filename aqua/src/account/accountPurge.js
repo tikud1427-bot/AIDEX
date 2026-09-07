@@ -47,10 +47,6 @@ import { purgeOwner as purgeBrain } from '../brain/index.js';
 // no-ops when DATABASE_URL is absent rather than reporting an erasure failure
 // for a database the deployment never had.
 import { purgeOwner as purgeClaims } from '../core/claims/claimRepository.js';
-// E4/PR-3 — the durable job queue is owner-scoped Postgres state like the
-// claims are. Caught by the purge-completeness pin the moment jobQueue.js
-// exported purgeOwner, which is the pin doing exactly what it is for.
-import { purgeOwner as purgeJobs } from '../core/jobs/jobQueue.js';
 import { listArtifacts, deleteArtifact } from '../artifacts/artifactStore.js';
 import { listWorkspaces, deleteWorkspace } from '../project/workspaceManager.js';
 import { clearIndex } from '../project/projectIndex.js';
@@ -155,7 +151,6 @@ export async function purgeOwnerData({ userId } = {}) {
   report.brainAnnotations = step(report, 'brain', () => purgeBrain(ownerId))?.annotations ?? 0;
   // E5/PR-6 — claim shadow rows. Async because Postgres is.
   report.claims = (await stepAsync(report, 'claims', () => purgeClaims(ownerId)))?.claims ?? 0;
-  report.jobs = (await stepAsync(report, 'jobs', () => purgeJobs(ownerId)))?.jobs ?? 0;
 
   // ── 5. Generated artifacts (manifest index + files on disk) ───────────────
   const artifacts = step(report, 'artifacts:list', () => listArtifacts({ ownerId })) ?? [];

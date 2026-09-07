@@ -30,18 +30,6 @@ const PIC = await import('../../pic/core.js');
 
 const O = 'user:ananya';
 
-/**
- * Drain the microtask queue.
- *
- * ⚠️ REQUIRED SINCE E4/PR-6. Both reflection and consolidation now route
- * through `runOrEnqueue`, which is async — `d.defer(fn)` still runs `fn`
- * inline, but `fn` itself returns a promise instead of finishing before it
- * returns. A synchronous assertion right after `turn()` sees the state from
- * BEFORE the consolidate/reflect call landed, which read as "consolidation
- * never fired" for every test in this file.
- */
-const flush = () => new Promise(r => setImmediate(r));
-
 /** Minimal deps: every stage a no-op except the one under test. */
 function deps({ turns = 0, onConsolidate = () => {}, enabled = true } = {}) {
   return {
@@ -56,18 +44,6 @@ function deps({ turns = 0, onConsolidate = () => {}, enabled = true } = {}) {
     consolidateEnabled: () => enabled,
     consolidateEvery: 25,
     ownerTurnCount: () => turns,
-    // ⚠️ CHECKED, NOT ASSUMED: `runPostTurn` merges `deps` with `REAL_DEPS`
-    // (`{ ...REAL_DEPS, ...deps }`), so omitting this key does NOT leave
-    // `d.runOrEnqueue` undefined — it falls back to the real one, which reads
-    // `AQUA_JOBS_DURABLE` (off by default) and runs the work directly. A bite
-    // test confirmed this explicitly: deleting this line changed nothing.
-    // First draft of this file claimed the opposite — that omitting it would
-    // throw and be silently swallowed by the fail-open catch — and that claim
-    // was never run before being written down. It is false, and the fixture
-    // does not need to know why it works; kept anyway, spelled out rather than
-    // relied on implicitly, so this file does not depend on the REAL_DEPS
-    // fallback to define a fixture's behaviour.
-    runOrEnqueue: (kind, ownerId, work) => work(),
   };
 }
 
@@ -81,53 +57,48 @@ afterEach(() => { delete process.env.AQUA_CONSOLIDATE; });
 
 // ── The cadence ─────────────────────────────────────────────────────────────
 
-test('does not consolidate before the interval is reached', async () => {
+test('does not consolidate before the interval is reached', () => {
   let calls = 0;
   turn(deps({ turns: 24, onConsolidate: () => { calls += 1; } }));
-  await flush();
   assert.equal(calls, 0);
 });
 
-test('consolidates once the interval is reached', async () => {
+test('consolidates once the interval is reached', () => {
   let calls = 0;
   turn(deps({ turns: 25, onConsolidate: () => { calls += 1; } }));
-  await flush();
   assert.equal(calls, 1);
 });
 
-test('does not consolidate again until another interval has passed', async () => {
+test('does not consolidate again until another interval has passed', () => {
   let calls = 0;
-  const at = async (turns) => { turn(deps({ turns, onConsolidate: () => { calls += 1; } })); await flush(); };
+  const at = (turns) => turn(deps({ turns, onConsolidate: () => { calls += 1; } }));
 
-  await at(25); assert.equal(calls, 1, 'first pass');
-  await at(26); assert.equal(calls, 1, 'one turn later — not due');
-  await at(49); assert.equal(calls, 1, 'still short of the next interval');
-  await at(50); assert.equal(calls, 2, 'second pass');
+  at(25); assert.equal(calls, 1, 'first pass');
+  at(26); assert.equal(calls, 1, 'one turn later — not due');
+  at(49); assert.equal(calls, 1, 'still short of the next interval');
+  at(50); assert.equal(calls, 2, 'second pass');
 });
 
-test('a watermark, not a modulo — a skipped turn does not skip the cadence', async () => {
+test('a watermark, not a modulo — a skipped turn does not skip the cadence', () => {
   // The counter is incremented by another subsystem and this hook is
   // fail-open, so exact multiples cannot be relied on. `turnCount % every`
   // would silently never fire for an owner whose turns land on 24, 26, 51…
   let calls = 0;
   turn(deps({ turns: 37, onConsolidate: () => { calls += 1; } }));
-  await flush();
   assert.equal(calls, 1, 'due is due, even at a non-multiple');
 });
 
-test('an owner with no recorded turns is left alone', async () => {
+test('an owner with no recorded turns is left alone', () => {
   let calls = 0;
   turn(deps({ turns: 0, onConsolidate: () => { calls += 1; } }));
-  await flush();
   assert.equal(calls, 0, 'no mind yet means no corpus worth consolidating');
 });
 
 // ── The flag ────────────────────────────────────────────────────────────────
 
-test('nothing runs when the flag is off, however overdue', async () => {
+test('nothing runs when the flag is off, however overdue', () => {
   let calls = 0;
   turn(deps({ turns: 10_000, enabled: false, onConsolidate: () => { calls += 1; } }));
-  await flush();
   assert.equal(calls, 0);
 });
 
@@ -144,28 +115,25 @@ test('the flag is off by default and subordinate to PIC', () => {
 
 // ── It cannot hurt the turn ─────────────────────────────────────────────────
 
-test('a throwing consolidation does not break the post-turn hook', async () => {
+test('a throwing consolidation does not break the post-turn hook', () => {
   assert.doesNotThrow(() => turn(deps({
     turns: 100,
     onConsolidate: () => { throw new Error('store on fire'); },
   })));
-  await flush();
 });
 
-test('a throwing consolidation still does not retry immediately', async () => {
+test('a throwing consolidation still does not retry immediately', () => {
   // The watermark advances BEFORE the call, so a failing pass waits for the
   // next interval rather than retrying every turn against a broken store.
   let calls = 0;
   const boom = () => { calls += 1; throw new Error('nope'); };
 
   turn(deps({ turns: 25, onConsolidate: boom }));
-  await flush();
   turn(deps({ turns: 26, onConsolidate: boom }));
-  await flush();
   assert.equal(calls, 1);
 });
 
-test('the earlier stages still run when consolidation is due', async () => {
+test('the earlier stages still run when consolidation is due', () => {
   const seen = [];
   const d = deps({ turns: 100, onConsolidate: () => seen.push('consolidate') });
   d.memoryAfterTurn = () => seen.push('memory');
@@ -174,7 +142,6 @@ test('the earlier stages still run when consolidation is due', async () => {
   d.getConversation = () => new Array(8);   // divisible by reflectEvery
 
   turn(d);
-  await flush();
 
   assert.deepEqual(seen, ['memory', 'ingest', 'reflect', 'consolidate'],
     'consolidation is last — a heavier pass must not delay the lighter stages');

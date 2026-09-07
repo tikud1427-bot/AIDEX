@@ -101,10 +101,6 @@ describe('db pool — inert by default', () => {
       // degrades to off carrying a stated reason, rather than throwing (L11) or
       // going quiet (L13). It reads availability only; it writes nothing.
       'src/core/claims/shadowMode.js',
-      // E4/PR-3 — the durable job queue. Reads and writes owner-scoped rows,
-      // and fails CLOSED without a database: a queue that pretends to schedule
-      // work is worse than one that says it cannot.
-      'src/core/jobs/jobQueue.js',
     ];
     const offenders = [];
     const walk = (dir) => {

@@ -39,42 +39,6 @@
  * neither adds a millisecond to the response the user is waiting on.
  */
 import { defer } from '../core/jobs/jobRegistry.js';
-import { enqueue } from '../core/jobs/jobQueue.js';
-
-/**
- * Run this work now, or hand it to the durable queue — E4/PR-6.
- *
- * 🔴 THE FALLBACK RUNS THE WORK. IT DOES NOT DROP IT.
- *
- * Moving reflection and consolidation onto the worker is the point of E4, and
- * it is also the first change in this subsystem where "the queue is down" and
- * "the work did not happen" could become the same thing. A deployment with
- * AQUA_JOBS_DURABLE=on and no worker running, or no DATABASE_URL, would quietly
- * stop reflecting — the flag would say the opposite, and nothing would report
- * it. That is the AQUA_E6_SHADOW failure with a different name.
- *
- * So the enqueue is best-effort and the inline path is the floor: if the job
- * cannot be scheduled, it runs here, now, exactly as it did before the flag
- * existed. The queue is an optimisation over inline work, never a replacement
- * that can silently fail.
- *
- * Idempotency key is `kind:owner:discriminator` — the turn number for
- * consolidation, the conversation length for reflection — so the same tick
- * enqueued twice is one row (G2).
- */
-async function runOrEnqueue(kind, ownerId, work, discriminator = String(Date.now())) {
-  if (String(process.env.AQUA_JOBS_DURABLE ?? '').toLowerCase() !== 'on') return work();
-  try {
-    const r = await enqueue({
-      ownerId, kind, idempotencyKey: `${kind}:${discriminator}`,
-      priority: kind === 'reflect' ? 50 : 150,
-    });
-    return r;
-  } catch (err) {
-    console.warn(`[JOBS] ${kind} could not be queued, running inline: ${err?.message ?? err}`);
-    return work();
-  }
-}
 import * as Brain from '../brain/index.js';
 import { memoryAfterTurn } from '../memory/engine.js';
 import { getConversation } from '../memory/conversationStore.js';
@@ -114,12 +78,7 @@ const REAL_DEPS = Object.freeze({
   // deferral and same fail-open; the registry simply makes the work visible
   // to the shutdown drain. The injectable seam was already here, which is why
   // this is a one-line change rather than new plumbing.
-  // ownerId makes this owner's post-turn work SERIAL (E4/PR-4). Two messages
-  // sent quickly used to run both blocks at once against one owner's stores —
-  // observeConversationTurn is read-modify-write and the loser's entities were
-  // silently dropped. Other owners still run in parallel.
-  defer: (fn, ownerId) => defer('post-turn', fn, { ownerId }),
-  runOrEnqueue,
+  defer: fn => defer('post-turn', fn),
   // E6 — semantic understanding. Injected so the seam is testable without a
   // provider; see the note at the deferred block below.
   understandTurn: Brain.understandTurn,
@@ -235,7 +194,7 @@ export function runPostTurn({
       // output would be a closed loop that manufactures its own evidence.
       d.observeTwin({ ownerId, userMessage, conversationId });
     } catch { /* fail-open */ }
-  }, ownerId);
+  });
 
   // ── E6 — SEMANTIC UNDERSTANDING, ON THE REAL TURN PATH AT LAST ─────────────
   //
@@ -294,28 +253,20 @@ export function runPostTurn({
         error => d.reportE6({ ownerId, conversationId, error, ms: Date.now() - started }),
       )
       .catch(() => { /* fail-open: understanding must never affect the turn */ });
-  }, ownerId);
+  });
 
   // Brain Reflection V2 (B5) — on the Mind's reflection cadence, compute a
   // STRUCTURED world-model delta (entities/relationships/obsoleted facts) and
   // apply it via reversible lifecycle transitions. Deferred, fail-open, off
   // by default (AQUA_REFLECT_V2). Runs after the ingest above so it reflects
   // on the turn just absorbed.
-  // ⚠️ `runOrEnqueue` IS ASYNC, SO THE CATCH HAS TO BE TOO.
-  //
-  // This block was a plain `try { d.reflectTurn() } catch {}` and that was
-  // sufficient while the call was synchronous. Routing it through the queue
-  // made it return a promise, and a throwing reflection then rejected AFTER the
-  // try had exited — an unhandledRejection instead of a swallowed failure. The
-  // existing test caught it immediately. Same shape as the E6 seam: wrap in
-  // Promise.resolve() so a synchronous throw and a rejected promise take the
-  // same path.
-  d.defer(() => Promise.resolve()
-    .then(() => {
-      if ((d.getConversation(conversationId).length % d.reflectEvery) !== 0) return undefined;
-      return d.runOrEnqueue('reflect', ownerId, () => d.reflectTurn(ownerId));
-    })
-    .catch(() => { /* fail-open: reflection must never affect the turn */ }), ownerId);
+  d.defer(() => {
+    try {
+      if ((d.getConversation(conversationId).length % d.reflectEvery) === 0) {
+        d.reflectTurn(ownerId);
+      }
+    } catch { /* fail-open: reflection must never affect the turn */ }
+  });
 
   // PIC consolidation (audit M6) — knowledge was accumulating and never
   // maturing: duplicates unmerged, corroborated claims never promoted to
@@ -325,19 +276,17 @@ export function runPostTurn({
   // Its own tick, after reflection, so a heavier pass (~90ms at 2k facts)
   // cannot delay the lighter stages above. Deferred, fail-open, off by default
   // (AQUA_CONSOLIDATE).
-  d.defer(() => Promise.resolve()
-    .then(() => {
-      if (!d.consolidateEnabled()) return undefined;
+  d.defer(() => {
+    try {
+      if (!d.consolidateEnabled()) return;
       const turns = d.ownerTurnCount(ownerId);
-      if (!turns) return undefined;
+      if (!turns) return;
       const last = lastConsolidatedAt.get(ownerId) ?? 0;
-      if (turns - last < d.consolidateEvery) return undefined;
+      if (turns - last < d.consolidateEvery) return;
       lastConsolidatedAt.set(ownerId, turns);
-      // The turn number is part of the idempotency key, so the same
-      // consolidation tick enqueued twice is one job (G2).
-      return d.runOrEnqueue('consolidate', ownerId, () => d.consolidate(ownerId), String(turns));
-    })
-    .catch(() => { /* fail-open: maintenance must never affect the turn */ }), ownerId);
+      d.consolidate(ownerId);
+    } catch { /* fail-open: maintenance must never affect the turn */ }
+  });
 }
 
 export const _internals = { REAL_DEPS };

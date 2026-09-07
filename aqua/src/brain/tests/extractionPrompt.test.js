@@ -24,7 +24,6 @@ import {
 import {
   parseExtractionResponse, validateClaim, extractJsonBlock,
 } from '../understanding/extractionContract.js';
-import { validateAgainstSegment } from '../understanding/claimValidator.js';
 import { allPredicates, registerPredicate, isRegistered } from '../../core/claims/predicateRegistry.js';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -146,28 +145,6 @@ describe('contract — the shipped fixtures satisfy it', () => {
     }
   });
 
-  test('every fixture ALSO survives the seven-gate TRUTH validator, not just the shape gate', () => {
-    // `parseExtractionResponse` above only proves a fixture is well-FORMED —
-    // it never calls claimValidator, so a fixture can pass that test while
-    // still being a claim the real firewall would discard. That gap is how
-    // fx-employment shipped an object literal ('runs product') that does not
-    // occur verbatim in its own statementText ('I run product at Nummo') —
-    // gate \u2461 rejects it, meaning the few-shot example was teaching the
-    // model output the validator refuses. A test that stops at the shape
-    // gate cannot see this; it has to run the same two stages production
-    // does, in the same order.
-    for (const ex of FIXTURES.examples) {
-      const parsed = parseExtractionResponse(JSON.stringify({ claims: ex.claims }));
-      assert.equal(parsed.ok, true, `${ex.id}: fails shape gate, cannot reach truth gate`);
-      for (const claim of parsed.claims) {
-        const r = validateAgainstSegment(claim, ex.segment, { sourceTier: 'chat' });
-        assert.equal(r.outcome, 'admit',
-          `${ex.id}: '${claim.statementText}' -> ${claim.predicate}=${JSON.stringify(claim.object)} `
-          + `was ${r.outcome} at gate ${r.gate} (${r.reason}) — the prompt is teaching an example its own firewall refuses`);
-      }
-    }
-  });
-
   test('every fixture states why it exists', () => {
     for (const ex of FIXTURES.examples) {
       assert.ok(ex.why && ex.why.length > 40, `${ex.id} needs a why`);
@@ -284,62 +261,5 @@ describe('contract — reading what models actually return', () => {
     for (const raw of ['', 'no braces here', null, undefined, 42]) {
       assert.equal(extractJsonBlock(raw), null, `${JSON.stringify(raw)}`);
     }
-  });
-});
-
-// ── The prompt forbids two of the five modalities it declares ────────────────
-
-/**
- * 🔴 A CONTRADICTION BETWEEN THE SCHEMA AND THE INSTRUCTIONS, IN ONE FILE.
- *
- *   MODALITIES = ['fact', 'intent', 'hypothetical', 'question', 'quote']
- *   rule 4     = "A conditional or a question asserts nothing. Return []."
- *
- * `hypothetical` and `question` are declared as valid modalities and then made
- * unproducible thirteen lines later. The contract accepts them; the prompt
- * orders the model never to emit them.
- *
- * MEASURED COST. 13 of the 167 gold claims are labelled hypothetical or
- * question — 7.8% of the corpus — and every one of them sits in the `modality`
- * category, which has 25 cases. So:
- *
- *     detection_modality ceiling under rule 4 = 12/25 = 0.480
- *
- * And the observed runs read 0.52, 0.60, 0.69 — ABOVE the ceiling. That is only
- * possible when the model disobeys rule 4, which means the metric has been
- * rewarding instruction-violation and the "modality REGRESSED 72% -> 52%"
- * finding may be nothing more than the model obeying its instructions more
- * consistently.
- *
- * WHICH SIDE IS WRONG IS A DESIGN DECISION (L20), NOT A REPAIR:
- *   · if rule 4 is right, the 13 labels are wrong and `hypothetical` and
- *     `question` should come out of MODALITIES;
- *   · if the schema is right, rule 4 must go and the model should extract these
- *     with the modality that says what they are.
- * Changing either side alters what the extractor produces and needs its own
- * measured run. This test states the invariant and is marked `todo` until the
- * decision is made — the assertion is unmodified and still executes.
- */
-describe('every declared modality is producible', () => {
-  test('the prompt does not forbid a modality the contract accepts', {
-    todo: 'hypothetical|question are declared and then forbidden by rule 4 — '
-        + 'caps detection_modality at 0.480. Owner decision: drop the rule or drop the modalities.',
-  }, () => {
-    const p = buildExtractionPrompt('Should I make Dev the tech lead?');
-    const text = `${p.system}\n${p.user}`;
-    const forbidsQuestions = /question asserts nothing|Return \[\]/i.test(text);
-    const declaresThem = MODALITIES.includes('question') && MODALITIES.includes('hypothetical');
-    assert.equal(forbidsQuestions && declaresThem, false,
-      'the schema and the instructions disagree about whether questions are claims');
-  });
-
-  test('THE COST IS PINNED, so the decision is not made by forgetting', () => {
-    // Not todo — this arithmetic is true either way and is the reason to decide.
-    const MODALITY_CASES = 25;
-    const FORBIDDEN_IN_MODALITY = 13;
-    const ceiling = (MODALITY_CASES - FORBIDDEN_IN_MODALITY) / MODALITY_CASES;
-    assert.equal(ceiling, 0.48);
-    assert.ok(MODALITIES.includes('hypothetical') && MODALITIES.includes('question'),
-      'the modalities were dropped — delete this test and the todo above with it');
   });
 });

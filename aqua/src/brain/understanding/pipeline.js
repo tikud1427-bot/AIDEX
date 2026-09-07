@@ -95,7 +95,7 @@ export const NOT_IMPLEMENTED = Object.freeze({
 export async function runUnderstandingPipeline(text, opts = {}) {
   const stats = {
     s0: { admitted: false, reason: null, redactions: 0, tags: [], chars: 0 },
-    segments: 0, gated: 0, called: 0, cached: 0, errors: 0, malformed: 0,
+    segments: 0, gated: 0, called: 0, cached: 0, errors: 0,
     parsed: 0, admitted: 0, proposed: 0, discarded: 0,
     byGate: {}, models: [],
   };
@@ -141,32 +141,7 @@ export async function runUnderstandingPipeline(text, opts = {}) {
     // ── S3 LLM EXTRACTION ──────────────────────────────────────────────────
     const out = await extractSegment(seg.text, opts);
     if (out.cached) stats.cached++; else stats.called++;
-    // 🔴 A TRUNCATED ANSWER IS NOT A DEAD TRANSPORT.
-    //
-    // This counted every failure as `errors`, and `extractionClient` had
-    // already told them apart: `transport:…` means the call threw, while
-    // `bad-json:…`, `no-json-found` and `missing-claims-array` mean the model
-    // ANSWERED and the answer did not parse.
-    //
-    // The conflation cost a whole run. A gemini pass completed 100 cases with
-    // no failed calls — every line read `success` or `hit maxTokens=1024 cap —
-    // returning partial as successful completion` — and was reported as
-    // "16 transport errors (16.0%) … pass INVALID … NOTHING WAS MEASURED".
-    // 1024 output tokens is not enough for a reasoning model, so a sixth of the
-    // responses arrived truncated, failed to parse, and were filed as a
-    // provider outage. The advice printed underneath was to wait for a quota
-    // that was never the problem.
-    //
-    // The distinction decides three things downstream: whether a pass is valid,
-    // whether consecutive failures abort the run, and — since the case-level
-    // fix — whether a case is scored at all. A truncated response must still be
-    // SCORED: the model answered, and producing unparseable output is an
-    // extraction failure the system owns. Only an unanswered call is unmeasured.
-    if (out.error) {
-      if (String(out.error).startsWith('transport:') || out.error === 'no-transport') stats.errors++;
-      else stats.malformed++;
-      continue;
-    }
+    if (out.error) { stats.errors++; continue; }
     if (out.model) models.add(out.model);
     stats.parsed += out.claims.length;
 

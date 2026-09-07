@@ -22,7 +22,6 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { _internals } from '../../routes/turnPostProcess.js';
 
 import {
   defer, drainJobs, drainLine, outstanding, jobStats, _resetForTests,
@@ -158,33 +157,11 @@ describe('job registry — what is outstanding is answerable', () => {
 // ── Wiring ───────────────────────────────────────────────────────────────────
 
 describe('job registry — wiring', () => {
-  test('the post-turn block defers THROUGH the registry, WITH an owner', async () => {
-    // WAS a grep for the literal `defer('post-turn', fn)`. E4/PR-4 added the
-    // ownerId argument and the grep broke while the behaviour it described was
-    // intact — a test that fails on a refactor and passes on a defect is
-    // measuring the source. Replaced with the behaviour: the real REAL_DEPS
-    // seam must route through the registry AND carry the owner, because
-    // without the owner the per-owner chain never engages and two turns from
-    // one person race on their stores again.
-    _resetForTests();
-    const before = jobStats();
-    await _internals.REAL_DEPS.defer(async () => {}, 'owner-under-test');
-    assert.equal(jobStats().completed, before.completed + 1,
-      'the post-turn seam no longer routes through the registry');
-
-    // The owner argument has to REACH the registry, not merely be accepted.
-    let released;
-    const gate = new Promise(r => { released = r; });
-    const order = [];
-    const first = _internals.REAL_DEPS.defer(async () => { await gate; order.push('first'); }, 'o1');
-    const second = _internals.REAL_DEPS.defer(async () => { order.push('second'); }, 'o1');
-    await new Promise(r => setTimeout(r, 10));
-    assert.deepEqual(order, [], 'the second job ran before the first — the owner never reached the chain');
-    released();
-    await Promise.all([first, second]);
-    assert.deepEqual(order, ['first', 'second']);
-
+  test('the post-turn block defers THROUGH the registry', () => {
+    // The seam was already injectable, which is why this is a one-line change
+    // rather than new plumbing.
     const src = fs.readFileSync(path.join(ROOT, 'src/routes/turnPostProcess.js'), 'utf8');
+    assert.match(src, /defer\(['"]post-turn['"], fn\)/);
     assert.ok(!/defer:\s*setImmediate\b/.test(src),
       'the post-turn block still defers through a bare setImmediate — the work is invisible again');
   });
@@ -211,100 +188,5 @@ describe('job registry — wiring', () => {
     for (const absent of ['retry', 'INSERT INTO', 'setTimeout(() => defer']) {
       assert.ok(!src.includes(absent), `jobRegistry.js has grown ${absent} — that is a later PR`);
     }
-  });
-});
-
-// ── Per-owner serial ordering (E4/PR-4) ──────────────────────────────────────
-
-/**
- * 🔴 TWO TURNS FROM ONE PERSON RAN AT THE SAME TIME, AGAINST ONE STORE.
- *
- * `setImmediate` fires whatever is queued in whatever order it lands. Send two
- * messages quickly and both post-turn blocks execute concurrently against a
- * single owner's stores — `observeConversationTurn` reads entities, adds to
- * them, writes back, and so does the other. Read-modify-write, interleaved.
- * The loser's entities are gone and nothing reports it, because both jobs
- * "succeeded".
- *
- * Serialising everything would be the easy fix and the wrong one: one slow turn
- * would stall every other user behind it. The guarantee is per owner.
- *
- * BITE, MEASURED (revert the named property → count failures):
- *   the per-owner chain            → 2 fail
- *   different owners stay parallel → 1 fail
- *   a failed job does not block its successors → 1 fail
- *   the owner map is cleaned up    → 1 fail
- */
-describe('jobs for one owner run in order; owners do not block each other', () => {
-  beforeEach(() => _resetForTests());
-
-  /** Resolves after `ms`, recording start and end so overlap is observable. */
-  const slice = (log, tag, ms) => async () => {
-    log.push(`${tag}:start`);
-    await new Promise(r => setTimeout(r, ms));
-    log.push(`${tag}:end`);
-  };
-
-  test('THE RACE: same owner, two jobs — the second waits for the first', async () => {
-    const log = [];
-    const a = defer('post-turn', slice(log, 'a', 30), { ownerId: 'u1' });
-    const b = defer('post-turn', slice(log, 'b', 1), { ownerId: 'u1' });
-    await Promise.all([a, b]);
-    // Without the chain this is a:start, b:start, b:end, a:end — b finishes
-    // first and its write is overwritten by a's stale read.
-    assert.deepEqual(log, ['a:start', 'a:end', 'b:start', 'b:end']);
-  });
-
-  test('DIFFERENT owners still overlap — this is not a global lock', async () => {
-    const log = [];
-    const a = defer('post-turn', slice(log, 'a', 30), { ownerId: 'u1' });
-    const b = defer('post-turn', slice(log, 'b', 1), { ownerId: 'u2' });
-    await Promise.all([a, b]);
-    assert.equal(log[0], 'a:start');
-    assert.ok(log.indexOf('b:end') < log.indexOf('a:end'),
-      'a short job for another owner queued behind a long one — this is a global lock');
-  });
-
-  test('a FAILING job does not strand the rest of that owner\'s queue', async () => {
-    // NOTE: this passes with `.then(run)` too — `run` swallows its own errors
-    // so the chain never rejects. Measured, not assumed: the bite for the
-    // two-argument form failed zero tests. What this DOES pin is that a failing
-    // job leaves the queue moving, whatever mechanism keeps it moving.
-    const log = [];
-    const a = defer('post-turn', async () => { throw new Error('boom'); }, { ownerId: 'u1' });
-    const b = defer('post-turn', slice(log, 'b', 1), { ownerId: 'u1' });
-    await Promise.all([a, b]);
-    assert.deepEqual(log, ['b:start', 'b:end']);
-    assert.equal(jobStats().failed, 1, 'the failure was not counted');
-  });
-
-  test('the owner map is EMPTY once the work drains (G6)', async () => {
-    // A Map keyed by every owner who has ever spoken is a leak with a slow fuse.
-    await Promise.all([
-      defer('post-turn', slice([], 'a', 1), { ownerId: 'u1' }),
-      defer('post-turn', slice([], 'b', 1), { ownerId: 'u2' }),
-    ]);
-    await new Promise(r => setTimeout(r, 5));
-    assert.equal(jobStats().serialOwners, 0, 'the per-owner map retained finished owners');
-  });
-
-  test('a job arriving mid-chain becomes the new tail, not a parallel branch', async () => {
-    // The cleanup checks identity for this reason: deleting the entry while a
-    // successor is queued would let the next arrival run alongside it.
-    const log = [];
-    const a = defer('post-turn', slice(log, 'a', 20), { ownerId: 'u1' });
-    await new Promise(r => setTimeout(r, 5));       // a is mid-flight
-    const b = defer('post-turn', slice(log, 'b', 1), { ownerId: 'u1' });
-    await Promise.all([a, b]);
-    assert.deepEqual(log, ['a:start', 'a:end', 'b:start', 'b:end']);
-  });
-
-  test('NO ownerId keeps the old concurrent behaviour — callers opt in', async () => {
-    const log = [];
-    await Promise.all([
-      defer('post-turn', slice(log, 'a', 30)),
-      defer('post-turn', slice(log, 'b', 1)),
-    ]);
-    assert.deepEqual(log, ['a:start', 'b:start', 'b:end', 'a:end']);
   });
 });
