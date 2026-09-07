@@ -27,6 +27,7 @@ const {
   REAUTH_MAX_AGE_MS,
 } = require("../../services/account/accountDeletion.service");
 const { createLogger } = require("../../utils/logger");
+const { endSession } = require("../../services/account/sessionLogout.service");
 
 const log = createLogger("ACCOUNT_ROUTES");
 
@@ -82,6 +83,22 @@ router.get("/", requireLogin, async (req, res) => {
       message: "Could not load your account details. Try again.",
     });
   }
+});
+
+// ── POST /api/account/logout ─────────────────────────────────────────────────
+// Idempotent by design: an expired session is already in the desired signed-out
+// state, so the SPA must not be trapped by a 401 while trying to log out.
+router.post("/logout", async (req, res) => {
+  const result = await endSession(req, res);
+  if (!result.ok) {
+    log.warn("logout: session destroy failed:", result.error);
+    return res.status(500).json({
+      success: false,
+      error: "LOGOUT_FAILED",
+      message: "We couldn't sign you out. Please try again.",
+    });
+  }
+  return res.json({ success: true });
 });
 
 // ── POST /api/account/delete ─────────────────────────────────────────────────

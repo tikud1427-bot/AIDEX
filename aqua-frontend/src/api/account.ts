@@ -43,6 +43,35 @@ export async function getAccount(): Promise<AccountInfo | null> {
   }
 }
 
+/** End the current server-side session. Idempotent when already signed out. */
+export async function logoutSession(): Promise<{ ok: boolean; message?: string }> {
+  try {
+    const res = await fetch('/api/account/logout', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: jsonHeaders,
+    });
+    let body: { success?: boolean; message?: string } = {};
+    try { body = await res.json(); } catch { /* status is enough */ }
+    if (res.ok && body?.success !== false) return { ok: true };
+    return {
+      ok: false,
+      message: body?.message ?? "We couldn't sign you out. Please try again.",
+    };
+  } catch {
+    return { ok: false, message: "Couldn't reach the server. Check your connection and try again." };
+  }
+}
+
+/** Remove only persisted account-scoped SPA state; keep browser/PWA infrastructure intact. */
+export function clearPersistedAppData(): void {
+  const keys = ['aqua-ui', 'aqua-settings', 'aqua-conversation-overlay'];
+  for (const key of keys) {
+    try { localStorage.removeItem(key); } catch { /* storage disabled */ }
+  }
+  try { sessionStorage.clear(); } catch { /* storage disabled */ }
+}
+
 /**
  * Permanently delete the signed-in account.
  * @param password required for password accounts; ignored for Google accounts
